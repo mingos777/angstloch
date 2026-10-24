@@ -1,0 +1,56 @@
+# Angstloch
+
+Angstloch is a map generator library for roguelike games on a 2D square grid. It is written in modern TypeScript and will be published on NPM for browser-based roguelikes to consume.
+
+## Rules
+
+### Git
+
+- **Never commit, push, or otherwise modify git history.** The user reviews every task and commits on their own.
+
+### Code style
+
+- 2 space indents.
+- Terminate lines with semicolons.
+- Single quotes. Prettier and ESLint enforce this; run `npm run format` and `npm run lint`.
+- kebab-case filenames; the single export is named after the file (`resolve-random.ts` exports `resolveRandom`).
+- 1 export per file, unless reasonable to ignore (e.g. a bunch of related constants). `src/index.ts` is the public API barrel and is exempt.
+- TypeScript is strict, including `noUncheckedIndexedAccess` (matters for grid indexing).
+
+### Tooling
+
+- npm is the package manager. Node 22 (`.nvmrc`).
+- Vite is the bundler (library mode, ESM only).
+- Vitest is the test runner.
+- ESLint (flat config, `strictTypeChecked`) plus Prettier.
+
+### Testing
+
+- All logic is covered by unit tests, colocated as `*.test.ts` next to the source.
+- Coverage threshold is 80% (lines, functions, branches, statements), enforced by `npm test`. Don't chase 100%.
+- Test one behaviour per test.
+- Structure each test body with `// given`, `// when` and `// then` comments separating the setup, the action and the assertions.
+
+### Library design
+
+- No runtime dependencies. Core code must not use DOM or Node APIs, so it runs in a browser, Node, or a web worker.
+- Determinism: never call `Math.random` directly in generator code. Generators accept an injected `Random` (`() => number` returning a float in [0, 1), same contract as `Math.random`), resolved via `resolveRandom`, which defaults to `Math.random`. Users can plug in any PRNG (mulberry32, etc.).
+- API contract: each generator is a function `generateX(options: XOptions)` taking a single options object. `width` and `height` are required; `random?: Random` and all algorithm-specific fields are optional with documented defaults. Each algorithm has its own typed options interface extending a shared base (`width`, `height`, `random`); never use `any`. Adding optional fields is fine, but never change or remove existing ones, since the external contract should stay constant. Generators are pure: no global state, no mutation of the caller's options. Invalid dimensions (non-positive or non-integer) throw a `RangeError`.
+- Data model: maps are a `Grid` (flat `Uint8Array`, `get`/`set`/`inBounds`/`clone`/`toString`). `Tile` values are part of the contract: `Wall` 0, `Floor` 1, `Door` 2 (a potential door placement). Add new values, never renumber. Positions are plain `{ x, y }` (`Point`), y grows downwards. `Grid#get` outside the grid returns `Wall`; `set` outside throws.
+- Results: generators never mutate their inputs and return a result object (`{ grid, ...extras }`), never a bare grid. Extras describe the map, e.g. a dungeon reports its rooms (count, position, dimensions), a maze reports `start` and `exits`. Any composition with other maps is left to the caller.
+- Only a single `Random` float is injected. Derive integers and picks with the shared helpers (`randomInt`, `pickRandom`).
+- Mazes and dungeons are the current scope. Towns, caves with water and similar come much later.
+- Reference material: the previous attempt lives in `../angstloch-old` (only the maze generator was finished) and rot.js 2.2.1 in `../ur/node_modules/rot-js`. Reimplement algorithms our way instead of copying code.
+
+## Layout
+
+- `src/`: library source; `src/index.ts` is the public entry point.
+- `demo/`: visual playground, run with `npm run dev`. Not published.
+- `dist/`: build output (gitignored).
+
+## Commands
+
+- `npm run dev`: start the playground.
+- `npm run build`: build the library to `dist/`.
+- `npm test`: run unit tests with coverage (`npm run test:watch` for watch mode).
+- `npm run typecheck`, `npm run lint`, `npm run format` / `format:check`.
