@@ -18,6 +18,13 @@
       <label
         >Height <input name="height" type="number" value="41" min="1"
       /></label>
+      <label
+        >Generator
+        <select name="generator">
+          <option value="room">room-first</option>
+          <option value="dig">digger</option>
+        </select>
+      </label>
       <label>Seed <input name="seed" type="number" value="1" /></label>
       <label
         >Tile size <input name="tileSize" type="number" value="12" min="1"
@@ -30,14 +37,32 @@
         </select>
       </label>
       <label
-        >Partition
+        >Corridor length min (digger)
+        <input name="corridorLengthMin" type="number" value="1" min="0"
+      /></label>
+      <label
+        >Corridor length max (digger)
+        <input name="corridorLengthMax" type="number" value="8" min="0"
+      /></label>
+      <label
+        >Branch chance (digger)
+        <input
+          name="branchChance"
+          type="number"
+          value="0.3"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Partition (room-first)
         <select name="partition">
           <option value="scatter">scatter</option>
           <option value="bsp">bsp</option>
         </select>
       </label>
       <label
-        >Spacing uniformity
+        >Spacing uniformity (room-first)
         <input
           name="spacingUniformity"
           type="number"

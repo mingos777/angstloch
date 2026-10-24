@@ -1,20 +1,12 @@
+import { corridorTileCost } from './corridor-tile-cost';
+import type { CorridorRules } from './corridor-tile-cost';
 import { DIRECTIONS } from './directions';
 import { MinHeap } from './min-heap';
 import type { Point } from './point';
 
-/** Extra cost of running over an existing corridor, when that is allowed at all. */
-const CROSSING_PENALTY = 3;
-
 /** How many times longer than the direct way a corridor to a given tile may be, and how many tiles it may add on top. */
 const DETOUR_FACTOR = 2;
 const DETOUR_MARGIN = 16;
-
-const DIAGONALS: readonly (readonly [number, number])[] = [
-  [-1, -1],
-  [1, -1],
-  [-1, 1],
-  [1, 1],
-];
 
 /** Memory that searches share, so that none has to allocate its own. A state holds data of the current search only if its `seen` stamp is the current `run`. */
 export interface SearchBuffers {
@@ -81,7 +73,7 @@ export function findCorridor(
   target: CorridorTarget,
   crossing: boolean,
 ): Point[] | undefined {
-  const { width, height } = map;
+  const { width } = map;
   const stride = map.lattice ? 2 : 1;
   const { search } = map;
   const run = ++search.run;
@@ -101,60 +93,9 @@ export function findCorridor(
     (Math.abs(x - aim.x) * map.horizontalCost +
       Math.abs(y - aim.y) * map.verticalCost) *
     map.averageCost;
-  /** Corridor tiles that a corridor may head straight into: the one it starts from, its destination, and any when crossing. */
-  const isTouchable = (x: number, y: number): boolean =>
-    crossing || isTarget(x, y) || (x === from.x && y === from.y);
-  const isCorridor = (x: number, y: number): boolean =>
-    x >= 0 && x < width && y >= 0 && y < height
-      ? map.corridor[y * width + x] === 1
-      : false;
-
-  /**
-   * Cost of stepping onto a tile while moving in a direction, or `undefined`
-   * when it cannot be used. A corridor never runs alongside another, as that
-   * would make it two tiles wide: the only corridor tiles it may touch are the
-   * ones it crosses, straight on. Nor does it pass diagonally beside one, as
-   * that would let a diagonal step jump from one corridor to the other.
-   */
-  const tileCost = (x: number, y: number, direction: number) => {
-    if (x < 1 || y < 1 || x > width - 2 || y > height - 2) {
-      return undefined;
-    }
-    const index = y * width + x;
-    if (map.reserved[index] === 1) {
-      return undefined;
-    }
-    const onCorridor = map.corridor[index] === 1;
-    if (onCorridor && !(crossing || isTarget(x, y))) {
-      return undefined;
-    }
-    for (const [side, step] of DIRECTIONS.entries()) {
-      const nx = x + step.x;
-      const ny = y + step.y;
-      if (isCorridor(nx, ny)) {
-        const inLine = side % 2 === direction % 2;
-        // touching a corridor ahead or behind is how a crossing, a junction or
-        // a branch begins and ends, but running along it is not
-        if (onCorridor ? inLine : !(inLine && isTouchable(nx, ny))) {
-          return undefined;
-        }
-      }
-    }
-    for (const [dx, dy] of DIAGONALS) {
-      if (
-        isCorridor(x + dx, y + dy) &&
-        !isCorridor(x + dx, y) &&
-        !isCorridor(x, y + dy)
-      ) {
-        return undefined;
-      }
-    }
-    return (
-      (direction % 2 === 1 ? map.horizontalCost : map.verticalCost) +
-      (map.noise[index] as number) +
-      (onCorridor ? CROSSING_PENALTY : 0)
-    );
-  };
+  const rules: CorridorRules = { crossing, isTarget, from };
+  const tileCost = (x: number, y: number, direction: number) =>
+    corridorTileCost(map, x, y, direction, rules);
 
   const directionOf = (dx: number, dy: number): number =>
     dx === 0 ? (dy > 0 ? 2 : 0) : dx > 0 ? 1 : 3;

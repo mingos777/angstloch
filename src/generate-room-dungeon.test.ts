@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { generateRoomDungeon } from './generate-room-dungeon';
-import type { DungeonResult } from './dungeon-result';
-import type { Grid } from './grid';
-import type { Point } from './point';
 import type { RoomDungeonOptions } from './room-dungeon-options';
 import type { Room } from './room';
 import { mulberry32 } from './test-helpers/mulberry32';
+import {
+  NEIGHBOURS,
+  SEEDS,
+  allTiles,
+  cycles,
+  deadEnds,
+  diagonalJumps,
+  inRoom,
+  isConnected,
+  overlap,
+  reachableFrom,
+  roomAt,
+  touchingExits,
+} from './test-helpers/dungeon-checks';
 import { Tile } from './tile';
 
 function dungeon(options: Partial<RoomDungeonOptions> = {}, seed = 1) {
@@ -16,78 +27,6 @@ function dungeon(options: Partial<RoomDungeonOptions> = {}, seed = 1) {
     ...options,
   });
 }
-
-function overlap(a: Room, b: Room, gap: number) {
-  return (
-    a.x < b.x + b.width + gap &&
-    b.x < a.x + a.width + gap &&
-    a.y < b.y + b.height + gap &&
-    b.y < a.y + a.height + gap
-  );
-}
-
-const NEIGHBOURS = [
-  { x: 0, y: -1 },
-  { x: 1, y: 0 },
-  { x: 0, y: 1 },
-  { x: -1, y: 0 },
-];
-
-function inRoom(room: Room, x: number, y: number) {
-  return (
-    x >= room.x &&
-    x < room.x + room.width &&
-    y >= room.y &&
-    y < room.y + room.height
-  );
-}
-
-function roomAt(rooms: Room[], x: number, y: number) {
-  return rooms.find((room) => inRoom(room, x, y));
-}
-
-/** Tiles reachable from the first room without crossing a wall. */
-function reachableFrom(result: DungeonResult, room: Room) {
-  const { grid } = result;
-  const key = (x: number, y: number) => y * grid.width + x;
-  const seen = new Set([key(room.x, room.y)]);
-  const queue = [{ x: room.x, y: room.y }];
-  for (let point = queue.shift(); point; point = queue.shift()) {
-    for (const n of NEIGHBOURS) {
-      const x = point.x + n.x;
-      const y = point.y + n.y;
-      if (grid.get(x, y) !== Tile.Wall && !seen.has(key(x, y))) {
-        seen.add(key(x, y));
-        queue.push({ x, y });
-      }
-    }
-  }
-  return (x: number, y: number) => seen.has(key(x, y));
-}
-
-function allTiles(grid: Grid) {
-  const tiles: Point[] = [];
-  for (let y = 0; y < grid.height; ++y) {
-    for (let x = 0; x < grid.width; ++x) {
-      tiles.push({ x, y });
-    }
-  }
-  return tiles;
-}
-
-/** Corner points where two open tiles touch diagonally with walls on both other tiles of the 2x2 block. */
-function diagonalJumps(grid: Grid) {
-  return allTiles(grid).filter(({ x, y }) => {
-    const open = (dx: number, dy: number) =>
-      grid.get(x + dx, y + dy) !== Tile.Wall;
-    return (
-      (open(0, 0) && open(1, 1) && !open(1, 0) && !open(0, 1)) ||
-      (open(1, 0) && open(0, 1) && !open(0, 0) && !open(1, 1))
-    );
-  });
-}
-
-const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 describe('generateRoomDungeon', () => {
   it('produces a grid of the requested size', () => {
@@ -560,24 +499,19 @@ describe('generateRoomDungeon', () => {
       expect(counted).toBe(true);
     });
 
-    it('keeps exits apart from each other', () => {
-      // given
-      const options = { ...connected, roomSpacing: 3 };
+    it.each([1, 3])(
+      'keeps exits apart from each other with a room spacing of %i',
+      (roomSpacing) => {
+        // given
+        const options = { ...connected, roomSpacing };
 
-      // when
-      const { exits } = dungeon(options);
+        // when
+        const results = SEEDS.map((seed) => dungeon(options, seed));
 
-      // then
-      const touching = exits.some((a, i) =>
-        exits.some(
-          (b, j) =>
-            i < j &&
-            Math.abs(a.position.x - b.position.x) <= 1 &&
-            Math.abs(a.position.y - b.position.y) <= 1,
-        ),
-      );
-      expect(touching).toBe(false);
-    });
+        // then
+        expect(results.flatMap(touchingExits)).toEqual([]);
+      },
+    );
 
     it('only opens the wall of a room at its exits', () => {
       // given
@@ -917,53 +851,6 @@ describe('generateRoomDungeon', () => {
     });
   });
 });
-
-function corridorTiles(result: DungeonResult) {
-  return allTiles(result.grid).filter(
-    ({ x, y }) =>
-      result.grid.get(x, y) !== Tile.Wall && !roomAt(result.rooms, x, y),
-  );
-}
-
-function deadEnds(result: DungeonResult) {
-  return corridorTiles(result).filter(
-    ({ x, y }) =>
-      NEIGHBOURS.filter((n) => result.grid.get(x + n.x, y + n.y) !== Tile.Wall)
-        .length === 1,
-  );
-}
-
-/** Number of independent cycles in the map, counting every room as a single junction. */
-function cycles(result: DungeonResult) {
-  const { grid, rooms } = result;
-  const node = (x: number, y: number) => {
-    const room = roomAt(rooms, x, y);
-    return room ? `room ${String(room.id)}` : `${String(x)},${String(y)}`;
-  };
-  const nodes = new Set<string>();
-  const edges = new Set<string>();
-  for (const { x, y } of allTiles(grid)) {
-    if (grid.get(x, y) === Tile.Wall) {
-      continue;
-    }
-    nodes.add(node(x, y));
-    for (const n of [NEIGHBOURS[1], NEIGHBOURS[2]]) {
-      const nx = x + (n as Point).x;
-      const ny = y + (n as Point).y;
-      const [a, b] = [node(x, y), node(nx, ny)];
-      if (grid.get(nx, ny) !== Tile.Wall && a !== b) {
-        edges.add([a, b].sort().join(' | '));
-      }
-    }
-  }
-  return edges.size - nodes.size + 1;
-}
-
-function isConnected(result: DungeonResult) {
-  const first = result.rooms[0];
-  const reaches = first && reachableFrom(result, first);
-  return result.rooms.every((room) => reaches?.(room.x, room.y));
-}
 
 function nearestDistances(rooms: Room[]) {
   const centres = rooms.map((r) => ({

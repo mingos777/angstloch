@@ -1,7 +1,9 @@
 export type { BaseOptions } from './base-options';
+export type { DigDungeonOptions } from './dig-dungeon-options';
 export type { DungeonOptions, Placement } from './dungeon-options';
 export type { DungeonResult } from './dungeon-result';
 export type { Exit } from './exit';
+export { generateDigDungeon } from './generate-dig-dungeon';
 export { generateMaze } from './generate-maze';
 export { generateRoomDungeon } from './generate-room-dungeon';
 export { Grid } from './grid';

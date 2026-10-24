@@ -5,7 +5,8 @@ A suite of map generators for roguelike games, on a 2D square grid. Written in T
 Currently available:
 
 - [`generateMaze`](#mazes): perfect and braid mazes.
-- [`generateRoomDungeon`](#dungeons): room-first dungeons with corridors and doors. _Work in progress._
+- [`generateRoomDungeon`](#dungeons): room-first dungeons: rooms are placed first and joined by corridors afterwards. _Work in progress._
+- [`generateDigDungeon`](#the-digger): dungeons that are dug: corridors and rooms grow out of a first room. _Work in progress._
 
 ## Concepts
 
@@ -110,7 +111,12 @@ console.log(grid.toString());
 console.log(`${rooms.length} rooms covering ${fill * 100}% of the map`);
 ```
 
-> **Work in progress.** A second dungeon generator, symmetry and prefabricated rooms are on the way. Existing options and result fields will keep working as documented here.
+> **Work in progress.** Symmetry and prefabricated rooms are on the way. Existing options and result fields will keep working as documented here.
+
+There are two dungeon generators. They take the same [`DungeonOptions`](#dungeonoptions), return the same [`DungeonResult`](#dungeonresult), and differ in how rooms and corridors come about:
+
+- `generateRoomDungeon` places the rooms first and joins them with corridors afterwards. Its rooms are spread over the whole map, in a scattered or a regular way.
+- [`generateDigDungeon`](#the-digger) digs corridors out of a first room and puts a room at the end of each, so the dungeon grows in a tree-like way, as in a roguelike of old.
 
 `generateRoomDungeon` builds a dungeon room-first:
 
@@ -162,7 +168,7 @@ As a result every room can always be reached from every other room, but a crowde
 
 ### Exits per room
 
-`exitsPerRoom` is a `Range`. Every room draws its own wanted number of exits from it, so `{ min: 1, max: 1 }` means one exit each, `{ min: 2, max: 4 }` means several and `{ min: 1, max: 3 }` (the default) is random with at least one.
+Both generators honour `exitsPerRoom`. It is a `Range`. Every room draws its own wanted number of exits from it, so `{ min: 1, max: 1 }` means one exit each, `{ min: 2, max: 4 }` means several and `{ min: 1, max: 3 }` (the default) is random with at least one.
 
 - A room with fewer links than it wants gets extra links to its nearest neighbours, which makes loops.
 - A room with more links than it wants uses its exits for several corridors: the extra corridors branch off the ones leaving through its exits, outside the wall.
@@ -171,15 +177,49 @@ This is best effort. A door shared with another room counts as an exit for both 
 
 ### Loops
 
-After the rooms are connected, `loopChance` adds extra corridors between rooms that are connected already. Each room is considered with its three nearest neighbours, and every such pair that is not linked yet gets one roll. A loop is never made by crossing another corridor and respects `exitsPerRoom`, so it is only added where there is room for it. At 0 the corridors form a tree (with the odd exception where a corridor had to cross another); at 1 every pair of neighbours is linked where possible.
+In both generators, after the rooms are connected, `loopChance` adds extra corridors between rooms that are connected already. Each room is considered with its three nearest neighbours, and every such pair that is not linked yet gets one roll. A loop is never made by crossing another corridor and respects `exitsPerRoom`, so it is only added where there is room for it. At 0 the corridors form a tree (with the odd exception where a corridor had to cross another); at 1 every pair of neighbours is linked where possible.
 
 ### Dead ends
 
-`deadEndChance` is the chance that a corridor sprouts a branch that leads nowhere, roughly 3 to 8 tiles long, from a random tile of the corridor. At 0, the default, there are no dead ends at all.
+In both generators, `deadEndChance` is the chance that a corridor sprouts a branch that leads nowhere, roughly 3 to 8 tiles long, from a random tile of the corridor. At 0, the default, there are no dead ends at all.
+
+### The digger
+
+```ts
+import { generateDigDungeon } from 'angstloch';
+
+const { grid, rooms, exits } = generateDigDungeon({
+  width: 61,
+  height: 41,
+  corridorLength: { min: 2, max: 10 },
+});
+```
+
+`generateDigDungeon` takes all the [`DungeonOptions`](#dungeonoptions) except that there is no partitioning, and returns a [`DungeonResult`](#dungeonresult). It digs the dungeon like this:
+
+1. It starts with one room in the middle of the map.
+2. It repeats the following until `fill` and `roomCount` are met, or the map is full (300 attempts in a row fail):
+   - Pick where to dig from. Usually that is a new exit on the wall of a room that has fewer exits than it wanted (see [Exits per room](#exits-per-room)), but with a `branchChance` it is a tile of an existing corridor. The direction is random, tipped by `horizontalBias` and `verticalBias`.
+   - Dig a corridor of `corridorLength` tiles. It mostly goes straight, as set by `straight`, and turns at most every other step. It follows the same rules as the [corridors of the room-first generator](#connections): it never runs alongside another corridor or passes diagonally beside one.
+   - Put a room of a size within `roomWidth` and `roomHeight` at the end, with a gap in its wall where the corridor arrives. If the corridor or the room does not fit, because it hits something or comes within `roomSpacing` of another room, the attempt is dropped and nothing is dug.
+3. It gives rooms the exits they want, and adds loops and dead ends, the way the room-first generator does.
+
+Every room is connected to the first one by the corridor it was dug from, so all rooms can be reached. Digging stalls when every room has all its exits and there are no corridors to branch off. In that case rooms are given more exits than they wanted, so that digging can go on.
+
+A `corridorLength` with a minimum of 0 sometimes skips the corridor and builds the new room right against the wall of its parent, with a single door in the wall between them, which needs `roomSpacing: 1`. With `lattice` placement, corridor lengths are rounded to what fits the lattice.
+
+`DigDungeonOptions` add two options to `DungeonOptions`:
+
+| Option           | Default              | Description                                                                                                                                |
+| ---------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `corridorLength` | `{ min: 1, max: 8 }` | Length of the corridor dug to the next room, in tiles, a `Range` of at least 0. 0 builds the room straight against the room it grows from. |
+| `branchChance`   | `0.3`                | Chance that a new corridor is dug from an existing corridor instead of from a room, from 0 to 1.                                           |
+
+The other options work as described in [`DungeonOptions`](#dungeonoptions). `roomSpacing` is the least number of wall tiles between the floors of two rooms, `fill` and `roomCount` decide when digging stops, and `placement: 'lattice'` puts rooms and corridors on the lattice of a maze. `sizeUniformity` applies, too. `partition` and `spacingUniformity` belong to `generateRoomDungeon` only.
 
 ### `DungeonOptions`
 
-`DungeonOptions` are the options shared by all dungeon generators. `RoomDungeonOptions`, the options of `generateRoomDungeon`, add `partition` and `spacingUniformity`.
+`DungeonOptions` are the options shared by all dungeon generators. `RoomDungeonOptions`, the options of `generateRoomDungeon`, add `partition` and `spacingUniformity`. [`DigDungeonOptions`](#the-digger), the options of `generateDigDungeon`, add `corridorLength` and `branchChance`.
 
 | Option            | Default                      | Description                                                                                                                                                                                                                               |
 | ----------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -264,7 +304,7 @@ for (const room of rooms) {
 
 ## Playground
 
-A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeon each have their own page.
+A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger.
 
 ## Development
 

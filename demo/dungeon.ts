@@ -1,4 +1,4 @@
-import { generateRoomDungeon } from '../src';
+import { generateDigDungeon, generateRoomDungeon } from '../src';
 import type { Placement, RoomPartition } from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { drawGrid } from './draw-grid';
@@ -19,13 +19,11 @@ function render(): void {
   const roomCountMax = data.get('roomCountMax') as string;
 
   try {
-    const { grid, rooms, exits, fill } = generateRoomDungeon({
+    const shared = {
       width: value('width'),
       height: value('height'),
       random: mulberry32(value('seed')),
       placement: data.get('placement') as Placement,
-      partition: data.get('partition') as RoomPartition,
-      spacingUniformity: value('spacingUniformity'),
       roomWidth: { min: value('roomWidthMin'), max: value('roomWidthMax') },
       roomHeight: { min: value('roomHeightMin'), max: value('roomHeightMax') },
       sizeUniformity: value('sizeUniformity'),
@@ -46,7 +44,22 @@ function render(): void {
       straight: value('straight'),
       horizontalBias: value('horizontalBias'),
       verticalBias: value('verticalBias'),
-    });
+    };
+    const { grid, rooms, exits, fill } =
+      data.get('generator') === 'dig'
+        ? generateDigDungeon({
+            ...shared,
+            corridorLength: {
+              min: value('corridorLengthMin'),
+              max: value('corridorLengthMax'),
+            },
+            branchChance: value('branchChance'),
+          })
+        : generateRoomDungeon({
+            ...shared,
+            partition: data.get('partition') as RoomPartition,
+            spacingUniformity: value('spacingUniformity'),
+          });
     error.textContent = '';
     const doors = exits.filter((exit) => exit.door).length;
     stats.textContent = `${String(rooms.length)} rooms, ${String(exits.length)} exits (${String(doors)} with doors), fill ${fill.toFixed(3)}`;
