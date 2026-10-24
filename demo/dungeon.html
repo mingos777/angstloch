@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Angstloch playground: dungeon</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <h1>Angstloch playground</h1>
+    <nav>
+      <a href="./index.html">Maze</a><a href="./dungeon.html">Dungeon</a>
+    </nav>
+    <form id="controls">
+      <label
+        >Width <input name="width" type="number" value="61" min="1"
+      /></label>
+      <label
+        >Height <input name="height" type="number" value="41" min="1"
+      /></label>
+      <label>Seed <input name="seed" type="number" value="1" /></label>
+      <label
+        >Tile size <input name="tileSize" type="number" value="12" min="1"
+      /></label>
+      <label
+        >Placement
+        <select name="placement">
+          <option value="free">free</option>
+          <option value="lattice">lattice</option>
+        </select>
+      </label>
+      <label
+        >Partition
+        <select name="partition">
+          <option value="scatter">scatter</option>
+          <option value="bsp">bsp</option>
+        </select>
+      </label>
+      <label
+        >Spacing uniformity
+        <input
+          name="spacingUniformity"
+          type="number"
+          value="0"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Room width min
+        <input name="roomWidthMin" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Room width max
+        <input name="roomWidthMax" type="number" value="7" min="1"
+      /></label>
+      <label
+        >Room height min
+        <input name="roomHeightMin" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Room height max
+        <input name="roomHeightMax" type="number" value="7" min="1"
+      /></label>
+      <label
+        >Size uniformity
+        <input
+          name="sizeUniformity"
+          type="number"
+          value="0"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Room count min
+        <input name="roomCountMin" type="number" value="1" min="0"
+      /></label>
+      <label
+        >Room count max
+        <input name="roomCountMax" type="number" placeholder="no limit" min="0"
+      /></label>
+      <label
+        >Room spacing <input name="roomSpacing" type="number" value="1" min="1"
+      /></label>
+      <label
+        >Fill
+        <input
+          name="fill"
+          type="number"
+          value="0.12"
+          min="0"
+          max="1"
+          step="0.01"
+      /></label>
+      <label
+        >Exits per room min
+        <input name="exitsPerRoomMin" type="number" value="1" min="1"
+      /></label>
+      <label
+        >Exits per room max
+        <input name="exitsPerRoomMax" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Loop chance
+        <input
+          name="loopChance"
+          type="number"
+          value="0.1"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Dead end chance
+        <input
+          name="deadEndChance"
+          type="number"
+          value="0"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Door chance
+        <input
+          name="doorChance"
+          type="number"
+          value="1"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Straight
+        <input
+          name="straight"
+          type="number"
+          value="0.5"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Horizontal bias
+        <input name="horizontalBias" type="number" value="0" min="0" step="0.5"
+      /></label>
+      <label
+        >Vertical bias
+        <input name="verticalBias" type="number" value="0" min="0" step="0.5"
+      /></label>
+      <label
+        >Show exits <input name="showExits" type="checkbox" checked
+      /></label>
+    </form>
+    <p id="stats"></p>
+    <canvas id="map"></canvas>
+    <p id="error"></p>
+    <script type="module" src="./dungeon.ts"></script>
+  </body>
+</html>

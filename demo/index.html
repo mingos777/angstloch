@@ -4,32 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Angstloch playground</title>
-    <style>
-      body {
-        font-family: system-ui, sans-serif;
-        margin: 1rem;
-        background: #1b1b1f;
-        color: #ddd;
-      }
-      form {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-        gap: 0.5rem;
-        max-width: 60rem;
-        margin-bottom: 1rem;
-      }
-      label {
-        display: flex;
-        flex-direction: column;
-        font-size: 0.8rem;
-      }
-      canvas {
-        image-rendering: pixelated;
-      }
-    </style>
+    <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <h1>Angstloch playground</h1>
+    <nav>
+      <a href="./index.html">Maze</a><a href="./dungeon.html">Dungeon</a>
+    </nav>
     <form id="controls">
       <label
         >Width <input name="width" type="number" value="41" min="3"

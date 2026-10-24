@@ -1,12 +1,7 @@
-import { generateMaze, Tile } from '../src';
+import { generateMaze } from '../src';
 import type { MazeSymmetry } from '../src';
+import { drawGrid } from './draw-grid';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
-
-const COLOURS = {
-  [Tile.Wall]: '#26262c',
-  [Tile.Floor]: '#d8d2c4',
-  [Tile.Door]: '#c8783c',
-};
 
 const form = document.querySelector<HTMLFormElement>('#controls');
 const canvas = document.querySelector<HTMLCanvasElement>('#map');
@@ -36,14 +31,7 @@ function render(): void {
       minExits: value('exits'),
     });
     error.textContent = '';
-    canvas.width = grid.width * tileSize;
-    canvas.height = grid.height * tileSize;
-    for (let y = 0; y < grid.height; ++y) {
-      for (let x = 0; x < grid.width; ++x) {
-        context.fillStyle = COLOURS[grid.get(x, y)];
-        context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-      }
-    }
+    drawGrid(canvas, context, grid, tileSize);
     context.fillStyle = '#4a8f5a';
     context.fillRect(
       start.x * tileSize + tileSize / 4,

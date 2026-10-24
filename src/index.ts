@@ -1,8 +1,15 @@
 export type { BaseOptions } from './base-options';
+export type { DungeonOptions, Placement } from './dungeon-options';
+export type { DungeonResult } from './dungeon-result';
+export type { Exit } from './exit';
 export { generateMaze } from './generate-maze';
+export { generateRoomDungeon } from './generate-room-dungeon';
 export { Grid } from './grid';
 export type { MazeOptions, MazeSymmetry } from './maze-options';
 export type { MazeResult } from './maze-result';
 export type { Point } from './point';
 export type { Random } from './random';
+export type { Range } from './range';
+export type { Room } from './room';
+export type { RoomDungeonOptions, RoomPartition } from './room-dungeon-options';
 export { Tile } from './tile';

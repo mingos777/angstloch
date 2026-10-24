@@ -31,6 +31,10 @@ Angstloch is a map generator library for roguelike games on a 2D square grid. It
 - Test one behaviour per test.
 - Structure each test body with `// given`, `// when` and `// then` comments separating the setup, the action and the assertions.
 
+### Documentation
+
+- `README.md` is the page npmjs shows to the world. Every time something is implemented or changed, document it there in the same task. The tool must be documented accurately and thoroughly: options, defaults, result shape and examples. Check the README still matches the code.
+
 ### Library design
 
 - No runtime dependencies. Core code must not use DOM or Node APIs, so it runs in a browser, Node, or a web worker.
