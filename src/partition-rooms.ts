@@ -178,7 +178,8 @@ function partition(random: Random, plan: RoomPlan): Placed[] {
         (leaf) =>
           leaf.width >= plan.widths.min && leaf.height >= plan.heights.min,
       )
-      .map((leaf, id) => ({ leaf, room: placeInLeaf(random, plan, leaf, id) }));
+      .map((leaf, id) => ({ leaf, room: placeInLeaf(random, plan, leaf, id) }))
+      .filter(({ room }) => !plan.isBlocked?.(room));
     const rooms = placed.map(({ room }) => room);
     const covered = rooms.reduce((sum, r) => sum + r.width * r.height, 0);
     const full = leaves.length < target;
@@ -235,6 +236,7 @@ function partitionSymmetric(random: Random, plan: RoomPlan): Room[] {
     exitCount: 0,
     doorCount: 0,
   });
+  const centerBlocked = plan.isBlocked?.(center) ?? false;
   const groups = partition(random, region).map(({ leaf, room }) => [
     room,
     ...plan.transforms.map((transform) => {
@@ -246,10 +248,14 @@ function partitionSymmetric(random: Random, plan: RoomPlan): Room[] {
     }),
   ]);
   return [
-    center,
+    ...(centerBlocked ? [] : [center]),
     ...groups
       .filter((group) =>
-        group.every((room) => !roomsConflict(room, center, plan.spacing)),
+        group.every(
+          (room) =>
+            !plan.isBlocked?.(room) &&
+            (centerBlocked || !roomsConflict(room, center, plan.spacing)),
+        ),
       )
       .flat(),
   ].map((room, id) => ({ ...room, id }));
@@ -263,4 +269,4 @@ function partitionSymmetric(random: Random, plan: RoomPlan): Room[] {
 export const partitionRooms: RoomPlacer = (random, plan) =>
   plan.transforms.length > 0
     ? partitionSymmetric(random, plan)
-    : partition(random, plan).map(({ room }) => room);
+    : partition(random, plan).map(({ room }, id) => ({ ...room, id }));

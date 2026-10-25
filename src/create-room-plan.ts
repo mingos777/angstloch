@@ -1,4 +1,5 @@
 import { createTransforms } from './create-transforms';
+import { effectiveSpacing } from './effective-spacing';
 import { fitSizes } from './fit-sizes';
 import type { LayoutSymmetry } from './layout-symmetry';
 import type { Range } from './range';
@@ -19,6 +20,7 @@ export interface RoomPlanOptions {
   fill: number;
   layout?: LayoutSymmetry;
   symmetryChance?: number;
+  isBlocked?: RoomPlan['isBlocked'];
 }
 
 /** Resolves the options into a plan, or returns `undefined` when not even the smallest room fits the map. */
@@ -41,10 +43,7 @@ export function createRoomPlan(options: RoomPlanOptions): RoomPlan | undefined {
     height,
     step,
     // lattice rooms sit on odd coordinates, which only odd spacings preserve
-    spacing:
-      step === 2
-        ? options.roomSpacing + ((options.roomSpacing + 1) % 2)
-        : options.roomSpacing,
+    spacing: effectiveSpacing(options.roomSpacing, step === 2),
     widths,
     heights,
     sizeUniformity: options.sizeUniformity,
@@ -57,5 +56,6 @@ export function createRoomPlan(options: RoomPlanOptions): RoomPlan | undefined {
         ? createTransforms(layout, width, height, step === 2)
         : [],
     symmetryChance,
+    isBlocked: options.isBlocked,
   };
 }

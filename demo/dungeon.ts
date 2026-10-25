@@ -8,6 +8,8 @@ import type {
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
 import { drawGrid } from './draw-grid';
+import { drawTemplates } from './draw-templates';
+import { createTemplateEditor } from './template-editor';
 import type { DisplayMode } from './draw-grid';
 
 const form = document.querySelector<HTMLFormElement>('#controls');
@@ -17,6 +19,12 @@ const canvas = document.querySelector<HTMLCanvasElement>('#map');
 const error = document.querySelector<HTMLElement>('#error');
 const stats = document.querySelector<HTMLElement>('#stats');
 const context = canvas?.getContext('2d');
+const templatePanel = document.querySelector<HTMLElement>('#templates');
+const editor = templatePanel
+  ? createTemplateEditor(templatePanel, () => {
+      render();
+    })
+  : undefined;
 
 function render(): void {
   if (!form || !display || !canvas || !error || !stats || !context) {
@@ -57,6 +65,8 @@ function render(): void {
       layoutSymmetryChance: value('layoutSymmetryChance'),
       corridorSymmetry: data.get('corridorSymmetry') as CorridorSymmetry,
       corridorSymmetryChance: value('corridorSymmetryChance'),
+      templates: editor?.templates() ?? [],
+      templateSymmetry: data.get('templateSymmetry') === 'on',
     };
     const { grid, rooms, exits, fill } =
       data.get('generator') === 'dig'
@@ -75,7 +85,8 @@ function render(): void {
           });
     error.textContent = '';
     const doors = exits.filter((exit) => exit.door).length;
-    stats.textContent = `${String(rooms.length)} rooms, ${String(exits.length)} exits (${String(doors)} with doors), fill ${fill.toFixed(3)}`;
+    const templated = rooms.filter((room) => room.template !== undefined);
+    stats.textContent = `${String(rooms.length)} rooms (${String(templated.length)} templated), ${String(exits.length)} exits (${String(doors)} with doors), fill ${fill.toFixed(3)}`;
     // open exits, which have no door, are highlighted
     const openExits = data.get('showExits')
       ? exits.filter((exit) => !exit.door).map((exit) => exit.position)
@@ -88,6 +99,9 @@ function render(): void {
       display.value as DisplayMode,
       openExits,
     );
+    if (data.get('showTemplates')) {
+      drawTemplates(context, rooms, tileSize);
+    }
   } catch (e) {
     error.textContent = e instanceof Error ? e.message : String(e);
   }

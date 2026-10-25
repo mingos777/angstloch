@@ -1,5 +1,6 @@
 import type { BaseOptions } from './base-options';
 import type { Range } from './range';
+import type { RoomTemplate } from './room-template';
 import type { SymmetryOptions } from './symmetry-options';
 
 /**
@@ -39,4 +40,8 @@ export interface DungeonOptions extends BaseOptions, SymmetryOptions {
   horizontalBias?: number;
   /** Weight of vertical corridor sections against `horizontalBias`. Defaults to 0. */
   verticalBias?: number;
+  /** Prefabricated rooms, which are placed first. The ordinary rooms fill the rest. A template that cannot be placed throws a `TemplatePlacementError`. */
+  templates?: RoomTemplate[];
+  /** Whether templated rooms get mirror images like any other room, which follows `layoutSymmetry`, always and whatever `layoutSymmetryChance` says. Defaults to `false`, which places each copy once. */
+  templateSymmetry?: boolean;
 }

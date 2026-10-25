@@ -14,6 +14,8 @@ import { pickRandom } from './pick-random';
 import type { Point } from './point';
 import type { Random } from './random';
 import { randomInt } from './random-int';
+import { TemplateCell } from './template-cell';
+import type { TemplatePlacement } from './template-placement';
 import type { Range } from './range';
 import type { Room } from './room';
 import { Tile } from './tile';
@@ -32,6 +34,18 @@ export interface DungeonBuilderOptions {
   layout?: { transforms: Transform[]; chance: number };
   /** The share of horizontal directions that corridors favor at a tile, which makes routed corridors follow a pattern. */
   steering?: (at: Point) => number;
+  /** The placements of templated rooms, by room id. Rooms without one are rectangles. */
+  templates?: readonly (TemplatePlacement | undefined)[];
+  /** Whether each `Exit` and `Door` cell of the templates gets a door, keyed by `y * width + x`. */
+  doors?: ReadonlyMap<number, boolean>;
+}
+
+/** An exit of a templated room that could not be opened or joined to the rest of the dungeon. */
+export interface UnconnectedExit {
+  /** Id of the room. */
+  room: number;
+  /** The exit cell. */
+  position: Point;
 }
 
 /** Where a corridor leaves a room: the tile outside the room's wall, and the wall tile to open unless the exit exists already. */
@@ -116,6 +130,8 @@ export interface DungeonBuilder {
   connectAll: () => number[];
   /** Adds the exits that rooms want, loops, and dead ends if asked for. */
   addExtras: (deadEnds: boolean) => void;
+  /** Joins the corridor stubs of the templated rooms' fixed exits to the rest of the corridors, and returns the exits that could not be opened or joined. */
+  connectStubs: () => UnconnectedExit[];
 }
 
 /**
@@ -232,8 +248,21 @@ export function createDungeonBuilder(
   const join = (a: number, b: number): void => {
     group[groupOf(a)] = groupOf(b);
   };
+  const placementOf = (room: Room): TemplatePlacement | undefined =>
+    options.templates?.[room.id];
   const registerRoom = (room: Room): void => {
-    for (let y = room.y - 1; y <= room.y + room.height; ++y) {
+    const placement = placementOf(room);
+    if (placement) {
+      // a template reserves what it is made of, and leaves the unused cells to corridors
+      placement.cells.forEach((row, dy) => {
+        row.forEach((cell, dx) => {
+          if (cell !== TemplateCell.Unused) {
+            reserved[(placement.y + dy) * width + placement.x + dx] = 1;
+          }
+        });
+      });
+    }
+    for (let y = room.y - 1; y <= room.y + room.height && !placement; ++y) {
       for (let x = room.x - 1; x <= room.x + room.width; ++x) {
         if (grid.inBounds(x, y)) {
           reserved[y * width + x] = 1;
@@ -538,6 +567,35 @@ export function createDungeonBuilder(
   ): ExitSlot[] => {
     const step = DIRECTIONS[direction] as Point;
     const slots: ExitSlot[] = [];
+    const placement = placementOf(room);
+    if (placement) {
+      // only optional exits are free to open: the fixed ones are open already
+      for (const candidate of placement.exits) {
+        if (
+          candidate.kind !== TemplateCell.OptionalExit ||
+          !candidate.directions.includes(direction)
+        ) {
+          continue;
+        }
+        const exit = {
+          x: placement.x + candidate.x,
+          y: placement.y + candidate.y,
+        };
+        const outside = { x: exit.x + step.x, y: exit.y + step.y };
+        if (
+          !isExitAllowed(exit) ||
+          (options.lattice && (outside.x % 2 === 0 || outside.y % 2 === 0))
+        ) {
+          continue;
+        }
+        if (isFree(outside.x, outside.y)) {
+          slots.push({ exit, outside, direction });
+        } else if (joining && isOtherGroup(outside, room)) {
+          slots.push({ exit, outside, direction, joins: true });
+        }
+      }
+      return slots;
+    }
     const vertical = step.y !== 0;
     const length = vertical ? room.width : room.height;
     for (let i = 0; i < length; ++i) {
@@ -563,6 +621,9 @@ export function createDungeonBuilder(
 
   /** Wall tiles that open straight into the other room, when exactly one wall separates the two. */
   const sharedWalls = (a: Room, b: Room): Point[] => {
+    if (placementOf(a) || placementOf(b)) {
+      return [];
+    }
     const walls: Point[] = [];
     const acrossX =
       a.x + a.width + 1 === b.x ? a : b.x + b.width + 1 === a.x ? b : undefined;
@@ -945,6 +1006,177 @@ export function createDungeonBuilder(
     }
   };
 
+  // the corridor tile in front of each fixed exit of a templated room
+  const stubs: (UnconnectedExit & { outside: Point; direction: number })[] = [];
+  const stubTiles = new Set<number>();
+  const unopened: UnconnectedExit[] = [];
+  // the rooms that have a fixed exit on a tile, to find doorways that rooms share
+  const fixedAt = new Map<number, number[]>();
+  const sharedDoorways = new Set<number>();
+  for (const room of rooms) {
+    for (const candidate of options.templates?.[room.id]?.exits ?? []) {
+      if (candidate.kind !== TemplateCell.OptionalExit) {
+        const placement = options.templates?.[room.id] as TemplatePlacement;
+        const key =
+          (placement.y + candidate.y) * width + placement.x + candidate.x;
+        fixedAt.set(key, [...(fixedAt.get(key) ?? []), room.id]);
+      }
+    }
+  }
+
+  /** Opens the exits of a template that are always there, each with a corridor tile in front of it. */
+  const openFixedExits = (room: Room, placement: TemplatePlacement): void => {
+    let fixed = 0;
+    let optional = 0;
+    for (const candidate of placement.exits) {
+      if (candidate.kind === TemplateCell.OptionalExit) {
+        ++optional;
+        continue;
+      }
+      const position = {
+        x: placement.x + candidate.x,
+        y: placement.y + candidate.y,
+      };
+      const key = position.y * width + position.x;
+      const sharing = fixedAt.get(key) ?? [];
+      if (sharing.length > 1) {
+        // a doorway of two rooms has no corridor of its own
+        if (!sharedDoorways.has(key)) {
+          sharedDoorways.add(key);
+          addExit(position, sharing, undefined, options.doors?.get(key));
+          join(sharing[0] as number, sharing[1] as number);
+          linked.add(idKey(sharing[0] as number, sharing[1] as number));
+        }
+        ++fixed;
+        continue;
+      }
+      const usable = candidate.directions.filter((direction) => {
+        const step = DIRECTIONS[direction] as Point;
+        const x = position.x + step.x;
+        const y = position.y + step.y;
+        return (
+          x >= 1 &&
+          y >= 1 &&
+          x <= width - 2 &&
+          y <= height - 2 &&
+          reserved[y * width + x] === 0 &&
+          (!options.lattice || (x % 2 === 1 && y % 2 === 1))
+        );
+      });
+      if (usable.length === 0) {
+        unopened.push({ room: room.id, position });
+        continue;
+      }
+      const direction = pickRandom(random, usable);
+      const step = DIRECTIONS[direction] as Point;
+      const outside = { x: position.x + step.x, y: position.y + step.y };
+      addExit(
+        position,
+        [room.id],
+        { outside, direction, exit: position },
+        options.doors?.get(position.y * width + position.x),
+      );
+      // a stub on or beside the stub of another room is one corridor with it
+      const beside = [
+        outside,
+        ...DIRECTIONS.map((step) => ({
+          x: outside.x + step.x,
+          y: outside.y + step.y,
+        })),
+      ].filter((tile) => stubTiles.has(tile.y * width + tile.x));
+      carve([outside], room.id);
+      for (const tile of beside) {
+        const other = owner[tile.y * width + tile.x] as number;
+        join(room.id, other);
+        linked.add(idKey(room.id, other));
+      }
+      stubs.push({ room: room.id, position, outside, direction });
+      stubTiles.add(outside.y * width + outside.x);
+      ++fixed;
+    }
+    // the fixed exits are all there are, and optional ones come on top
+    wanted[room.id] = Math.min(
+      Math.max(wanted[room.id] as number, fixed),
+      fixed + optional,
+    );
+  };
+
+  /** The tiles of the corridors that a tile belongs to. */
+  const corridorAt = (start: Point): Set<number> => {
+    const seen = new Set<number>([start.y * width + start.x]);
+    const queue = [start];
+    for (let tile = queue.shift(); tile; tile = queue.shift()) {
+      for (const step of DIRECTIONS) {
+        const x = tile.x + step.x;
+        const y = tile.y + step.y;
+        const index = y * width + x;
+        if (map.corridor[index] === 1 && !seen.has(index)) {
+          seen.add(index);
+          queue.push({ x, y });
+        }
+      }
+    }
+    return seen;
+  };
+
+  const connectStubs = (): UnconnectedExit[] => {
+    const failures = [...unopened];
+    for (const stub of stubs) {
+      const own = corridorAt(stub.outside);
+      // a stub that has a corridor leading off it is joined already
+      if ([...own].some((index) => !stubTiles.has(index))) {
+        continue;
+      }
+      let nearest: Point | undefined;
+      let nearestDistance = Infinity;
+      for (let y = 0; y < height; ++y) {
+        for (let x = 0; x < width; ++x) {
+          const distance = manhattan({ x, y }, stub.outside);
+          if (
+            distance < nearestDistance &&
+            map.corridor[y * width + x] === 1 &&
+            !own.has(y * width + x)
+          ) {
+            nearest = { x, y };
+            nearestDistance = distance;
+          }
+        }
+      }
+      // with no other corridor on the map there is nothing to join
+      if (!nearest) {
+        continue;
+      }
+      const target: CorridorTarget = {
+        test: (x, y) =>
+          map.corridor[y * width + x] === 1 && !own.has(y * width + x),
+        aim: nearest,
+        unbounded: true,
+      };
+      const joined = [false, true].some((crossing) => {
+        const path = findCorridor(
+          map,
+          stub.outside,
+          stub.direction,
+          target,
+          crossing,
+        );
+        return (
+          path !== undefined &&
+          place({
+            paths: [pathOf(path, stub.room, crossing, stub.direction)],
+            exits: [],
+            links: [],
+            joins: [],
+          })
+        );
+      });
+      if (!joined) {
+        failures.push({ room: stub.room, position: stub.position });
+      }
+    }
+    return failures;
+  };
+
   const groupSizes = (): Map<number, number> => {
     const sizes = new Map<number, number>();
     for (const room of rooms) {
@@ -1048,6 +1280,12 @@ export function createDungeonBuilder(
   for (const room of rooms) {
     registerRoom(room);
   }
+  for (const room of rooms) {
+    const placement = placementOf(room);
+    if (placement) {
+      openFixedExits(room, placement);
+    }
+  }
   // twins want the same number of exits, so that they can be linked alike
   for (const room of rooms) {
     for (const transform of transforms) {
@@ -1070,6 +1308,7 @@ export function createDungeonBuilder(
     ownerOf: ({ x, y }) => owner[y * width + x] as number,
     connectAll,
     addExtras,
+    connectStubs,
   };
 }
 

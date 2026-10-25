@@ -111,7 +111,7 @@ console.log(grid.toString());
 console.log(`${rooms.length} rooms covering ${fill * 100}% of the map`);
 ```
 
-> **Work in progress.** Prefabricated rooms are on the way. Existing options and result fields will keep working as documented here.
+> **Work in progress.** Prefabricated rooms are supported by both generators (see [Room templates](#room-templates)). Existing options and result fields will keep working as documented here.
 
 There are two dungeon generators. They take the same [`DungeonOptions`](#dungeonoptions), return the same [`DungeonResult`](#dungeonresult), and differ in how rooms and corridors come about:
 
@@ -158,7 +158,7 @@ Rooms are linked shortest link first, between rooms that are not connected yet, 
 - If the two rooms face each other across exactly one wall tile (`roomSpacing: 1` makes this common), a single door in that wall joins them. This exit belongs to both rooms.
 - Otherwise a corridor is routed between the rooms. Each room's end of it is a new exit on the wall that faces the other room, or, if the room has all the exits it wants, a branch off a corridor it has already (see [Exits per room](#exits-per-room)).
 
-Corridors are one tile wide. They stay a tile away from the walls of rooms, except where they leave through an exit, and they never run alongside another corridor, which would make a section two tiles wide, nor diagonally past one, which would let a diagonal step jump from one corridor to the other. Corridors do not touch themselves either. If the direct route is blocked, a corridor may cross an existing one, but only straight on. A corridor that would have to wind far around to get anywhere is not built; another route is tried instead.
+Corridors are one tile wide. They stay a tile away from the walls of rooms, except where they leave through an exit, and they never run alongside another corridor, which would make a section two tiles wide, nor diagonally past one, which would let a diagonal step jump from one corridor to the other. Corridors do not touch themselves either. If the direct route is blocked, a corridor may cross an existing one, but only straight on. Two corridors that point at each other along one line may be joined end to end. A corridor that would have to wind far around to get anywhere is not built; another route is tried instead.
 
 Exits are never next to each other, not even diagonally, so no room has two doors side by side.
 
@@ -205,6 +205,8 @@ const { grid, rooms, exits } = generateDigDungeon({
 3. It gives rooms the exits they want, and adds loops and dead ends, the way the room-first generator does.
 
 Every room is connected to the first one by the corridor it was dug from, so all rooms can be reached. Digging stalls when every room has all its exits and there are no corridors to branch off. In that case rooms are given more exits than they wanted, so that digging can go on.
+
+With [templates](#room-templates), the digger starts with the first template instead of a room of its own, placed in the middle of the map unless it has `positions` of its own. Digging then goes on from it and from its corridors as usual, and every other templated room is placed before digging starts and is an obstacle that new rooms and corridors keep away from. Once digging is done, those rooms are joined to the rest by corridors, before the extra exits, loops and dead ends are added. Templated rooms count towards `roomCount` and `fill`. With a symmetric layout, digging is mirrored only where the room it starts from has a twin, which takes `templateSymmetry`; without it, the steps that grow from a templated room are not mirrored. Templates work best with `generateRoomDungeon`, which has more freedom in where it puts them.
 
 A `corridorLength` with a minimum of 0 sometimes skips the corridor and builds the new room right against the wall of its parent, with a single door in the wall between them, which needs `roomSpacing: 1`. With `lattice` placement, corridor lengths are rounded to what fits the lattice.
 
@@ -306,6 +308,8 @@ Corridor symmetry does not make the layout symmetric.
 | `layoutSymmetryChance`   | `1`                          | How often the layout is symmetric, from 0 to 1.                                                                                                                                                                                           |
 | `corridorSymmetry`       | `none`                       | Makes corridors follow a maze pattern: `none`, `whirlpool` or `snowflake`.                                                                                                                                                                |
 | `corridorSymmetryChance` | `1`                          | How strongly corridors follow `corridorSymmetry`, from 0 to 1.                                                                                                                                                                            |
+| `templates`              | none                         | Prefabricated rooms, see [Room templates](#room-templates).                                                                                                                                                                               |
+| `templateSymmetry`       | `false`                      | Whether templated rooms get mirror images, see [Room templates](#room-templates).                                                                                                                                                         |
 
 `RoomDungeonOptions` adds:
 
@@ -360,6 +364,11 @@ for (const room of rooms) {
 | `exits`           | Indices into `DungeonResult#exits` of the room's exits.                      |
 | `exitCount`       | Number of exits of the room.                                                 |
 | `doorCount`       | Number of exits of the room that have a door.                                |
+| `template`        | Templated rooms only: the index of the room's template in `templates`.       |
+| `rotation`        | Templated rooms only: the clockwise rotation the template was placed in.     |
+| `mirrored`        | Templated rooms only: whether the template was placed mirrored.              |
+
+For a templated room, `x`, `y`, `width` and `height` describe the template's bounding box, walls included, as the floor of such a room need not be a rectangle. Ordinary rooms have no `template`, `rotation` or `mirrored`.
 
 ### `Exit`
 
@@ -369,9 +378,112 @@ for (const room of rooms) {
 | `rooms`    | Ids of the rooms the exit belongs to: one, or two when a single door joins two rooms that face each other across one wall. |
 | `door`     | Whether a door was placed.                                                                                                 |
 
+### Room templates
+
+Pass templates to either generator in the `templates` option. A `RoomTemplate` is a player-made room: a rectangular design that is placed in a dungeon as it is, with the corridors dug around it. The design is a grid of `TemplateCell` values, written as rows:
+
+```ts
+import { TemplateCell, type RoomTemplate } from 'angstloch';
+
+const { Unused: _, Floor: F, Wall: W, Exit: E } = TemplateCell;
+
+const cross: RoomTemplate = {
+  name: 'cross',
+  cells: [
+    [_, W, E, W, _],
+    [W, W, F, W, W],
+    [E, F, F, F, E],
+    [W, W, F, W, W],
+    [_, W, E, W, _],
+  ],
+};
+```
+
+| `TemplateCell` | Value | Meaning                                                                                                        |
+| -------------- | ----- | -------------------------------------------------------------------------------------------------------------- |
+| `Unused`       | 0     | Not part of the room. Corridors and other rooms may use the space, and the map is left untouched there.        |
+| `Floor`        | 1     | Becomes `Tile.Floor`.                                                                                          |
+| `Wall`         | 2     | Becomes `Tile.Wall` and is protected: nothing is dug through it and it never gets an exit.                     |
+| `Exit`         | 3     | A connection point. Becomes `Tile.Floor`, or `Tile.Door` according to `doorChance`.                            |
+| `Door`         | 4     | A connection point that always becomes `Tile.Door`.                                                            |
+| `OptionalExit` | 5     | A wall that may be opened into an exit, as `Exit` is, when the room needs one. Elsewhere it stays `Tile.Wall`. |
+
+The values are part of the public contract: kinds may be added, but existing values never change.
+
+A template is valid if:
+
+- it has at least one row, and all rows are equally long;
+- at least one `Exit`, `Door` or `OptionalExit` cell has an orthogonal neighbor that is `Unused` or beyond the template's edge (an _exit candidate_, where a corridor can start; every `Exit` and `Door` candidate gets connected, while `OptionalExit` candidates are opened only as far as `exitsPerRoom` asks, and a cell of these kinds without an outside neighbor is just an internal door);
+- open cells (`Floor`, `Exit`, `Door`, `OptionalExit`) are walled in: none of their eight neighbors, diagonals included, is `Unused` or beyond the template's edge, except on the outward side of an exit candidate. Diagonal moves are common in games, so this keeps a corridor from touching a floor diagonally, and keeps a door from being sidestepped;
+- `count`, `rotate`, `positionAccuracy` and `positions` follow the table below.
+
+An invalid template throws a `RangeError` that names the template.
+
+| Field              | Default   | Description                                                                                                                                     |
+| ------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cells`            | required  | The design, as rows of `TemplateCell` values.                                                                                                   |
+| `name`             | none      | Names the template in error messages.                                                                                                           |
+| `count`            | exactly 1 | Number of copies to place, a `Range` of at least 0.                                                                                             |
+| `rotate`           | `[0]`     | Clockwise rotations the template may be placed in, any of `0`, `90`, `180` and `270`. Each is controlled separately; the default never rotates. |
+| `mirror`           | `false`   | Whether the template may also be placed mirrored left to right.                                                                                 |
+| `positions`        | none      | Acceptable targets, see below. One is picked at random per copy; copies beyond the list are placed at random.                                   |
+| `areas`            | none      | Rectangles of the map, `{ x, y, width, height }`, to place copies in, see below. Used for copies that have no position.                         |
+| `positionAccuracy` | `1`       | How exactly positions are honored, from 0 to 1: 1 is exact if possible, in between allows some variance, 0 ignores positions.                   |
+
+A `Position` is `{ coords, anchor, rotations? }`. `anchor` says which point of the placed room's bounding box lands on `coords`: `'center'`, `'top'`, `'bottom'`, `'left'`, `'right'`, `'top-left'`, `'top-right'`, `'bottom-left'` or `'bottom-right'`. The anchor describes the room as it ends up on the map, so it does not rotate with the template. `rotations` limits the rotations allowed at that position, for example a door in the template's bottom wall and a `'bottom'` anchor call for `[90, 180, 270]`. The rotations used at a position are those in both `rotations` and the template's `rotate`; having none in common is an error.
+
+Mirroring and rotating produce the template's _variants_. Variants that look alike, such as a symmetric room turned by 180°, count once, so symmetric rooms are not favored when a variant is picked at random.
+
+#### Where templates go
+
+Placement is best effort, but never silent. For each copy of a template:
+
+1. One of the template's `positions` is picked at random; every position is used by one copy. Copies beyond the list go into the template's `areas`, see below, or are placed at random if it has none. A copy without a position, and every copy of a template with a `positionAccuracy` of 0, goes to a random free spot.
+2. The target is the position's `coords`, with the anchor of the room's bounding box on it (an even box has its center rounded down). Below an accuracy of 1 the target is moved by up to `(1 - positionAccuracy)` times half the shorter map side in each direction.
+3. If the target is not valid, the nearest valid spot is used instead. Every allowed variant is considered, so a variant that fits better than the first one can win.
+
+`areas` say where copies without a position go, when you care about the region and not the exact spot, for example near the sides of the map: give a strip on each side. A copy picks one of the areas at random and is placed at a random valid spot inside it, in any allowed variant. The copy's whole bounding box must lie inside the area. If the picked area has no room for it, the other areas are tried, and if none has, placing throws a `TemplatePlacementError`: a template with areas is never placed outside them. An area must be a rectangle of whole numbers, at least 1 by 1, within the map, and at least one allowed variant must fit in at least one area, or the template is rejected with a `RangeError` before anything is generated. `positionAccuracy` only applies to positions. With `templateSymmetry`, a copy is only placed where its mirror images fit too, but they need not lie inside an area. The digger starts with the first template in the middle of the map unless it has `positions` or `areas`.
+
+A spot is valid if the room's footprint, which is every cell but the `Unused` ones and so includes the template's walls, lies within the map and keeps its distance from other rooms' footprints, and if the exits have room. Distance works like this:
+
+- With a `roomSpacing` of 1, as for ordinary rooms, templates may touch and **share walls**. Two cells may sit on the same tile only if both are walls (an `OptionalExit` counts as a wall where it is not opened), or if both are an `Exit` or a `Door` that line up as a doorway: they leave in opposite directions, with the floor of one room on each side. Anything else on the same tile, such as a floor on a wall or a doorway on a wall, is a collision. A doorway that two templates share is a single exit of both rooms, listed once in `exits` with both room ids, and it needs no corridor. Spots that touch no other room are preferred when a copy is placed at random; a copy with a position is placed exactly there if it is valid, shared walls or not.
+- With a `roomSpacing` of 2 or more, footprints must be more than `roomSpacing` tiles apart, and nothing is shared.
+
+Exits need room as well: every `Exit` and `Door` needs either a shared doorway or a free tile outside it to start a corridor from, one tile or more away from the map edge, and at least one exit candidate of any kind needs that free tile, so that every templated room can reach out on its own. Templates may sit in each other's bounding boxes as long as their footprints keep to these rules.
+
+On the lattice (`placement: 'lattice'`) a template's bounding box sits on even coordinates, so that walls fall on even tiles and floors on odd ones, and only variants with an odd width and height are used. Variants that do not fit the lattice are not used.
+
+#### In a dungeon
+
+`generateRoomDungeon` places the templates before anything else, in the order of the list, and carves them as they are. ([`generateDigDungeon`](#the-digger) does the same, and starts digging from the first one.) The ordinary rooms are placed afterwards around them, at least `roomSpacing` tiles from a template's footprint and leaving the tile in front of each of its exits free, and corridors never cut through a template's walls. The templated rooms come first in `rooms`, copies of a template together, and are described by `template`, `rotation` and `mirrored`.
+
+```ts
+import { generateRoomDungeon } from 'angstloch';
+
+const { grid, rooms } = generateRoomDungeon({
+  width: 61,
+  height: 31,
+  templates: [
+    { ...cross, positions: [{ coords: { x: 30, y: 15 }, anchor: 'center' }] },
+  ],
+});
+```
+
+- A templated room counts towards `roomCount`, and its floor, doors included, towards `fill`. The `fill` of the result includes it.
+- Every `Exit` and `Door` cell that leads outside is opened and joined to the rest of the dungeon by a corridor, whatever `exitsPerRoom` says. Those exits count towards the room's `exitsPerRoom`, so a room with more fixed exits than the range asks for simply has more.
+- `OptionalExit` cells are opened only as far as `exitsPerRoom` asks for more exits, and only where a corridor can start. If a template has no more exits than its fixed ones, it gets no others.
+- `Exit` cells become doors by `doorChance`, and `Door` cells always do. They are listed in `exits`, and `Exit` and `Door` cells inside the template, which lead nowhere, are tiles only: they are not listed, and the same `doorChance` applies to the `Exit` ones.
+- Every exit has a corridor tile in front of it and corridors keep the usual distance from one another, so a door cannot be sidestepped and corridors cannot be crossed diagonally.
+- With `templateSymmetry` set and a `layoutSymmetry` other than `none`, every copy of a template brings its mirror images along, always and whatever `layoutSymmetryChance` is. An image is the geometric image of the copy, whatever `rotate` and `mirror` allow, and `rotation` and `mirrored` describe it accordingly. A copy is only placed where its images fit too, and an image that equals the copy (a centered, symmetric template) is not added. Without `templateSymmetry`, a template is placed once per copy, even with a symmetric layout. `templateSymmetry` has no effect without a layout symmetry.
+- The corridor rules can occasionally box in the fixed exit of a template. The ordinary rooms and corridors are then built again (dug again, by the digger), up to ten times, before giving up with a `TemplatePlacementError`. The templates keep their places.
+
+With `placement: 'lattice'`, a template that cannot sit on the lattice is rejected before anything is generated, with a `RangeError` that names it: at least one of its variants must have an odd width and height, every `Exit` and `Door` that leads outside must face a tile with odd coordinates, which is where corridors start, and so must at least one exit candidate of any kind. Design lattice templates with their walls on even and their floors on odd rows and columns of the template, and exits on the walls at odd positions along them. An example is a 3x3 template with a floor in the middle and one exit in the top wall.
+
+A template that cannot be placed will always throw a `TemplatePlacementError` instead of being skipped silently. Its message says which template (by `name` and index) and why, and its `templateIndex` and `templateName` fields carry the same. A template that cannot be joined to the rest of the dungeon throws the same error.
+
 ## Playground
 
-A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators.
+A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
 
 Both pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
 

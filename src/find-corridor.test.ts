@@ -386,4 +386,29 @@ describe('findCorridor', () => {
       expect(touching).toEqual([]);
     });
   });
+
+  it('joins the tip of a corridor that goes on straight ahead', () => {
+    // given
+    const across = (from: number, to: number, y: number) =>
+      Array.from({ length: to - from + 1 }, (_, i) => ({ x: from + i, y }));
+    // a row of corridor with a gap in it, walled in above and below
+    const corridors = map({
+      reserved: [...across(0, 11, 4), ...across(0, 11, 6)],
+      corridor: [...across(1, 3, 5), ...across(5, 8, 5)],
+    });
+    const target = {
+      test: (x: number, y: number) => x >= 5 && y === 5,
+      aim: { x: 5, y: 5 },
+    };
+
+    // when
+    const path = findCorridor(corridors, { x: 3, y: 5 }, 1, target, false);
+
+    // then
+    expect(path).toEqual([
+      { x: 3, y: 5 },
+      { x: 4, y: 5 },
+      { x: 5, y: 5 },
+    ]);
+  });
 });

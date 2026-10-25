@@ -158,3 +158,36 @@ export function asymmetry(
   }
   return differing;
 }
+
+/** Tiles that are open, reachable from a tile without crossing a wall. */
+export function reachable(
+  result: DungeonResult,
+  from: { x: number; y: number },
+) {
+  const { grid } = result;
+  const seen = new Set([from.y * grid.width + from.x]);
+  const queue = [from];
+  for (let tile = queue.shift(); tile; tile = queue.shift()) {
+    for (const step of NEIGHBORS) {
+      const [x, y] = [tile.x + step.x, tile.y + step.y];
+      if (grid.get(x, y) !== Tile.Wall && !seen.has(y * grid.width + x)) {
+        seen.add(y * grid.width + x);
+        queue.push({ x, y });
+      }
+    }
+  }
+  return seen;
+}
+
+/** The map position of the first floor cell of a templated room. */
+export function floorOf(result: DungeonResult, id: number) {
+  const room = result.rooms[id];
+  for (let y = room?.y ?? 0; y < (room?.y ?? 0) + (room?.height ?? 0); y++) {
+    for (let x = room?.x ?? 0; x < (room?.x ?? 0) + (room?.width ?? 0); x++) {
+      if (result.grid.get(x, y) === Tile.Floor) {
+        return { x, y };
+      }
+    }
+  }
+  throw new Error('no floor');
+}

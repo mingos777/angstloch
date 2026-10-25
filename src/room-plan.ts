@@ -26,6 +26,8 @@ export interface RoomPlan {
   transforms: Transform[];
   /** How often a room gets twins, from 0 to 1. */
   symmetryChance: number;
+  /** Whether a room's floor is too close to a templated room, or to a tile an exit of one opens onto. Absent without templates. */
+  isBlocked?: (room: Pick<Room, 'x' | 'y' | 'width' | 'height'>) => boolean;
 }
 
 export type RoomPlacer = (random: Random, plan: RoomPlan) => Room[];

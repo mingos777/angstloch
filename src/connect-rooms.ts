@@ -1,5 +1,5 @@
 import { createDungeonBuilder } from './dungeon-builder';
-import type { DungeonBuilderOptions } from './dungeon-builder';
+import type { DungeonBuilderOptions, UnconnectedExit } from './dungeon-builder';
 import type { Exit } from './exit';
 import type { Grid } from './grid';
 import type { Random } from './random';
@@ -9,6 +9,8 @@ export interface Connections {
   exits: Exit[];
   /** Ids of rooms that could not be joined to the biggest group of connected rooms. */
   stranded: number[];
+  /** Fixed exits of templated rooms that could not be opened or joined to the rest of the dungeon. */
+  unconnected: UnconnectedExit[];
 }
 
 /**
@@ -20,7 +22,8 @@ export interface Connections {
  * A room that cannot reach another room may join any corridor instead. Rooms
  * that cannot be joined at all are reported as stranded.
  *
- * Once the rooms are connected, extra links give rooms the number of exits
+ * Every fixed exit of a templated room gets a corridor too. Once the rooms are
+ * connected, extra links give rooms the number of exits
  * they ask for and add loops, and dead ends sprout from corridors.
  */
 export function connectRooms(
@@ -31,11 +34,16 @@ export function connectRooms(
 ): Connections {
   const builder = createDungeonBuilder(grid, rooms, random, options);
   if (rooms.length < 2) {
-    return { exits: builder.exits, stranded: [] };
+    return {
+      exits: builder.exits,
+      stranded: [],
+      unconnected: builder.connectStubs(),
+    };
   }
   const stranded = builder.connectAll();
-  if (stranded.length === 0) {
+  const unconnected = stranded.length === 0 ? builder.connectStubs() : [];
+  if (stranded.length === 0 && unconnected.length === 0) {
     builder.addExtras(true);
   }
-  return { exits: builder.exits, stranded };
+  return { exits: builder.exits, stranded, unconnected };
 }

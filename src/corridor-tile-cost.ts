@@ -73,8 +73,12 @@ export function corridorTileCost(
     if (isCorridor(nx, ny)) {
       const inLine = side % 2 === direction % 2;
       // touching a corridor ahead or behind is how a crossing, a junction or
-      // a branch begins and ends, but running along it is not
-      if (onCorridor ? inLine : !(inLine && isTouchable(nx, ny))) {
+      // a branch begins and ends, but running along it is not. Ending on the
+      // tip of a corridor that goes on straight ahead is an end-to-end join.
+      const joiningEnd = rules.isTarget(x, y) && side === direction;
+      if (
+        onCorridor ? inLine && !joiningEnd : !(inLine && isTouchable(nx, ny))
+      ) {
         return undefined;
       }
     }

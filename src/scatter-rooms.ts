@@ -54,7 +54,9 @@ export const scatterRooms: RoomPlacer = (random, plan) => {
     if (!center) {
       return rooms;
     }
-    add(center);
+    if (!plan.isBlocked?.(center)) {
+      add(center);
+    }
   }
 
   /** The room and its distinct mirror images. */
@@ -85,6 +87,7 @@ export const scatterRooms: RoomPlacer = (random, plan) => {
         room.y >= EDGE_CLEARANCE &&
         room.x + room.width <= width - EDGE_CLEARANCE &&
         room.y + room.height <= height - EDGE_CLEARANCE &&
+        !plan.isBlocked?.(room) &&
         !rooms.some((other) => roomsConflict(other, room, spacing)) &&
         !group
           .slice(i + 1)
