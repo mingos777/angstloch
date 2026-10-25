@@ -5,6 +5,7 @@ A suite of map generators for roguelike games, on a 2D square grid. Written in T
 Currently available:
 
 - [`generateMaze`](#mazes): perfect and braid mazes.
+- [`generateCave`](#caves): organic caves, grown with a cellular automaton. _Work in progress._
 - [`generateRoomDungeon`](#dungeons): room-first dungeons: rooms are placed first and joined by corridors afterwards. _Work in progress._
 - [`generateDigDungeon`](#the-digger): dungeons that are dug: corridors and rooms grow out of a first room. _Work in progress._
 
@@ -163,6 +164,88 @@ A maze is a lattice, so templates are placed [on the lattice](#placement): a tem
 - `start` must not be inside a templated room, which throws a `RangeError`. Without a `start`, the nearest free cell to the middle is used.
 
 Templated rooms are in `rooms`, listed before the ordinary ones, with `template`, `rotation` and `mirrored` set, and their openings are in `roomExits`. `rooms.count` counts only ordinary rooms. A `symmetry` cannot be combined with `templates`.
+
+## Caves
+
+```ts
+import { generateCave } from 'angstloch';
+
+const { grid, regions } = generateCave({ width: 60, height: 30 });
+console.log(grid.toString());
+console.log(`the largest cavern has ${String(regions[0]?.size)} tiles`);
+```
+
+A cave is grown with a cellular automaton. The map starts as random noise, with each tile a wall with the chance `fillChance`. Then it is smoothed over `iterations` passes. In each pass, every tile counts its neighbors that are walls, and all tiles change at the same time:
+
+- a floor tile turns into a wall when it has at least `birthLimit` wall neighbors;
+- a wall tile stays a wall when it has at least `survivalLimit` wall neighbors, and turns into floor otherwise.
+
+Tiles outside the map count as walls. The default limits are the classic 4-5 rule on 8 neighbors, which gives open, rounded caverns, and 3-2 on 4 neighbors. Raising `fillChance` or lowering the limits gives more wall. Fewer `iterations` gives rougher caves.
+
+The automaton usually leaves several caverns that are not joined to each other. Two cleanup steps deal with that, after the smoothing: `minRegionSize` fills in the small pockets, and `connect` decides what happens with the rest. Caverns are groups of floor tiles that touch along an edge; tiles that only touch diagonally are separate caverns.
+
+### Joining the caverns
+
+`connect` takes one of three values:
+
+- `'tunnel'` (the default) digs tunnels until the whole map is one cavern. The largest cavern is joined to the cavern nearest to it first, then the joined group to the nearest one after that, and so on. That keeps tunnels short, and joins caverns in a tree-like way, with no deliberate loops. A tunnel runs from the closest pair of tiles of the two caverns, and may cross a third cavern on its way, which joins that one as well. It only ever turns rock into floor, so no floor tile is lost.
+- `'largest'` fills in every cavern but the largest.
+- `'none'` leaves the caverns as the automaton made them.
+
+`minRegionSize` applies first, so a pocket that is too small is filled in and never gets a tunnel. The shape of tunnels is set by `tunnelStyle`:
+
+- `'winding'` (the default) digs a random walk from one end to the other. Each step either heads for the other end or goes in a random direction, and `tunnelWindiness` sets how often it wanders: with 0, the tunnel runs close to a straight line with only small jitters, and with 1 it meanders a lot. The tunnels are longer for it.
+- `'direct'` digs a line with at most one bend, horizontal first or vertical first at random. `tunnelWindiness` has no effect.
+
+`tunnelWidth` makes the tunnels wider, which suits caves that are meant to be roomy. With `borderWalls`, tunnels never touch the outermost ring of tiles.
+
+### `CaveOptions`
+
+| Option            | Default                                | Meaning                                                                                                                                                |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `width`           |                                        | Map width in tiles. Required.                                                                                                                          |
+| `height`          |                                        | Map height in tiles. Required.                                                                                                                         |
+| `random`          | `Math.random`                          | Source of randomness.                                                                                                                                  |
+| `fillChance`      | 0.45                                   | Chance that a tile starts as a wall, from 0 to 1.                                                                                                      |
+| `iterations`      | 4                                      | Number of smoothing passes. 0 leaves the raw noise.                                                                                                    |
+| `neighborhood`    | `'moore'`                              | `'moore'` counts the 8 surrounding tiles, `'von-neumann'` the 4 that share an edge.                                                                    |
+| `birthLimit`      | 5 for `'moore'`, 3 for `'von-neumann'` | Wall neighbors needed to turn a floor tile into a wall. A whole number, 0 or more.                                                                     |
+| `survivalLimit`   | 4 for `'moore'`, 2 for `'von-neumann'` | Wall neighbors needed for a wall tile to stay a wall. A whole number, 0 or more.                                                                       |
+| `borderWalls`     | `true`                                 | Keeps the outermost ring of tiles solid wall.                                                                                                          |
+| `minRegionSize`   | 0                                      | Fills in every cavern smaller than this many tiles. 0 keeps all.                                                                                       |
+| `connect`         | `'tunnel'`                             | What to do with caverns that are not joined: `'tunnel'` digs tunnels between them, `'largest'` fills in all but the largest one, `'none'` leaves them. |
+| `tunnelStyle`     | `'winding'`                            | The shape of tunnels: `'winding'` meanders, `'direct'` has at most one bend.                                                                           |
+| `tunnelWidth`     | 1                                      | The width of tunnels in tiles. A whole number, 1 or more.                                                                                              |
+| `tunnelWindiness` | 0.5                                    | How much `'winding'` tunnels wander, from 0 to 1.                                                                                                      |
+
+The limits are counted out of 8 neighbors for `'moore'` and out of 4 for `'von-neumann'`, which is why the defaults differ. A limit above the number of neighbors can never be reached, so a `birthLimit` of 9 stops floor from ever turning into a wall. A non-positive size, a `fillChance` or `tunnelWindiness` outside 0 to 1, a `tunnelWidth` that is not a whole number of at least 1, or a limit, `minRegionSize` or `iterations` that is not a whole number of at least 0 throws a `RangeError`.
+
+### Exits
+
+`minExits` and `maxExits` add openings on the map border, for a game to join the cave to its surroundings. The number of exits is picked between the two. An exit is a `Door` tile on the border and, unless a cavern already reaches the border, a straight tunnel from it to the nearest floor.
+
+Each exit goes on a random side of the map. On that side, the exit is put where the tunnel is shortest, going straight in from the border. Exits are never next to each other, corners are never used, and a side with no floor in line with its border is skipped. When no side can reach any floor, fewer exits than asked for are made, which happens on a map with no floor at all. Exit tunnels are one tile wide whatever `tunnelWidth` is, and they are part of the cavern that they reach.
+
+### `CaveResult`
+
+- `grid`: the map, made of `Wall` and `Floor` tiles, and a `Door` tile for each exit.
+- `regions`: the caverns of the final map, sorted from the largest to the smallest, so `regions[0]` is the largest and a good place for the player to start. Each has:
+  - `size`: the number of floor tiles.
+  - `center`: the floor tile nearest to the cavern's center of mass. A bent cavern's middle may be rock, so this is always a floor tile.
+  - `bounds`: the smallest `Area` (`x`, `y`, `width`, `height`) that holds the cavern.
+
+  Caverns that `minRegionSize` or `connect` filled in are not listed, and caverns joined by tunnels are listed as one. The list is empty when the map has no floor.
+
+- `exits`: the door tiles on the map border, one per exit. Empty without `minExits`.
+
+```ts
+const { grid, regions } = generateCave({
+  width: 60,
+  height: 30,
+  connect: 'largest',
+});
+const spawn = regions[0]?.center;
+```
 
 ## Dungeons
 
@@ -551,13 +634,15 @@ A template that cannot be placed will always throw a `TemplatePlacementError` in
 
 ## Playground
 
-A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
+A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons and the caves each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
 
-Both pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
+All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
 
 The maze page has the same room controls: the count, size and exits of ordinary [rooms](#rooms-in-mazes) (a maximum count of 0 means no rooms), the door chance, and the same Templates panel under the map, which is shared with the dungeon page. Tick **Use templates** to place them in the maze, mind that they must fit the lattice. Templated rooms are outlined, and room openings without a door are highlighted by **Show room gaps**.
 
-The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png` or `angstloch-dungeon.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
+The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png`, `angstloch-dungeon.png` or `angstloch-cave.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
+
+The cave page has a control for every `CaveOptions` field. The limits are blank by default, which means the defaults of the chosen neighborhood. The stats line shows the number of floor tiles, regions and exits, and **Mark region centers** highlights the `center` of every region, which makes it easy to see what `connect` and `minRegionSize` do to the caverns.
 
 ## Development
 

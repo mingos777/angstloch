@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Angstloch playground: cave</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <h1>Angstloch playground</h1>
+    <nav>
+      <a href="./index.html">Maze</a><a href="./dungeon.html">Dungeon</a
+      ><a href="./cave.html">Cave</a>
+    </nav>
+    <form id="controls">
+      <label
+        >Width <input name="width" type="number" value="61" min="1"
+      /></label>
+      <label
+        >Height <input name="height" type="number" value="41" min="1"
+      /></label>
+      <label>Seed <input name="seed" type="number" value="1" /></label>
+      <label
+        >Tile size <input name="tileSize" type="number" value="12" min="1"
+      /></label>
+      <label
+        >Fill chance
+        <input
+          name="fillChance"
+          type="number"
+          value="0.45"
+          min="0"
+          max="1"
+          step="0.01"
+      /></label>
+      <label
+        >Iterations <input name="iterations" type="number" value="4" min="0"
+      /></label>
+      <label
+        >Birth limit
+        <input name="birthLimit" type="number" placeholder="auto" min="0"
+      /></label>
+      <label
+        >Survival limit
+        <input name="survivalLimit" type="number" placeholder="auto" min="0"
+      /></label>
+      <label
+        >Neighborhood
+        <select name="neighborhood">
+          <option value="moore">moore (8)</option>
+          <option value="von-neumann">von-neumann (4)</option>
+        </select>
+      </label>
+      <label
+        >Min region size
+        <input name="minRegionSize" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Connect
+        <select name="connect">
+          <option value="tunnel">tunnel</option>
+          <option value="largest">largest</option>
+          <option value="none">none</option>
+        </select>
+      </label>
+      <label
+        >Tunnel style
+        <select name="tunnelStyle">
+          <option value="winding">winding</option>
+          <option value="direct">direct</option>
+        </select>
+      </label>
+      <label
+        >Tunnel width <input name="tunnelWidth" type="number" value="1" min="1"
+      /></label>
+      <label
+        >Tunnel windiness
+        <input
+          name="tunnelWindiness"
+          type="number"
+          value="0.5"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Exits min <input name="minExits" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Exits max <input name="maxExits" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Mark region centers <input name="showCenters" type="checkbox" checked
+      /></label>
+      <label
+        >Border walls <input name="borderWalls" type="checkbox" checked
+      /></label>
+    </form>
+    <p id="stats"></p>
+    <div class="view">
+      <label for="display">Display</label>
+      <select id="display">
+        <option value="simple">simple</option>
+        <option value="roguelike">roguelike</option>
+      </select>
+      <button id="download" type="button">Download PNG</button>
+    </div>
+    <canvas id="map"></canvas>
+    <p id="error"></p>
+    <script type="module" src="./cave.ts"></script>
+  </body>
+</html>
