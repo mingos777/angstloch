@@ -49,6 +49,10 @@ function render(): void {
       straight: value('straight'),
       horizontalBias: value('horizontalBias'),
       verticalBias: value('verticalBias'),
+      layoutSymmetry: data.get('layoutSymmetry') as LayoutSymmetry,
+      layoutSymmetryChance: value('layoutSymmetryChance'),
+      corridorSymmetry: data.get('corridorSymmetry') as CorridorSymmetry,
+      corridorSymmetryChance: value('corridorSymmetryChance'),
     };
     const { grid, rooms, exits, fill } =
       data.get('generator') === 'dig'
@@ -59,10 +63,6 @@ function render(): void {
               max: value('corridorLengthMax'),
             },
             branchChance: value('branchChance'),
-            layoutSymmetry: data.get('layoutSymmetry') as LayoutSymmetry,
-            layoutSymmetryChance: value('layoutSymmetryChance'),
-            corridorSymmetry: data.get('corridorSymmetry') as CorridorSymmetry,
-            corridorSymmetryChance: value('corridorSymmetryChance'),
           })
         : generateRoomDungeon({
             ...shared,

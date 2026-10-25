@@ -1,3 +1,4 @@
+import type { LayoutSymmetry } from '../layout-symmetry';
 import type { DungeonResult } from '../dungeon-result';
 import type { Grid } from '../grid';
 import type { Point } from '../point';
@@ -135,4 +136,25 @@ export function touchingExits(result: DungeonResult) {
       )
       .map((b) => [a, b]),
   );
+}
+
+/** How many tiles differ from the tile at their mirror image. */
+export function asymmetry(
+  { grid }: DungeonResult,
+  symmetry: LayoutSymmetry,
+  lattice: boolean,
+) {
+  const extent = (size: number) =>
+    lattice && size % 2 === 0 ? size - 1 : size;
+  const [w, h] = [extent(grid.width), extent(grid.height)];
+  const flipX = symmetry !== 'vertical';
+  const flipY = symmetry !== 'horizontal';
+  let differing = 0;
+  for (let y = 0; y < grid.height; ++y) {
+    for (let x = 0; x < grid.width; ++x) {
+      const image = grid.get(flipX ? w - 1 - x : x, flipY ? h - 1 - y : y);
+      differing += grid.get(x, y) === image ? 0 : 1;
+    }
+  }
+  return differing;
 }

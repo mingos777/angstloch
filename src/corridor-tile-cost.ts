@@ -88,9 +88,16 @@ export function corridorTileCost(
       return undefined;
     }
   }
+  const share = map.steer?.[index];
+  const move =
+    share === undefined
+      ? direction % 2 === 1
+        ? map.horizontalCost
+        : map.verticalCost
+      : direction % 2 === 1
+        ? 1.5 - share
+        : 0.5 + share;
   return (
-    (direction % 2 === 1 ? map.horizontalCost : map.verticalCost) +
-    (map.noise[index] as number) +
-    (onCorridor ? CROSSING_PENALTY : 0)
+    move + (map.noise[index] as number) + (onCorridor ? CROSSING_PENALTY : 0)
   );
 }

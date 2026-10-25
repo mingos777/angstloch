@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { DigDungeonOptions } from './dig-dungeon-options';
 import { generateDigDungeon } from './generate-dig-dungeon';
-import type { LayoutSymmetry } from './layout-symmetry';
 import type { Room } from './room';
 import {
   NEIGHBOURS,
   SEEDS,
   allTiles,
+  asymmetry,
   corridorTiles,
   deadEnds,
   diagonalJumps,
@@ -30,27 +30,6 @@ function dungeon(options: Partial<DigDungeonOptions> = {}, seed = 1) {
 
 function manyDungeons(options: Partial<DigDungeonOptions> = {}) {
   return SEEDS.map((seed) => dungeon(options, seed));
-}
-
-/** How many tiles differ from the tile at their mirror image. */
-function asymmetry(
-  { grid }: ReturnType<typeof dungeon>,
-  symmetry: LayoutSymmetry,
-  lattice: boolean,
-) {
-  const extent = (size: number) =>
-    lattice && size % 2 === 0 ? size - 1 : size;
-  const [w, h] = [extent(grid.width), extent(grid.height)];
-  const flipX = symmetry !== 'vertical';
-  const flipY = symmetry !== 'horizontal';
-  let differing = 0;
-  for (let y = 0; y < grid.height; ++y) {
-    for (let x = 0; x < grid.width; ++x) {
-      const image = grid.get(flipX ? w - 1 - x : x, flipY ? h - 1 - y : y);
-      differing += grid.get(x, y) === image ? 0 : 1;
-    }
-  }
-  return differing;
 }
 
 describe('generateDigDungeon', () => {

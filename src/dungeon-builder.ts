@@ -30,6 +30,8 @@ export interface DungeonBuilderOptions {
   deadEndChance: number;
   /** Mirror images that every addition to the dungeon is repeated as, and how often. */
   layout?: { transforms: Transform[]; chance: number };
+  /** The share of horizontal directions that corridors favour at a tile, which makes routed corridors follow a pattern. */
+  steering?: (at: Point) => number;
 }
 
 /** Where a corridor leaves a room: the tile outside the room's wall, and the wall tile to open unless the exit exists already. */
@@ -151,6 +153,12 @@ export function createDungeonBuilder(
     turnCost: options.straight * TURN_COST,
     averageCost: 1 + ((1 - options.straight) * MAX_NOISE) / 2,
   };
+  if (options.steering) {
+    const steering = options.steering;
+    map.steer = new Float32Array(width * height).map((_, i) =>
+      steering({ x: i % width, y: Math.floor(i / width) }),
+    );
+  }
   // for every corridor tile, the room whose link carved it
   const owner = new Int32Array(width * height).fill(-1);
   // tiles around exits, where no other exit may go
@@ -261,6 +269,20 @@ export function createDungeonBuilder(
     atCapacity(room) ? 'reuse' : 'new';
 
   const commit = (operation: Operation): void => {
+    // the rooms that a corridor connects are the ones that own the corridor
+    // it starts or ends on, or that have an exit where it starts or ends
+    const attached = ({ x, y }: Point): number[] => [
+      ...(map.corridor[y * width + x] === 1
+        ? [owner[y * width + x] as number]
+        : []),
+      ...operation.exits
+        .filter(({ start }) => start?.outside.x === x && start.outside.y === y)
+        .flatMap((exit) => exit.rooms),
+    ];
+    const connected = operation.paths.map(({ tiles }) => [
+      ...attached(tiles[0] as Point),
+      ...attached(tiles.at(-1) as Point),
+    ]);
     for (const path of operation.paths) {
       carve(path.tiles, path.owner);
     }
@@ -272,6 +294,11 @@ export function createDungeonBuilder(
     }
     for (const [a, b] of operation.joins) {
       join(a, b);
+    }
+    for (const [first, ...others] of connected) {
+      for (const id of others) {
+        join(first as number, id);
+      }
     }
   };
 
@@ -309,7 +336,11 @@ export function createDungeonBuilder(
     operation: Operation,
     newRooms: Room[],
   ):
-    | { rooms: Room[]; copies: Map<number, number>; operations: Operation[] }
+    | {
+        rooms: Room[];
+        copies: Map<number, number>;
+        operations: Operation[];
+      }
     | undefined => {
     const base = rooms.length;
     const created = [...newRooms];
@@ -572,7 +603,7 @@ export function createDungeonBuilder(
           paths: [],
           exits: [{ position: wall, rooms: [a.id, b.id] }],
           links: [[a.id, b.id]],
-          joins: [],
+          joins: [[a.id, b.id]],
         })
       ) {
         return true;
@@ -846,7 +877,7 @@ export function createDungeonBuilder(
               paths: [pathOf(path, room.id, crossing, slot.direction)],
               exits: exitOf(room, slot),
               links: [],
-              joins: [[room.id, owner[end.y * width + end.x] as number]],
+              joins: [],
             })
           ) {
             return true;
@@ -1016,6 +1047,15 @@ export function createDungeonBuilder(
 
   for (const room of rooms) {
     registerRoom(room);
+  }
+  // twins want the same number of exits, so that they can be linked alike
+  for (const room of rooms) {
+    for (const transform of transforms) {
+      const twin = geometry.get(geometryKey(transform.room(room)));
+      if (twin !== undefined && twin > room.id) {
+        wanted[twin] = wanted[room.id] as number;
+      }
+    }
   }
 
   return {

@@ -1,3 +1,4 @@
+import { createCentreRoom } from './create-centre-room';
 import { EDGE_CLEARANCE } from './room-plan';
 import type { RoomPlacer } from './room-plan';
 import { pickRoomSize } from './pick-room-size';
@@ -43,13 +44,62 @@ export const scatterRooms: RoomPlacer = (random, plan) => {
   const rooms: Room[] = [];
 
   let covered = 0;
+  const add = (room: Room): void => {
+    rooms.push({ ...room, id: rooms.length });
+    covered += room.width * room.height;
+  };
+  if (plan.transforms.length > 0) {
+    // a symmetric layout starts with a room that is its own mirror image
+    const centre = createCentreRoom(random, plan);
+    if (!centre) {
+      return rooms;
+    }
+    add(centre);
+  }
+
+  /** The room and its distinct mirror images. */
+  const withTwins = (room: Room): Room[] => {
+    const group = [room];
+    for (const transform of plan.transforms) {
+      const image = transform.room(room);
+      if (
+        !group.some(
+          (other) =>
+            other.x === image.x &&
+            other.y === image.y &&
+            other.width === image.width &&
+            other.height === image.height,
+        )
+      ) {
+        group.push(image);
+      }
+    }
+    return group;
+  };
+
+  const fitsTogether = (group: Room[]): boolean =>
+    rooms.length + group.length <= roomCount.max &&
+    group.every(
+      (room, i) =>
+        room.x >= EDGE_CLEARANCE &&
+        room.y >= EDGE_CLEARANCE &&
+        room.x + room.width <= width - EDGE_CLEARANCE &&
+        room.y + room.height <= height - EDGE_CLEARANCE &&
+        !rooms.some((other) => roomsConflict(other, room, spacing)) &&
+        !group
+          .slice(i + 1)
+          .some((other) => roomsConflict(other, room, spacing)),
+    );
+
   let failures = 0;
   while (
     rooms.length < roomCount.max &&
     (rooms.length < roomCount.min || covered / (width * height) < fill) &&
     failures < MAX_FAILURES
   ) {
-    const fitting: Room[] = [];
+    const mirrored =
+      plan.transforms.length > 0 && plan.symmetryChance > random();
+    const fitting: Room[][] = [];
     for (let i = 0; i < candidates; ++i) {
       const roomWidth = pickRoomSize(
         random,
@@ -73,16 +123,19 @@ export const scatterRooms: RoomPlacer = (random, plan) => {
         exitCount: 0,
         doorCount: 0,
       };
-      if (!rooms.some((room) => roomsConflict(room, candidate, spacing))) {
-        fitting.push(candidate);
+      const group = mirrored ? withTwins(candidate) : [candidate];
+      if (fitsTogether(group)) {
+        fitting.push(group);
       }
     }
     const best = fitting
-      .map((room) => ({ room, distance: distanceToNearest(room, rooms) }))
+      .map((group) => ({
+        group,
+        distance: distanceToNearest(group[0] as Room, rooms),
+      }))
       .sort((a, b) => b.distance - a.distance)[0];
     if (best) {
-      rooms.push(best.room);
-      covered += best.room.width * best.room.height;
+      best.group.forEach(add);
       failures = 0;
     } else {
       ++failures;

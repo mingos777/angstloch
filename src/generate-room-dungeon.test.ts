@@ -7,6 +7,7 @@ import {
   NEIGHBOURS,
   SEEDS,
   allTiles,
+  asymmetry,
   cycles,
   deadEnds,
   diagonalJumps,
@@ -1337,9 +1338,271 @@ describe('generateRoomDungeon with bsp', () => {
   });
 });
 
+describe.each(['scatter', 'bsp'] as const)(
+  'generateRoomDungeon symmetry with %s',
+  (partition) => {
+    const kinds = ['horizontal', 'vertical', 'both', 'rotational'] as const;
+    const cases = kinds.flatMap((kind) =>
+      (['free', 'lattice'] as const).flatMap((placement) =>
+        [
+          [61, 41],
+          [60, 40],
+        ].map(([width, height]) => [kind, placement, width, height] as const),
+      ),
+    );
+    const many = (options: Partial<RoomDungeonOptions>) =>
+      SEEDS.map((seed) => dungeon({ partition, ...options }, seed));
+
+    it.each(cases)(
+      'makes the %s layout symmetric with %s placement on %ix%i',
+      (layoutSymmetry, placement, width, height) => {
+        // given
+        const options = {
+          layoutSymmetry,
+          placement,
+          width,
+          height,
+          deadEndChance: 0.3,
+          loopChance: 0.3,
+          doorChance: 0.5,
+        };
+
+        // when
+        const results = many(options);
+
+        // then
+        expect(
+          results.map((result) =>
+            asymmetry(result, layoutSymmetry, placement === 'lattice'),
+          ),
+        ).toEqual(results.map(() => 0));
+      },
+    );
+
+    it.each(kinds)(
+      'keeps %s dungeons connected, free of jumps and rooms apart',
+      (layoutSymmetry) => {
+        // given
+        const options = { layoutSymmetry, roomSpacing: 2 };
+
+        // when
+        const results = many(options);
+
+        // then
+        for (const result of results) {
+          expect(isConnected(result)).toBe(true);
+          expect(diagonalJumps(result.grid)).toEqual([]);
+          for (const [i, a] of result.rooms.entries()) {
+            for (const b of result.rooms.slice(i + 1)) {
+              expect(overlap(a, b, 2)).toBe(false);
+            }
+          }
+        }
+      },
+    );
+
+    it('keeps the numbering and exit counts of rooms consistent', () => {
+      // given
+      const options = { layoutSymmetry: 'both', loopChance: 0.5 } as const;
+
+      // when
+      const results = many(options);
+
+      // then
+      for (const { rooms, exits } of results) {
+        expect(rooms.map(({ id }) => id)).toEqual(rooms.map((_r, i) => i));
+        for (const room of rooms) {
+          expect(
+            exits.filter(({ rooms: ids }) => ids.includes(room.id)).length,
+          ).toBe(room.exitCount);
+        }
+      }
+    });
+
+    it('puts a room in the middle of the map', () => {
+      // given
+      const options = { layoutSymmetry: 'both' } as const;
+
+      // when
+      const results = many(options);
+
+      // then
+      for (const { rooms } of results) {
+        expect(
+          rooms.some(
+            (r) => r.x + r.width / 2 === 30.5 && r.y + r.height / 2 === 20.5,
+          ),
+        ).toBe(true);
+      }
+    });
+
+    it('gives twins the same number of exits', () => {
+      // given
+      const options = { layoutSymmetry: 'horizontal' } as const;
+
+      // when
+      const results = many(options);
+
+      // then
+      for (const { rooms } of results) {
+        for (const room of rooms) {
+          const twin = rooms.find(
+            (other) =>
+              other.x === 61 - room.x - room.width &&
+              other.y === room.y &&
+              other.width === room.width &&
+              other.height === room.height,
+          );
+          expect(twin?.exitCount).toBe(room.exitCount);
+        }
+      }
+    });
+
+    it('counts the mirrored rooms towards the room count', () => {
+      // given
+      const options = {
+        layoutSymmetry: 'both',
+        roomCount: { min: 1, max: 9 },
+      } as const;
+
+      // when
+      const results = many(options);
+
+      // then
+      expect(results.every(({ rooms }) => rooms.length <= 9)).toBe(true);
+    });
+
+    it('counts the mirrored rooms towards the fill', () => {
+      // given
+      const options = { layoutSymmetry: 'both', fill: 0.15 } as const;
+
+      // when
+      const results = many(options);
+
+      // then
+      for (const { rooms, fill } of results) {
+        const covered = rooms.reduce((sum, r) => sum + r.width * r.height, 0);
+        expect(fill).toBeCloseTo(covered / (61 * 41));
+        expect(fill).toBeGreaterThanOrEqual(0.1);
+        expect(fill).toBeLessThan(0.3);
+      }
+    });
+
+    it('ignores the symmetry at a chance of 0', () => {
+      // given
+      const plain = dungeon({ partition }, 3);
+
+      // when
+      const ignored = dungeon(
+        { partition, layoutSymmetry: 'both', layoutSymmetryChance: 0 },
+        3,
+      );
+
+      // then
+      expect(ignored.grid.toString()).toBe(plain.grid.toString());
+    });
+
+    it('is less symmetric at a lower chance, yet connected', () => {
+      // given
+      const total = (layoutSymmetryChance: number) =>
+        many({ layoutSymmetry: 'horizontal', layoutSymmetryChance });
+
+      // when
+      const [low, high] = [0.3, 0.9].map((chance) =>
+        total(chance)
+          .map((result) => asymmetry(result, 'horizontal', false))
+          .reduce((a, b) => a + b, 0),
+      ) as [number, number];
+
+      // then
+      expect(low).toBeGreaterThan(high);
+      expect(total(0.5).every(isConnected)).toBe(true);
+    });
+
+    it('leaves exits and corridors connected at any chance', () => {
+      // given
+      const options = {
+        layoutSymmetry: 'rotational',
+        layoutSymmetryChance: 0.6,
+        exitsPerRoom: { min: 1, max: 1 },
+        loopChance: 0,
+      } as const;
+
+      // when
+      const results = many(options);
+
+      // then
+      expect(results.every(isConnected)).toBe(true);
+    });
+
+    it.each(['whirlpool', 'snowflake'] as const)(
+      'lays out corridors differently with %s corridor symmetry',
+      (corridorSymmetry) => {
+        // given
+        const options = { corridorSymmetry };
+
+        // when
+        const symmetric = dungeon({ partition, ...options });
+        const plain = dungeon({ partition });
+
+        // then
+        expect(symmetric.grid.toString()).not.toBe(plain.grid.toString());
+      },
+    );
+
+    it('keeps corridor symmetry dungeons connected and free of jumps', () => {
+      // given
+      const options = { corridorSymmetry: 'whirlpool', straight: 0.2 } as const;
+
+      // when
+      const results = many(options);
+
+      // then
+      for (const result of results) {
+        expect(isConnected(result)).toBe(true);
+        expect(diagonalJumps(result.grid)).toEqual([]);
+      }
+    });
+
+    it('ignores corridor symmetry at a chance of 0', () => {
+      // given
+      const plain = dungeon({ partition }, 3);
+
+      // when
+      const ignored = dungeon(
+        { partition, corridorSymmetry: 'snowflake', corridorSymmetryChance: 0 },
+        3,
+      );
+
+      // then
+      expect(ignored.grid.toString()).toBe(plain.grid.toString());
+    });
+
+    it('combines both kinds of symmetry', () => {
+      // given
+      const options = {
+        layoutSymmetry: 'both',
+        corridorSymmetry: 'snowflake',
+      } as const;
+
+      // when
+      const results = many(options);
+
+      // then
+      expect(results.map((result) => asymmetry(result, 'both', false))).toEqual(
+        results.map(() => 0),
+      );
+    });
+  },
+);
+
 describe('generateRoomDungeon new option validation', () => {
   it.each([
     ['partition', { partition: 'grid' }],
+    ['layoutSymmetry', { layoutSymmetry: 'diagonal' }],
+    ['layoutSymmetryChance', { layoutSymmetryChance: 2 }],
+    ['corridorSymmetry', { corridorSymmetry: 'spiral' }],
+    ['corridorSymmetryChance', { corridorSymmetryChance: -1 }],
     ['exitsPerRoom', { exitsPerRoom: { min: 0, max: 1 } }],
     ['loopChance', { loopChance: 2 }],
     ['deadEndChance', { deadEndChance: -1 }],

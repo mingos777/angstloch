@@ -1,4 +1,6 @@
+import { createTransforms } from './create-transforms';
 import { fitSizes } from './fit-sizes';
+import type { LayoutSymmetry } from './layout-symmetry';
 import type { Range } from './range';
 import { EDGE_CLEARANCE } from './room-plan';
 import type { RoomPlan } from './room-plan';
@@ -15,6 +17,8 @@ export interface RoomPlanOptions {
   roomCount: Range;
   roomSpacing: number;
   fill: number;
+  layout?: LayoutSymmetry;
+  symmetryChance?: number;
 }
 
 /** Resolves the options into a plan, or returns `undefined` when not even the smallest room fits the map. */
@@ -30,6 +34,8 @@ export function createRoomPlan(options: RoomPlanOptions): RoomPlan | undefined {
   if (!widths || !heights) {
     return undefined;
   }
+  const layout = options.layout ?? 'none';
+  const symmetryChance = options.symmetryChance ?? 0;
   return {
     width,
     height,
@@ -45,5 +51,11 @@ export function createRoomPlan(options: RoomPlanOptions): RoomPlan | undefined {
     spacingUniformity: options.spacingUniformity,
     roomCount: options.roomCount,
     fill: options.fill,
+    layout,
+    transforms:
+      symmetryChance > 0
+        ? createTransforms(layout, width, height, step === 2)
+        : [],
+    symmetryChance,
   };
 }

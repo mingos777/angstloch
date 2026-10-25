@@ -1,9 +1,12 @@
 import { blend } from './blend';
+import { createCentreRoom } from './create-centre-room';
 import { pickRoomSize } from './pick-room-size';
 import { EDGE_CLEARANCE } from './room-plan';
 import type { RoomPlacer, RoomPlan } from './room-plan';
 import type { Random } from './random';
 import type { Room } from './room';
+import { roomsConflict } from './rooms-conflict';
+import { symmetricExtent } from './symmetric-extent';
 
 /** Attempts at partitioning the map with more leaves, when the rooms fall short of the fill. */
 const MAX_ATTEMPTS = 6;
@@ -145,13 +148,18 @@ function placeInLeaf(
   };
 }
 
+/** A room and the area it was placed in. */
+interface Placed {
+  leaf: Leaf;
+  room: Room;
+}
+
 /**
- * Places rooms by binary space partitioning: the map is cut in two again and
- * again, and every resulting area gets one room. The number of areas is
- * estimated from the fill and the typical room size, and grown if the rooms
- * fall short.
+ * Cuts the map in two again and again, and puts one room in every resulting
+ * area. The number of areas is estimated from the fill and the typical room
+ * size, and grown if the rooms fall short.
  */
-export const partitionRooms: RoomPlacer = (random, plan) => {
+function partition(random: Random, plan: RoomPlan): Placed[] {
   const { roomCount, fill } = plan;
   const area = plan.width * plan.height;
   const typicalArea =
@@ -162,15 +170,16 @@ export const partitionRooms: RoomPlacer = (random, plan) => {
     Math.max(roomCount.min, Math.ceil((fill * area) / typicalArea)),
   );
 
-  let rooms: Room[] = [];
+  let placed: Placed[] = [];
   for (let attempt = 0; attempt < MAX_ATTEMPTS && target > 0; ++attempt) {
     const leaves = split(random, plan, target);
-    rooms = leaves
+    placed = leaves
       .filter(
         (leaf) =>
           leaf.width >= plan.widths.min && leaf.height >= plan.heights.min,
       )
-      .map((leaf, id) => placeInLeaf(random, plan, leaf, id));
+      .map((leaf, id) => ({ leaf, room: placeInLeaf(random, plan, leaf, id) }));
+    const rooms = placed.map(({ room }) => room);
     const covered = rooms.reduce((sum, r) => sum + r.width * r.height, 0);
     const full = leaves.length < target;
     const satisfied = rooms.length >= roomCount.min && covered >= fill * area;
@@ -179,5 +188,79 @@ export const partitionRooms: RoomPlacer = (random, plan) => {
     }
     target = Math.min(roomCount.max, Math.ceil(target * 1.3) + 1);
   }
-  return rooms;
-};
+  return placed;
+}
+
+/**
+ * Places a room in the middle that is its own mirror image, and the rest of
+ * the rooms in one half or quarter of the map, which is partitioned. Every
+ * other part of the map gets the mirror images of those rooms, or with a
+ * chance below 1, rooms of its own in the mirrored areas.
+ */
+function partitionSymmetric(random: Random, plan: RoomPlan): Room[] {
+  const centre = createCentreRoom(random, plan);
+  if (!centre) {
+    return [];
+  }
+  const lattice = plan.step === 2;
+  const copies = plan.transforms.length + 1;
+  const mirrorsX = plan.layout !== 'vertical';
+  const mirrorsY = plan.layout === 'vertical' || plan.layout === 'both';
+  // the part that is partitioned ends a spacing before its mirror image starts
+  const part = (size: number, mirrors: boolean): number =>
+    mirrors
+      ? Math.floor((symmetricExtent(size, lattice) - plan.spacing) / 2) + 1
+      : size;
+  const [width, height] = [
+    part(plan.width, mirrorsX),
+    part(plan.height, mirrorsY),
+  ];
+  const share = (plan.width * plan.height) / (copies * width * height);
+  const region: RoomPlan = {
+    ...plan,
+    width,
+    height,
+    fill: Math.min(1, plan.fill * share),
+    roomCount: {
+      min: Math.max(0, Math.ceil((plan.roomCount.min - 1) / copies)),
+      max: Math.max(0, Math.floor((plan.roomCount.max - 1) / copies)),
+    },
+    transforms: [],
+  };
+
+  const shape = (leaf: Leaf): Room => ({
+    id: 0,
+    ...leaf,
+    exits: [],
+    exitCount: 0,
+    doorCount: 0,
+  });
+  const groups = partition(random, region).map(({ leaf, room }) => [
+    room,
+    ...plan.transforms.map((transform) => {
+      if (plan.symmetryChance > random()) {
+        return transform.room(room);
+      }
+      const { x, y, width: w, height: h } = transform.room(shape(leaf));
+      return placeInLeaf(random, region, { x, y, width: w, height: h }, 0);
+    }),
+  ]);
+  return [
+    centre,
+    ...groups
+      .filter((group) =>
+        group.every((room) => !roomsConflict(room, centre, plan.spacing)),
+      )
+      .flat(),
+  ].map((room, id) => ({ ...room, id }));
+}
+
+/**
+ * Places rooms by binary space partitioning: the map is cut in two again and
+ * again, and every resulting area gets one room. With a symmetric layout, only
+ * a part of the map is partitioned and the rooms are mirrored.
+ */
+export const partitionRooms: RoomPlacer = (random, plan) =>
+  plan.transforms.length > 0
+    ? partitionSymmetric(random, plan)
+    : partition(random, plan).map(({ room }) => room);

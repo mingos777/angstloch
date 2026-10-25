@@ -1,3 +1,5 @@
+import type { Transform } from './create-transforms';
+import type { LayoutSymmetry } from './layout-symmetry';
 import type { Random } from './random';
 import type { Range } from './range';
 import type { Room } from './room';
@@ -18,6 +20,12 @@ export interface RoomPlan {
   spacingUniformity: number;
   roomCount: Range;
   fill: number;
+  /** Symmetry of the layout, which is `none` when it is ignored. */
+  layout: LayoutSymmetry;
+  /** The mirror images of the symmetry, which are none when the layout is not symmetric. */
+  transforms: Transform[];
+  /** How often a room gets twins, from 0 to 1. */
+  symmetryChance: number;
 }
 
 export type RoomPlacer = (random: Random, plan: RoomPlan) => Room[];

@@ -1,8 +1,8 @@
 import { assertFraction } from './assert-fraction';
 import { assertRange } from './assert-range';
 import { carveRoom } from './carve-room';
+import { createCentreRoom } from './create-centre-room';
 import { createSteering } from './create-steering';
-import { createTransforms } from './create-transforms';
 import { createRoomPlan } from './create-room-plan';
 import { digCorridor } from './dig-corridor';
 import type { DigDungeonOptions } from './dig-dungeon-options';
@@ -19,7 +19,6 @@ import type { Point } from './point';
 import { randomInt } from './random-int';
 import { resolveDungeonOptions } from './resolve-dungeon-options';
 import { resolveSymmetryOptions } from './resolve-symmetry-options';
-import { symmetricExtent } from './symmetric-extent';
 import type { Room } from './room';
 import { EDGE_CLEARANCE } from './room-plan';
 import { roomBeyond } from './room-beyond';
@@ -50,30 +49,28 @@ export function generateDigDungeon(options: DigDungeonOptions): DungeonResult {
 
   const grid = new Grid(width, height);
   const rooms: Room[] = [];
+  const steered =
+    symmetry.corridorSymmetry !== 'none' && symmetry.corridorSymmetryChance > 0;
   const plan = createRoomPlan({
     ...resolved,
     spacingUniformity: 0,
+    layout: symmetry.layoutSymmetry,
+    symmetryChance: symmetry.layoutSymmetryChance,
   });
   if (!plan || roomCount.max === 0) {
     return { grid, rooms, exits: [], fill: 0 };
   }
 
   const lattice = placement === 'lattice';
-  const layout = symmetry.layoutSymmetry;
-  const transforms =
-    layout !== 'none' && symmetry.layoutSymmetryChance > 0
-      ? createTransforms(layout, width, height, lattice)
-      : [];
+  const transforms = plan.transforms;
+  const steering = createSteering({ ...resolved, ...symmetry, lattice });
   const builder = createDungeonBuilder(grid, rooms, random, {
     ...resolved,
     lattice,
     layout: { transforms, chance: symmetry.layoutSymmetryChance },
+    steering: steered ? steering : undefined,
   });
-  const settings = {
-    ...resolved,
-    lattice,
-    share: createSteering({ ...resolved, ...symmetry, lattice }),
-  };
+  const settings = { ...resolved, lattice, share: steering };
   const area = width * height;
   const coverage = (): number =>
     rooms.reduce((sum, room) => sum + room.width * room.height, 0) / area;
@@ -83,47 +80,11 @@ export function generateDigDungeon(options: DigDungeonOptions): DungeonResult {
     height: pickRoomSize(random, plan.heights, plan.step, plan.sizeUniformity),
   });
 
-  // a room that is its own mirror image sits on the axis, which also takes
-  // the right size: one step more or less than a size that would not fit
-  const mirroredAxes = {
-    x: ['horizontal', 'both', 'rotational'].includes(layout),
-    y: ['vertical', 'both', 'rotational'].includes(layout),
-  };
-  const align = (size: number, mapSize: number, max: number): number => {
-    const extent = symmetricExtent(mapSize, lattice);
-    const sits = (s: number): boolean =>
-      (extent - s) % 2 === 0 && (!lattice || ((extent - s) / 2) % 2 === 1);
-    if (sits(size)) {
-      return size;
-    }
-    const larger = size + plan.step;
-    return larger <= max || size - plan.step < 1 ? larger : size - plan.step;
-  };
-  const centre = (size: number, mapSize: number, mirrored: boolean): number => {
-    if (mirrored) {
-      return (symmetricExtent(mapSize, lattice) - size) / 2;
-    }
-    const x = Math.max(EDGE_CLEARANCE, Math.floor((mapSize - size) / 2));
-    return plan.step === 2 && x % 2 === 0 ? x - 1 : x;
-  };
-
-  const first = pickSize();
-  const active = transforms.length > 0;
-  if (active && mirroredAxes.x) {
-    first.width = align(first.width, width, plan.widths.max);
+  // a room that is its own mirror image sits on the axis
+  const start = createCentreRoom(random, plan);
+  if (!start) {
+    return { grid, rooms, exits: [], fill: 0 };
   }
-  if (active && mirroredAxes.y) {
-    first.height = align(first.height, height, plan.heights.max);
-  }
-  const start: Room = {
-    id: 0,
-    x: centre(first.width, width, active && mirroredAxes.x),
-    y: centre(first.height, height, active && mirroredAxes.y),
-    ...first,
-    exits: [],
-    exitCount: 0,
-    doorCount: 0,
-  };
   rooms.push(start);
   carveRoom(grid, start);
   builder.registerRoom(start);

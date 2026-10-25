@@ -111,7 +111,7 @@ console.log(grid.toString());
 console.log(`${rooms.length} rooms covering ${fill * 100}% of the map`);
 ```
 
-> **Work in progress.** Symmetry for the room-first generator and prefabricated rooms are on the way. Existing options and result fields will keep working as documented here.
+> **Work in progress.** Prefabricated rooms are on the way. Existing options and result fields will keep working as documented here.
 
 There are two dungeon generators. They take the same [`DungeonOptions`](#dungeonoptions), return the same [`DungeonResult`](#dungeonresult), and differ in how rooms and corridors come about:
 
@@ -208,7 +208,7 @@ Every room is connected to the first one by the corridor it was dug from, so all
 
 A `corridorLength` with a minimum of 0 sometimes skips the corridor and builds the new room right against the wall of its parent, with a single door in the wall between them, which needs `roomSpacing: 1`. With `lattice` placement, corridor lengths are rounded to what fits the lattice.
 
-`DigDungeonOptions` add two options to `DungeonOptions`, as well as the four [symmetry options](#symmetry):
+`DigDungeonOptions` add two options to `DungeonOptions`:
 
 | Option           | Default              | Description                                                                                                                                |
 | ---------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -219,7 +219,7 @@ The other options work as described in [`DungeonOptions`](#dungeonoptions). `roo
 
 ### Symmetry
 
-_Only `generateDigDungeon` supports symmetry so far; the room-first generator will follow._
+Both generators take the same symmetry options, which are part of [`DungeonOptions`](#dungeonoptions).
 
 ```ts
 import { generateDigDungeon } from 'angstloch';
@@ -227,7 +227,7 @@ import { generateDigDungeon } from 'angstloch';
 const { grid } = generateDigDungeon({
   width: 61,
   height: 41,
-  layoutSymmetry: 'both',
+  layoutSymmetry: 'both', // generateRoomDungeon takes the same options
 });
 ```
 
@@ -249,9 +249,9 @@ There are two independent kinds of symmetry, each with a chance. They can be use
 - `both` does both at once, so that the dungeon is made of four mirrored quarters.
 - `rotational` turns it by 180° about the centre. The result looks the same upside down.
 
-Rooms, corridors, exits and doors are all mirrored. A room and its _twins_ get the same exits, and an exit and its twins are all open or all have a door, whatever `doorChance` is. Loops and dead ends are mirrored, too. Rooms that lie on an axis are their own twins, and so is the first room, which sits in the middle of the map. Every room is still reachable, and all the rules of corridors apply as usual.
+Rooms, corridors, exits and doors are all mirrored. A room and its _twins_ get the same exits (as far as the usual [exit counts](#exits-per-room) allow), and an exit and its twins are all open or all have a door, whatever `doorChance` is. Loops and dead ends are mirrored, too. Rooms that lie on an axis are their own twins. Both generators put a room in the middle of the map that is its own twin: the digger starts with it, and the room-first generator places it before all others. Every room is still reachable, and all the rules of corridors apply as usual.
 
-`layoutSymmetryChance` is rolled for every room and corridor that is dug, and for every extra exit, loop and dead end. When the roll fails, the room or corridor gets no twins. Rooms without twins cannot take twins to anything they grow, so the unsymmetric parts stay unsymmetric. Where a mirrored room, corridor or exit would not fit, because it would collide with something, the whole step is skipped, which keeps a dungeon at chance 1 perfectly symmetric.
+`layoutSymmetryChance` is rolled for every room and corridor that is dug (or placed), and for every extra exit, loop and dead end. When the roll fails, the room or corridor gets no twins. Rooms without twins cannot take twins to anything they grow, so the unsymmetric parts stay unsymmetric. Where a mirrored room, corridor or exit would not fit, because it would collide with something, the whole step is skipped, which keeps a dungeon at chance 1 perfectly symmetric.
 
 Things to know:
 
@@ -260,37 +260,52 @@ Things to know:
 - The first room must sit exactly on the axis, which needs its size to have the same parity as the map (and, on the lattice, the right position on it). If its random size does not, it is made one step (2 on the lattice) wider, or narrower if it is as wide as it can be. It can therefore stray one step outside `roomWidth` or `roomHeight`, but only when the range has a single size.
 - Symmetry changes what the generator makes, so the same seed gives another dungeon than without it.
 
+How each generator applies the layout symmetry:
+
+- The digger mirrors every step of digging (corridor, room, exits) as a whole. A step is only taken if all its mirror images fit.
+- `generateRoomDungeon` mirrors the rooms and every link between them. With `scatter`, each room that is placed is mirrored together with its twins at the given chance, and rooms may lie on an axis. With `bsp`, only one half (or quarter) of the map is partitioned and its areas are mirrored; rooms never straddle an axis, apart from the middle room. With a chance below 1, a mirrored area gets a room of its own instead of a twin. A corridor that crosses an axis cannot be mirrored, as it would meet its own image, so the two halves are joined through the room in the middle. A room that cannot be linked symmetrically is dropped together with its twins, so the layout stays symmetric.
+- For `generateRoomDungeon`, a `roomCount.max` below the size of a set of twins can leave few rooms; with `bsp`, `fill` is met roughly, as without symmetry, but less closely.
+
 #### Corridor symmetry
 
-`corridorSymmetry` is the symmetry of `generateMaze`, applied to the direction that the digger picks for corridors. It steers corridors by where they are on the map:
+`corridorSymmetry` is the symmetry of `generateMaze`, applied to the direction of corridors. It steers corridors by where they are on the map:
 
 - `snowflake` makes corridors radiate from the centre. Where a tile is further from the centre horizontally than vertically, corridors there run horizontally, and the other way round.
 - `whirlpool` makes them twirl around the centre, with the same rule turned by 90°.
 
-`corridorSymmetryChance` is how often a choice of direction follows the pattern, instead of `horizontalBias` and `verticalBias`. A corridor decides its direction at its start and whenever it turns, so `straight` limits the effect: corridors that never turn keep the direction they started in. Corridor symmetry shapes only the corridors that the digger digs. It leaves the extra links of the finishing step (extra exits, loops and dead ends) alone, and it does not make the layout symmetric.
+`corridorSymmetryChance` is how often the pattern applies, instead of `horizontalBias` and `verticalBias`. `straight` limits the effect:
+
+- The digger picks the direction of a corridor at its start and whenever it turns, so corridors that never turn keep the direction they started in. Routed corridors of the extra links (exits, loops, dead ends) are steered, too.
+- `generateRoomDungeon` routes corridors on a map where each tile has a preferred axis, chosen by the chance. Corridors prefer to follow it, as moving along the other axis costs more, but they still go wherever they have to.
+
+Corridor symmetry does not make the layout symmetric.
 
 ### `DungeonOptions`
 
 `DungeonOptions` are the options shared by all dungeon generators. `RoomDungeonOptions`, the options of `generateRoomDungeon`, add `partition` and `spacingUniformity`. [`DigDungeonOptions`](#the-digger), the options of `generateDigDungeon`, add `corridorLength` and `branchChance`.
 
-| Option            | Default                      | Description                                                                                                                                                                                                                               |
-| ----------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `width`, `height` | required                     | Map size in tiles.                                                                                                                                                                                                                        |
-| `random`          | `Math.random`                | Source of randomness.                                                                                                                                                                                                                     |
-| `placement`       | `'free'`                     | `'free'` or `'lattice'`, see above.                                                                                                                                                                                                       |
-| `roomWidth`       | `{ min: 3, max: 7 }`         | Room width in tiles, a `Range` of at least 1.                                                                                                                                                                                             |
-| `roomHeight`      | `{ min: 3, max: 7 }`         | Room height in tiles, a `Range` of at least 1.                                                                                                                                                                                            |
-| `sizeUniformity`  | `0`                          | How alike room sizes are, from 0 to 1. At 0 every size in the ranges is equally likely. Higher values pull sizes towards the middle of the ranges, and at 1 all rooms are the same size.                                                  |
-| `roomCount`       | `{ min: 1, max: unbounded }` | Number of rooms, a `Range` of at least 0. Generation never exceeds `max`, and `fill` is only honoured once `min` is reached.                                                                                                              |
-| `roomSpacing`     | `1`                          | Fewest wall tiles between the floors of two rooms, a whole number of at least 1. With 1, rooms can sit right next to each other and share a door. With 3 or more a corridor fits between rooms.                                           |
-| `fill`            | `0.12`                       | Target share of the map covered by room floors, from 0 to 1. Corridors do not count. The last room may overshoot the target. Above roughly 0.15 the map gets cramped; below 0.1 it is sparse.                                             |
-| `exitsPerRoom`    | `{ min: 1, max: 3 }`         | Number of exits per room, a `Range` of at least 1. See [Exits per room](#exits-per-room).                                                                                                                                                 |
-| `loopChance`      | `0.1`                        | Chance of an extra corridor between each pair of nearby rooms that is not linked yet, from 0 to 1. See [Loops](#loops).                                                                                                                   |
-| `deadEndChance`   | `0`                          | Chance that a corridor sprouts a dead end, from 0 to 1. See [Dead ends](#dead-ends).                                                                                                                                                      |
-| `doorChance`      | `1`                          | Chance that an exit gets a door, from 0 to 1. Exits without a door are plain openings in the wall.                                                                                                                                        |
-| `straight`        | `0.5`                        | Preference of corridors for going straight, from 0 to 1. At 0 corridors wander; at 1 they turn as little as possible.                                                                                                                     |
-| `horizontalBias`  | `0`                          | Weight of horizontal corridor sections against `verticalBias`. Only the ratio matters, so set both; a lone value against 0 means always. The bias makes corridors prefer to leave rooms sideways (or up and down) and to detour that way. |
-| `verticalBias`    | `0`                          | Weight of vertical corridor sections against `horizontalBias`.                                                                                                                                                                            |
+| Option                   | Default                      | Description                                                                                                                                                                                                                               |
+| ------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `width`, `height`        | required                     | Map size in tiles.                                                                                                                                                                                                                        |
+| `random`                 | `Math.random`                | Source of randomness.                                                                                                                                                                                                                     |
+| `placement`              | `'free'`                     | `'free'` or `'lattice'`, see above.                                                                                                                                                                                                       |
+| `roomWidth`              | `{ min: 3, max: 7 }`         | Room width in tiles, a `Range` of at least 1.                                                                                                                                                                                             |
+| `roomHeight`             | `{ min: 3, max: 7 }`         | Room height in tiles, a `Range` of at least 1.                                                                                                                                                                                            |
+| `sizeUniformity`         | `0`                          | How alike room sizes are, from 0 to 1. At 0 every size in the ranges is equally likely. Higher values pull sizes towards the middle of the ranges, and at 1 all rooms are the same size.                                                  |
+| `roomCount`              | `{ min: 1, max: unbounded }` | Number of rooms, a `Range` of at least 0. Generation never exceeds `max`, and `fill` is only honoured once `min` is reached.                                                                                                              |
+| `roomSpacing`            | `1`                          | Fewest wall tiles between the floors of two rooms, a whole number of at least 1. With 1, rooms can sit right next to each other and share a door. With 3 or more a corridor fits between rooms.                                           |
+| `fill`                   | `0.12`                       | Target share of the map covered by room floors, from 0 to 1. Corridors do not count. The last room may overshoot the target. Above roughly 0.15 the map gets cramped; below 0.1 it is sparse.                                             |
+| `exitsPerRoom`           | `{ min: 1, max: 3 }`         | Number of exits per room, a `Range` of at least 1. See [Exits per room](#exits-per-room).                                                                                                                                                 |
+| `loopChance`             | `0.1`                        | Chance of an extra corridor between each pair of nearby rooms that is not linked yet, from 0 to 1. See [Loops](#loops).                                                                                                                   |
+| `deadEndChance`          | `0`                          | Chance that a corridor sprouts a dead end, from 0 to 1. See [Dead ends](#dead-ends).                                                                                                                                                      |
+| `doorChance`             | `1`                          | Chance that an exit gets a door, from 0 to 1. Exits without a door are plain openings in the wall.                                                                                                                                        |
+| `straight`               | `0.5`                        | Preference of corridors for going straight, from 0 to 1. At 0 corridors wander; at 1 they turn as little as possible.                                                                                                                     |
+| `horizontalBias`         | `0`                          | Weight of horizontal corridor sections against `verticalBias`. Only the ratio matters, so set both; a lone value against 0 means always. The bias makes corridors prefer to leave rooms sideways (or up and down) and to detour that way. |
+| `verticalBias`           | `0`                          | Weight of vertical corridor sections against `horizontalBias`.                                                                                                                                                                            |
+| `layoutSymmetry`         | `none`                       | Mirrors or rotates the layout about the centre of the map: `none`, `horizontal`, `vertical`, `both` or `rotational`. See [Symmetry](#symmetry).                                                                                           |
+| `layoutSymmetryChance`   | `1`                          | How often the layout is symmetric, from 0 to 1.                                                                                                                                                                                           |
+| `corridorSymmetry`       | `none`                       | Makes corridors follow a maze pattern: `none`, `whirlpool` or `snowflake`.                                                                                                                                                                |
+| `corridorSymmetryChance` | `1`                          | How strongly corridors follow `corridorSymmetry`, from 0 to 1.                                                                                                                                                                            |
 
 `RoomDungeonOptions` adds:
 
@@ -356,7 +371,7 @@ for (const room of rooms) {
 
 ## Playground
 
-A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to the digger.
+A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators.
 
 ## Development
 
