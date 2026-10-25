@@ -461,4 +461,331 @@ describe('generateForest', () => {
     expect(generate).toThrow(RangeError);
     expect(generate).toThrow(name);
   });
+
+  it('lays no roads by default', () => {
+    // given
+    const options = {};
+
+    // when
+    const { grid, roads, junctions, exits } = forest(options);
+
+    // then
+    expect([roads, junctions, exits]).toEqual([[], [], []]);
+    expect(count(grid, Tile.Road)).toBe(0);
+  });
+
+  it('leaves the forest as it was when roads are not asked for', () => {
+    // given
+    const plain = forest({}, 5);
+
+    // when
+    const withoutRoads = forest({ roads: undefined }, 5);
+
+    // then
+    expect(withoutRoads.grid.toString()).toBe(plain.grid.toString());
+  });
+
+  it('lays a road of road tiles through the forest', () => {
+    // given
+    const options = { roads: { angle: 0 } };
+
+    // when
+    const { grid, roads } = forest(options);
+
+    // then
+    expect(roads).toHaveLength(1);
+    expect(count(grid, Tile.Road)).toBeGreaterThan(80 * 3 - 10);
+  });
+
+  it('puts no trees on the road', () => {
+    // given
+    const options = { roads: { width: { min: 4, max: 4 } }, maxDensity: 1 };
+
+    // when
+    const { grid, roads } = forest(options);
+
+    // then
+    for (const { x, y } of roads[0]?.points ?? []) {
+      expect(grid.get(x, y)).toBe(Tile.Road);
+    }
+    expect(count(grid, Tile.Road)).toBeGreaterThan(0);
+  });
+
+  it('keeps the trees off the road everywhere, not just on the centerline', () => {
+    // given
+    const options = {
+      roads: { angle: 0, windiness: 0, width: { min: 5, max: 5 } },
+      minDensity: 1,
+      maxDensity: 1,
+    };
+
+    // when
+    const { grid } = forest(options);
+
+    // then
+    const roadTiles = count(grid, Tile.Road);
+    expect(roadTiles + count(grid, Tile.Tree)).toBe(80 * 60);
+    expect(roadTiles).toBeGreaterThan(80 * 4);
+  });
+
+  it('reports the exits where the road leaves the map', () => {
+    // given
+    const options = { roads: { angle: 0, windiness: 0 } };
+
+    // when
+    const { exits } = forest(options);
+
+    // then
+    expect(exits).toHaveLength(2);
+    expect(exits.map((exit) => exit.x).sort((a, b) => a - b)).toEqual([0, 79]);
+  });
+
+  it('can use another tile for the road', () => {
+    // given
+    const options = { roads: {}, roadTile: Tile.Floor, groundTile: Tile.Grass };
+
+    // when
+    const { grid } = forest(options);
+
+    // then
+    expect(count(grid, Tile.Floor)).toBeGreaterThan(0);
+    expect(count(grid, Tile.Road)).toBe(0);
+  });
+
+  it('rejects invalid road options', () => {
+    // given
+    const generate = () => forest({ roads: { windiness: 2 } });
+
+    // when / then
+    expect(generate).toThrow(RangeError);
+  });
+
+  it('rejects an invalid roadTile', () => {
+    // given
+    const generate = () => forest({ roadTile: 99 as Tile });
+
+    // when / then
+    expect(generate).toThrow(RangeError);
+    expect(generate).toThrow('roadTile');
+  });
+
+  it('reports the junctions of crossings and branches', () => {
+    // given
+    const options = {
+      roads: {
+        crossings: { min: 1, max: 1 },
+        branches: { min: 3, max: 3 },
+      },
+    };
+
+    // when
+    const { roads, junctions } = forest(options);
+
+    // then
+    expect(roads.map((road) => road.kind)).toEqual([
+      'road',
+      'road',
+      'branch',
+      'branch',
+      'branch',
+    ]);
+    expect(junctions.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('puts no trees on crossings and branches either', () => {
+    // given
+    const options = {
+      roads: { crossings: { min: 1, max: 1 }, branches: { min: 3, max: 3 } },
+      minDensity: 1,
+      maxDensity: 1,
+    };
+
+    // when
+    const { grid, roads } = forest(options);
+
+    // then
+    for (const road of roads) {
+      for (const { x, y } of road.points) {
+        expect(grid.get(x, y)).toBe(Tile.Road);
+      }
+    }
+  });
+
+  it('reports no junctions for a single road', () => {
+    // given
+    const options = { roads: {} };
+
+    // when
+    const { junctions } = forest(options);
+
+    // then
+    expect(junctions).toEqual([]);
+  });
+
+  describe('clearance', () => {
+    const SOLID = { minDensity: 1, maxDensity: 1 };
+    const STRAIGHT = {
+      angle: 0,
+      windiness: 0,
+      width: { min: 3, max: 3 },
+    };
+
+    it('lets the trees grow up to the road by default', () => {
+      // given
+      const options = { roads: STRAIGHT, ...SOLID };
+
+      // when
+      const { grid, roads } = forest(options);
+
+      // then
+      const centerY = roads[0]?.points[0]?.y ?? 0;
+      expect(grid.get(40, centerY + 2)).toBe(Tile.Tree);
+      expect(grid.get(40, centerY - 2)).toBe(Tile.Tree);
+    });
+
+    it('keeps the trees off the tiles within the clearance of the road', () => {
+      // given
+      const options = { roads: STRAIGHT, clearance: 3, ...SOLID };
+
+      // when
+      const { grid, roads } = forest(options);
+
+      // then
+      const centerY = roads[0]?.points[0]?.y ?? 0;
+      for (const row of [2, 3, 4]) {
+        expect(grid.get(40, centerY + row)).toBe(Tile.Grass);
+        expect(grid.get(40, centerY - row)).toBe(Tile.Grass);
+      }
+    });
+
+    it('keeps the full density beyond the clearance', () => {
+      // given
+      const options = { roads: STRAIGHT, clearance: 3, ...SOLID };
+
+      // when
+      const { grid, density, roads } = forest(options);
+
+      // then
+      const centerY = roads[0]?.points[0]?.y ?? 0;
+      expect(grid.get(40, centerY + 5)).toBe(Tile.Tree);
+      expect(grid.get(40, centerY - 5)).toBe(Tile.Tree);
+      expect(density[(centerY + 5) * 80 + 40]).toBe(1);
+    });
+
+    it('reports a density of 0 where the trees are kept off', () => {
+      // given
+      const options = { roads: STRAIGHT, clearance: 2, ...SOLID };
+
+      // when
+      const { density, roads } = forest(options);
+
+      // then
+      const centerY = roads[0]?.points[0]?.y ?? 0;
+      expect(density[(centerY + 2) * 80 + 40]).toBe(0);
+      expect(density[(centerY + 3) * 80 + 40]).toBe(0);
+      expect(density[(centerY + 4) * 80 + 40]).toBe(1);
+    });
+
+    it('keeps trees off all eight neighbors of the road with a clearance of 1', () => {
+      // given
+      const options = {
+        roads: {
+          crossings: { min: 1, max: 1 },
+          branches: { min: 3, max: 3 },
+          windiness: 0.8,
+        },
+        clearance: 1,
+        ...SOLID,
+      };
+
+      // when
+      const { grid, roads } = forest(options);
+
+      // then
+      for (const road of roads) {
+        for (const { x, y } of road.points) {
+          for (let dy = -1; dy <= 1; ++dy) {
+            for (let dx = -1; dx <= 1; ++dx) {
+              expect(grid.get(x + dx, y + dy)).not.toBe(Tile.Tree);
+            }
+          }
+        }
+      }
+    });
+
+    it('keeps trees off the tiles diagonally next to a road of any width', () => {
+      // given
+      const options = {
+        roads: { angle: 30, width: { min: 4, max: 4 }, windiness: 0.5 },
+        clearance: 1,
+        ...SOLID,
+      };
+
+      // when
+      const { grid } = forest(options);
+
+      // then
+      for (let y = 0; y < 60; ++y) {
+        for (let x = 0; x < 80; ++x) {
+          if (grid.get(x, y) !== Tile.Tree) {
+            continue;
+          }
+          for (let dy = -1; dy <= 1; ++dy) {
+            for (let dx = -1; dx <= 1; ++dx) {
+              expect(grid.get(x + dx, y + dy)).not.toBe(Tile.Road);
+            }
+          }
+        }
+      }
+    });
+
+    it('leaves the density of the road tiles alone', () => {
+      // given
+      const options = {
+        roads: STRAIGHT,
+        clearance: 3,
+        minDensity: 0.7,
+        maxDensity: 0.7,
+      };
+
+      // when
+      const { density, roads } = forest(options);
+
+      // then
+      const centerY = roads[0]?.points[0]?.y ?? 0;
+      expect(density[centerY * 80 + 40]).toBeCloseTo(0.7);
+    });
+
+    it('has no effect without a road', () => {
+      // given
+      const plain = forest({}, 4);
+
+      // when
+      const withClearance = forest({ clearance: 5 }, 4);
+
+      // then
+      expect(withClearance.grid.toString()).toBe(plain.grid.toString());
+      expect(withClearance.density).toEqual(plain.density);
+    });
+
+    it('has no effect with a clearance of 0', () => {
+      // given
+      const plain = forest({ roads: STRAIGHT }, 4);
+
+      // when
+      const zero = forest({ roads: STRAIGHT, clearance: 0 }, 4);
+
+      // then
+      expect(zero.grid.toString()).toBe(plain.grid.toString());
+    });
+
+    it.each([-1, 1.5, Number.NaN])('rejects a clearance of %s', (clearance) => {
+      // given
+      const generate = () => forest({ clearance });
+
+      // when / then
+      expect(generate).toThrow(RangeError);
+      expect(generate).toThrow('clearance');
+    });
+  });
 });

@@ -5,7 +5,8 @@
  *
  * `Door` marks a potential door placement; what to put there is up to the game.
  * `Grass` and `Tree` are the ground and the trees of outdoor maps. Whether a
- * tree blocks movement or sight is up to the game too.
+ * tree blocks movement or sight is up to the game too. `Road` is a road or
+ * a path, which differ only in how wide they are.
  */
 export const Tile = {
   Wall: 0,
@@ -13,6 +14,7 @@ export const Tile = {
   Door: 2,
   Grass: 3,
   Tree: 4,
+  Road: 5,
 } as const;
 
 export type Tile = (typeof Tile)[keyof typeof Tile];

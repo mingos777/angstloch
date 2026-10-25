@@ -15,14 +15,14 @@
     </nav>
     <form id="controls">
       <label
-        >Width <input name="width" type="number" value="120" min="1"
+        >Width <input name="width" type="number" value="80" min="1"
       /></label>
       <label
-        >Height <input name="height" type="number" value="70" min="1"
+        >Height <input name="height" type="number" value="50" min="1"
       /></label>
       <label>Seed <input name="seed" type="number" value="1" /></label>
       <label
-        >Tile size <input name="tileSize" type="number" value="8" min="1"
+        >Tile size <input name="tileSize" type="number" value="12" min="1"
       /></label>
       <label
         >Min density
@@ -71,6 +71,97 @@
       <label
         >Lacunarity
         <input name="lacunarity" type="number" value="1" min="0.1" step="0.1"
+      /></label>
+      <label>Road <input name="road" type="checkbox" /></label>
+      <label
+        >Road angle
+        <input name="roadAngle" type="number" placeholder="random" step="5"
+      /></label>
+      <label
+        >Road width min
+        <input name="roadWidthMin" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Road width max
+        <input name="roadWidthMax" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Road windiness
+        <input
+          name="roadWindiness"
+          type="number"
+          value="0.3"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Clearance <input name="clearance" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Crossings min
+        <input name="crossingsMin" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Crossings max
+        <input name="crossingsMax" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Crossing angle min
+        <input
+          name="crossingAngleMin"
+          type="number"
+          value="45"
+          min="1"
+          max="179"
+      /></label>
+      <label
+        >Crossing angle max
+        <input
+          name="crossingAngleMax"
+          type="number"
+          value="90"
+          min="1"
+          max="179"
+      /></label>
+      <label
+        >Branches min <input name="branchesMin" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Branches max <input name="branchesMax" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Branch width min
+        <input name="branchWidthMin" type="number" value="1" min="1"
+      /></label>
+      <label
+        >Branch width max
+        <input name="branchWidthMax" type="number" value="1" min="1"
+      /></label>
+      <label
+        >Branch angle min
+        <input name="branchAngleMin" type="number" value="20" min="1" max="179"
+      /></label>
+      <label
+        >Branch angle max
+        <input name="branchAngleMax" type="number" value="70" min="1" max="179"
+      /></label>
+      <label
+        >Limit branch length <input name="limitBranches" type="checkbox"
+      /></label>
+      <label
+        >Branch length min
+        <input name="branchLengthMin" type="number" value="10" min="1"
+      /></label>
+      <label
+        >Branch length max
+        <input name="branchLengthMax" type="number" value="40" min="1"
+      /></label>
+      <label
+        >Mark junctions <input name="showJunctions" type="checkbox" checked
+      /></label>
+      <label
+        >Mark road exits <input name="showExits" type="checkbox" checked
       /></label>
       <label
         >Tiles

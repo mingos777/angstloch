@@ -21,7 +21,7 @@ function render(): void {
   const plain = data.get('tiles') === 'plain';
 
   try {
-    const { grid, density } = generateForest({
+    const { grid, density, roads, junctions, exits } = generateForest({
       width: value('width'),
       height: value('height'),
       random: mulberry32(value('seed')),
@@ -35,13 +35,52 @@ function render(): void {
       lacunarity: value('lacunarity'),
       groundTile: plain ? Tile.Floor : Tile.Grass,
       treeTile: plain ? Tile.Wall : Tile.Tree,
+      clearance: value('clearance'),
+      roads: data.has('road')
+        ? {
+            // a blank angle means a random one
+            angle: data.get('roadAngle') === '' ? 'random' : value('roadAngle'),
+            width: { min: value('roadWidthMin'), max: value('roadWidthMax') },
+            windiness: value('roadWindiness'),
+            crossings: {
+              min: value('crossingsMin'),
+              max: value('crossingsMax'),
+            },
+            crossingAngle: {
+              min: value('crossingAngleMin'),
+              max: value('crossingAngleMax'),
+            },
+            branches: {
+              min: value('branchesMin'),
+              max: value('branchesMax'),
+            },
+            branchWidth: {
+              min: value('branchWidthMin'),
+              max: value('branchWidthMax'),
+            },
+            branchAngle: {
+              min: value('branchAngleMin'),
+              max: value('branchAngleMax'),
+            },
+            branchLength: data.has('limitBranches')
+              ? {
+                  min: value('branchLengthMin'),
+                  max: value('branchLengthMax'),
+                }
+              : undefined,
+          }
+        : undefined,
     });
     error.textContent = '';
     const trees = grid
       .toString()
       .split('')
       .filter((c) => c === 'T' || c === '#').length;
-    stats.textContent = `${String(trees)} trees of ${String(grid.width * grid.height)} tiles (${((100 * trees) / (grid.width * grid.height)).toFixed(1)}%)`;
+    const roadTiles = grid
+      .toString()
+      .split('')
+      .filter((c) => c === '=').length;
+    stats.textContent = `${String(roads.length)} roads (${String(roadTiles)} tiles, ${String(junctions.length)} junctions), ${String(trees)} trees of ${String(grid.width * grid.height)} tiles (${((100 * trees) / (grid.width * grid.height)).toFixed(1)}%)`;
 
     const tileSize = value('tileSize');
     if (display.value === 'density') {
@@ -63,7 +102,26 @@ function render(): void {
         }
       }
     } else {
-      drawGrid(canvas, context, grid, tileSize, display.value as DisplayMode);
+      drawGrid(
+        canvas,
+        context,
+        grid,
+        tileSize,
+        display.value as DisplayMode,
+        data.has('showExits') ? exits : [],
+      );
+      if (data.has('showJunctions')) {
+        // a red square on every junction, in both displays
+        context.fillStyle = '#d23c3c';
+        for (const { x, y } of junctions) {
+          context.fillRect(
+            x * tileSize + tileSize / 4,
+            y * tileSize + tileSize / 4,
+            tileSize / 2,
+            tileSize / 2,
+          );
+        }
+      }
     }
   } catch (e) {
     error.textContent = e instanceof Error ? e.message : String(e);

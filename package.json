@@ -2,7 +2,7 @@
   "name": "angstloch",
   "version": "0.0.0",
   "description": "A suite of map generators for roguelike games.",
-  "license": "BSD-2-Clause",
+  "license": "BSD-3-Clause",
   "author": "Dominik Marczuk",
   "type": "module",
   "sideEffects": false,

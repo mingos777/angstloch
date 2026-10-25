@@ -1,6 +1,7 @@
 import type { BaseOptions } from '../core/base-options';
 import type { Tile } from '../core/tile';
 import type { NoiseFunction } from '../noise/noise-function';
+import type { RoadOptions } from '../roads/road-options';
 
 export interface ForestOptions extends BaseOptions {
   /** Size in tiles of a feature of the density noise along the x axis, before rotation. Larger values make broader woods and glades. Defaults to 40. */
@@ -25,4 +26,10 @@ export interface ForestOptions extends BaseOptions {
   groundTile?: Tile;
   /** The tile for a tree. Defaults to `Tile.Tree`. */
   treeTile?: Tile;
+  /** Lays roads through the forest, with no trees on them: a main road, and if asked for, crossings and branches. Defaults to no roads. */
+  roads?: RoadOptions;
+  /** The tile for a road. Defaults to `Tile.Road`. */
+  roadTile?: Tile;
+  /** How many tiles beside a road have no trees, a whole number of at least 0. Tiles count in any direction, so a clearance of 1 keeps trees off all eight neighbors of a road tile, diagonals included. Defaults to 0, where the trees grow right up to the road. */
+  clearance?: number;
 }

@@ -7,7 +7,7 @@ Currently available:
 - [`generateMaze`](#mazes): perfect and braid mazes.
 - [`generateCave`](#caves): organic caves, grown with a cellular automaton. _Work in progress._
 - [`createSimplexNoise`](#noise): smooth 2D noise that can be stretched and turned, for terrain-like maps. Forests are built on it.
-- [`generateForest`](#forests): forests of scattered trees with clearings and denser stands, from noise. _Work in progress._
+- [`generateForest`](#forests): forests of scattered trees with clearings and denser stands, from noise, with roads, crossroads and paths through them. _Work in progress._
 - [`generateRoomDungeon`](#dungeons): room-first dungeons: rooms are placed first and joined by corridors afterwards. _Work in progress._
 - [`generateDigDungeon`](#the-digger): dungeons that are dug: corridors and rooms grow out of a first room. _Work in progress._
 
@@ -24,20 +24,21 @@ grid.get(x, y); // the tile at the position; anything outside the grid is a Wall
 grid.set(x, y, Tile.Floor); // throws a RangeError outside the grid
 grid.inBounds(x, y);
 grid.clone();
-grid.toString(); // '#' wall, '.' floor, '+' door, '"' grass, 'T' tree, one line per row
+grid.toString(); // '#' wall, '.' floor, '+' door, '"' grass, 'T' tree, '=' road, one line per row
 ```
 
 Positions are plain `{ x, y }` objects (`Point`). `x` grows to the right and `y` grows downwards.
 
 The numeric values of `Tile` are part of the public contract and never change; new kinds may be added.
 
-| Tile         | Value | Meaning                                                 |
-| ------------ | ----- | ------------------------------------------------------- |
-| `Tile.Wall`  | 0     | Solid rock.                                             |
-| `Tile.Floor` | 1     | Passable floor.                                         |
-| `Tile.Door`  | 2     | A potential door placement. What to put there is yours. |
-| `Tile.Grass` | 3     | Open ground of an outdoor map.                          |
-| `Tile.Tree`  | 4     | A tree. Whether it blocks movement or sight is yours.   |
+| Tile         | Value | Meaning                                                  |
+| ------------ | ----- | -------------------------------------------------------- |
+| `Tile.Wall`  | 0     | Solid rock.                                              |
+| `Tile.Floor` | 1     | Passable floor.                                          |
+| `Tile.Door`  | 2     | A potential door placement. What to put there is yours.  |
+| `Tile.Grass` | 3     | Open ground of an outdoor map.                           |
+| `Tile.Tree`  | 4     | A tree. Whether it blocks movement or sight is yours.    |
+| `Tile.Road`  | 5     | A road or a path. They differ only in how wide they are. |
 
 ### Options
 
@@ -305,6 +306,54 @@ A forest is made from a [noise](#noise) map that says how dense the trees are: d
 
 The chance of a tree is set at the two ends of the noise: `minDensity` where the noise is at its lowest and `maxDensity` where it is at its highest. In between the chance rises evenly with the noise. With the defaults, 0 and 0.25, the lowest parts are bare and the thickest woods are a quarter full of trees, so the trees stand apart. Raise `maxDensity` for tighter woods: 1 packs the thickest parts solid. Both values can be anything from 0 to 1, and `minDensity` may be the larger of the two, which puts the trees where the noise is low. The noise is sampled at the center of each tile, and `random` both seeds the built-in noise and rolls the chance for each tile, so the same seed always gives the same forest. The noise rarely reaches the very ends of its range, so the chances rarely do either.
 
+### Roads
+
+```ts
+const { grid, roads, exits } = generateForest({
+  width: 120,
+  height: 70,
+  roads: { angle: 20, width: { min: 3, max: 4 }, windiness: 0.5 },
+});
+```
+
+Without `roads` the forest has no roads. With it, a main road runs through the forest from one edge of the map to the opposite one, and no trees grow on it: road tiles are `Tile.Road` (or `roadTile`). The roads are laid before the trees, so the trees fill in around them.
+
+The road is laid through a random point near the middle of the map, at the `angle`, and is then followed in both directions until it leaves the map. The angle is in degrees, clockwise from east, like `rotation`: 0 runs from left to right, 90 from top to bottom and 45 from the top left towards the bottom right. `'random'` picks an angle. The road winds as far as `windiness` says: its centerline is pushed to either side by smooth noise, which makes gentle bends and not jitter. At 1 it strays up to 12 tiles from the straight line. Its width is picked from the `width` range, in whole tiles, and the road is rounded at its edges when it is wide.
+
+| Road option | Default              | Meaning                                                                                           |
+| ----------- | -------------------- | ------------------------------------------------------------------------------------------------- |
+| `angle`     | `'random'`           | Direction of the main road in degrees, clockwise from east, or `'random'`.                        |
+| `width`     | `{ min: 3, max: 3 }` | Width of the main road, and of the crossings, in tiles, a `Range` of whole numbers of at least 1. |
+| `windiness` | 0.3                  | How much every road winds, from 0 (straight) to 1.                                                |
+
+An invalid angle, width or windiness throws a `RangeError`.
+
+#### Clearance
+
+By default the trees grow right up to the road, which can look like a hedge. `clearance` keeps a strip beside every road free of trees, the main road, the crossings and the branches alike. It is a number of tiles, and it is an option of the forest and not of `roads`, since it is about the trees. No tree grows within `clearance` tiles of a road tile, in any direction, and a step to a diagonal neighbor counts as one tile. So a clearance of 1 keeps trees off all eight neighbors of every road tile, diagonals included, a clearance of 2 clears a strip two tiles wide on either side, and so on. The strip has a hard edge: beyond it the trees grow as thick as they would have anyway.
+
+The `density` in the result is 0 on the tiles that are kept clear, since it is the chance that was used. The tiles of the road keep the density that the noise gave them. With a `clearance` of 0, which is the default, or without roads, no tiles are cleared. A `clearance` that is not a whole number of at least 0 throws a `RangeError`.
+
+#### Crossings and branches
+
+More roads can be attached to the main road, which makes a network. Every new road is laid on a place of a road that is there already, so the network is always joined up, and no road stands on its own.
+
+- A **crossing** is a road that passes through a place on a road and runs on to both edges of the map, which makes a crossroads. It has the same `width` as the main road, and it meets the road at an angle picked from `crossingAngle`, turned to the left or to the right.
+- A **branch** is a thinner path that leaves a road at a place on it and goes on one side only, so it forks away from the road. It leaves at an angle picked from `branchAngle` to the road, along it or against it. It has a width from `branchWidth` and a length from `branchLength`. A branch with no `branchLength` runs to the edge of the map. A branch that is not long enough to get there ends in the forest, which is a good place for a clearing, a camp or a hut. A branch may leave a crossing or another branch, and a crossing may cross a branch.
+
+Crossings are laid first and branches after them. A place on a road is chosen at random, but never close to the ends of the road or to a junction, so roads do not pile up in one spot, and longer roads are more likely to be chosen. When the map is too small to find such a place, fewer roads are made than asked for, and no error is thrown. Each road winds with its own pattern of bends, at the same `windiness`.
+
+| Road option     | Default                | Meaning                                                                                                           |
+| --------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `crossings`     | none                   | Number of crossings, a `Range` of whole numbers, 0 or more.                                                       |
+| `crossingAngle` | `{ min: 45, max: 90 }` | The angle in whole degrees, 1 to 179, at which a crossing meets the road. 90 is a right angle.                    |
+| `branches`      | none                   | Number of branches, a `Range` of whole numbers, 0 or more.                                                        |
+| `branchWidth`   | `{ min: 1, max: 1 }`   | Width of a branch in tiles, a `Range` of whole numbers of at least 1.                                             |
+| `branchAngle`   | `{ min: 20, max: 70 }` | The angle in whole degrees, 1 to 179, between a branch and the road it leaves. A small angle makes a gentle fork. |
+| `branchLength`  | to the edge            | Length of a branch in tiles, a `Range` of whole numbers of at least 1.                                            |
+
+The result lists every road, in the order they were laid: the main road, then the crossings (all of kind `'road'`), then the branches (kind `'branch'`). `junctions` lists the places where roads meet, and not only the ones that were planned: wherever the centerlines of two roads touch, that is a junction too, and where two roads share a stretch of tiles it counts as one junction, at the first of them. `exits` lists the places where roads reach the border. A branch that ends in the forest has no exit. An invalid range or an angle outside 1 to 179 throws a `RangeError`.
+
 ### `ForestOptions`
 
 | Option        | Default       | Meaning                                                                                                                                                                 |
@@ -323,6 +372,9 @@ The chance of a tree is set at the two ends of the noise: `minDensity` where the
 | `noise`       | built-in      | A [`NoiseFunction`](#noise) to use instead of the built-in simplex noise.                                                                                               |
 | `groundTile`  | `Tile.Grass`  | The tile for ground without a tree. Any `Tile` value, for instance `Tile.Floor`.                                                                                        |
 | `treeTile`    | `Tile.Tree`   | The tile for a tree, for instance `Tile.Wall` for a forest that blocks like rock.                                                                                       |
+| `roads`       | no roads      | Lays a road through the forest, see [Roads](#roads).                                                                                                                    |
+| `clearance`   | 0             | How many tiles of verge beside a road the trees thin out over, a whole number, 0 or more. See [Clearance](#clearance).                                                  |
+| `roadTile`    | `Tile.Road`   | The tile for a road.                                                                                                                                                    |     |
 
 An injected `noise` takes the place of the built-in simplex noise: it receives positions in noise units, which is the tile center divided by the scales after the rotation, and returns a number from -1 to 1. Anything outside that range is limited to it. Since it replaces the built-in noise, `octaves`, `persistence` and `lacunarity` do not apply to it; wrap it in [`createFractalNoise`](#noise) if you want layers. `scaleX`, `scaleY` and `rotation` apply to it as they do to the built-in noise.
 
@@ -332,6 +384,9 @@ Non-positive or non-integer dimensions, a `minDensity` or `maxDensity` outside 0
 
 - `grid`: the map.
 - `density`: the chance of a tree on every tile, from `minDensity` to `maxDensity`, as a `Float32Array` that runs row by row, so `density[y * grid.width + x]`. A game can use it to tell thick woods from glades, for instance to put mushrooms or a hunter's hut where the trees are few.
+- `roads`: the roads that were laid, the main road first. Each is a `Road` with its `kind` (`'road'` for the main road and crossings, `'branch'` for branches), its `width` in tiles and its `points`, the tiles of its centerline from one end to the other, each next to the one before. Empty without the `roads` option.
+- `junctions`: the places where roads meet or cross, which are good places for a signpost or an inn. Empty while there is a single road. See [Crossings and branches](#crossings-and-branches).
+- `exits`: the tiles on the map border where a road leaves the map, as for a [maze](#mazes). A game can join the maps on the other sides there.
 
 ```ts
 const { grid, density } = generateForest({
@@ -735,13 +790,13 @@ A template that cannot be placed will always throw a `TemplatePlacementError` in
 
 A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons, the caves, the forests and the noise each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
 
-All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500), grass `.` (#55aa55), tree `T` (#1f7a2e) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
+All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background, in the colors of an ANSI terminal: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500), grass `.` (#00aa00), tree `T` (#55ff55), road `.` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
 
 The maze page has the same room controls: the count, size and exits of ordinary [rooms](#rooms-in-mazes) (a maximum count of 0 means no rooms), the door chance, and the same Templates panel under the map, which is shared with the dungeon page. Tick **Use templates** to place them in the maze, mind that they must fit the lattice. Templated rooms are outlined, and room openings without a door are highlighted by **Show room gaps**.
 
 The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png`, `angstloch-dungeon.png` or `angstloch-cave.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
 
-The forest page has a control for every `ForestOptions` field, a switch between grass-and-tree and floor-and-wall tiles, and a **density** display that paints the chance of a tree on every tile, stretched over the range from `minDensity` to `maxDensity`: white for thick woods and black for glades, so you can see what the noise settings do before the trees are rolled. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
+The forest page has a control for every `ForestOptions` field, including a switch for the road with its angle (blank for random), width and windiness, the clearance, the crossings and branches with all their options (branch length is only limited when **Limit branch length** is ticked), **Mark junctions** (red squares) and **Mark road exits**, a switch between grass-and-tree and floor-and-wall tiles, and a **density** display that paints the chance of a tree on every tile, stretched over the range from `minDensity` to `maxDensity`: white for thick woods and black for glades, so you can see what the noise settings do before the trees are rolled. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
 
 The noise page paints a `NoiseFunction` as gray squares, black for -1 and white for 1, with controls for the size, the seed, the fractal options and the transform: `scaleX`, `scaleY` and `rotation`. The fractal controls start at the defaults of `createFractalNoise`, and the scales start at 40, which is a size that shows a few features on the default map. The stats line shows the lowest, highest and mean value.
 
@@ -757,6 +812,10 @@ npm run typecheck
 npm run lint
 npm run format
 ```
+
+## Why “Angstloch”?
+
+_Angstloch_ is German for “fear hole”, and the name is not a random word. In medieval castles it was the hatch leading to a dark pit at the bottom of the keep (the _Bergfried_) or the main tower. The pit served as a secure store and, during a siege, as a last place of refuge - and in some cases, a dungeon. A fitting name for a library that digs dungeons.
 
 ## License
 

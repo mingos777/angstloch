@@ -3,25 +3,46 @@ import type { Grid, Point } from '../src';
 
 export type DisplayMode = 'simple' | 'roguelike';
 
+const Color = {
+  Black: '#000000',
+  Red: '#aa0000',
+  Green: '#00aa00',
+  Yellow: '#aa5500',
+  Blue: '#0000aa',
+  Magenta: '#aa00aa',
+  Cyan: '#00aaaa',
+  White: '#aaaaaa',
+  BrightBlack: '#555555',
+  BrightRed: '#ff5555',
+  BrightGreen: '#55ff55',
+  BrightYellow: '#ffff55',
+  BrightBlue: '#5555ff',
+  BrightMagenta: '#ff55ff',
+  BrightCyan: '#55ffff',
+  BrightWhite: '#ffffff',
+};
+
 const COLORS = {
   [Tile.Wall]: '#26262c',
   [Tile.Floor]: '#d8d2c4',
   [Tile.Door]: '#c8783c',
-  [Tile.Grass]: '#8fb36a',
+  [Tile.Grass]: '#00aa00',
   [Tile.Tree]: '#2f5d34',
+  [Tile.Road]: '#b48a5a',
 };
 
 const SIMPLE_EXIT_COLOR = '#4a7fc8';
 
 const GLYPHS = {
-  [Tile.Wall]: { glyph: '#', color: '#555555' },
-  [Tile.Floor]: { glyph: '.', color: '#aaaaaa' },
-  [Tile.Door]: { glyph: '+', color: '#aa5500' },
-  [Tile.Grass]: { glyph: '.', color: '#55aa55' },
-  [Tile.Tree]: { glyph: 'T', color: '#1f7a2e' },
+  [Tile.Wall]: { glyph: '#', color: Color.BrightBlack },
+  [Tile.Floor]: { glyph: '.', color: Color.White },
+  [Tile.Door]: { glyph: '+', color: Color.Yellow },
+  [Tile.Grass]: { glyph: '.', color: Color.Green },
+  [Tile.Tree]: { glyph: 'T', color: Color.BrightGreen },
+  [Tile.Road]: { glyph: '.', color: Color.Yellow },
 };
 
-const EXIT_GLYPH = { glyph: '.', color: '#5555ff' };
+const EXIT_GLYPH = { glyph: '.', color: Color.BrightBlue };
 
 /** Whether all eight neighbors are walls (out of bounds counts as wall). */
 function isBuried(grid: Grid, x: number, y: number): boolean {
