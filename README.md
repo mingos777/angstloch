@@ -760,4 +760,4 @@ npm run format
 
 ## License
 
-BSD-2-Clause
+BSD-3-Clause
