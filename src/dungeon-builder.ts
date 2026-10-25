@@ -1,4 +1,11 @@
+import { carveRoom } from './carve-room';
+import { corridorTileCost } from './corridor-tile-cost';
 import { DIRECTIONS } from './directions';
+import type {
+  Operation,
+  OperationExit,
+  OperationPath,
+} from './dungeon-operation';
 import type { Exit } from './exit';
 import { createSearchBuffers, findCorridor } from './find-corridor';
 import type { CorridorMap, CorridorTarget } from './find-corridor';
@@ -10,6 +17,7 @@ import { randomInt } from './random-int';
 import type { Range } from './range';
 import type { Room } from './room';
 import { Tile } from './tile';
+import type { Transform } from './create-transforms';
 
 export interface DungeonBuilderOptions {
   lattice: boolean;
@@ -20,6 +28,8 @@ export interface DungeonBuilderOptions {
   exitsPerRoom: Range;
   loopChance: number;
   deadEndChance: number;
+  /** Mirror images that every addition to the dungeon is repeated as, and how often. */
+  layout?: { transforms: Transform[]; chance: number };
 }
 
 /** Where a corridor leaves a room: the tile outside the room's wall, and the wall tile to open unless the exit exists already. */
@@ -79,22 +89,27 @@ export interface DungeonBuilder {
   readonly corridors: Point[][];
   /** Starts counting a room that is carved on the grid. */
   registerRoom: (room: Room) => void;
+  /**
+   * Adds rooms, corridors and exits to the dungeon, together with their mirror
+   * images if the layout is symmetric and the dice say so. The new rooms must
+   * have the ids that follow the rooms made so far. Nothing is added, and
+   * `false` returned, if `accepts` turns the rooms down, given all of them and
+   * the tiles of all the corridors that are about to be carved, or if a mirror
+   * image does not fit.
+   */
+  place: (
+    operation: Operation,
+    newRooms?: Room[],
+    accepts?: (rooms: Room[], pending: ReadonlySet<number>) => boolean,
+  ) => boolean;
   /** Whether a room has all the exits it wanted. */
   atCapacity: (room: Room) => boolean;
   /** Places on one wall of a room where a new exit can go. */
   slotsOf: (room: Room, direction: number) => ExitSlot[];
   /** Whether no other exit is next to the tile. */
   isExitAllowed: (position: Point) => boolean;
-  /** Opens an exit on the wall, with a door if the dice say so. */
-  addExit: (position: Point, ids: number[], start?: Start) => void;
   /** The id of the room that the corridor on a tile belongs to. */
   ownerOf: (tile: Point) => number;
-  /** Carves the tiles of a corridor, noting which room it belongs to. */
-  carve: (path: Point[], owner: number) => void;
-  /** Notes that two rooms are in the same group of connected rooms. */
-  join: (a: number, b: number) => void;
-  /** Notes that two rooms are linked to each other. */
-  link: (a: Room, b: Room) => void;
   /** Links the rooms with corridors and doors, and returns the ids of rooms that could not be joined to the biggest group. */
   connectAll: () => number[];
   /** Adds the exits that rooms want, loops, and dead ends if asked for. */
@@ -148,6 +163,10 @@ export function createDungeonBuilder(
   const linked = new Set<string>();
   // the tiles of every corridor, in the order they were carved
   const corridors: Point[][] = [];
+  // the id of the room at each position, to find the mirror image of a room
+  const geometry = new Map<string, number>();
+  const transforms = options.layout?.transforms ?? [];
+  const mirrorChance = options.layout?.chance ?? 0;
 
   /** Whether a corridor can start or end on the tile, which excludes tiles beside an existing corridor, diagonally too. */
   const isFree = (x: number, y: number): boolean =>
@@ -163,8 +182,13 @@ export function createDungeonBuilder(
   const isExitAllowed = (position: Point): boolean =>
     exitBlocked[position.y * width + position.x] === 0;
 
-  const addExit = (position: Point, ids: number[], start?: Start): void => {
-    const door = options.doorChance > random();
+  const addExit = (
+    position: Point,
+    ids: number[],
+    start?: Start,
+    forcedDoor?: boolean,
+  ): void => {
+    const door = forcedDoor ?? options.doorChance > random();
     grid.set(position.x, position.y, door ? Tile.Door : Tile.Floor);
     for (let y = position.y - 1; y <= position.y + 1; ++y) {
       for (let x = position.x - 1; x <= position.x + 1; ++x) {
@@ -214,11 +238,11 @@ export function createDungeonBuilder(
       options.exitsPerRoom.max,
     );
     group[room.id] = room.id;
+    geometry.set(geometryKey(room), room.id);
   };
-  const pairKey = (a: Room, b: Room): string =>
-    a.id < b.id
-      ? `${String(a.id)}-${String(b.id)}`
-      : `${String(b.id)}-${String(a.id)}`;
+  const idKey = (a: number, b: number): string =>
+    a < b ? `${String(a)}-${String(b)}` : `${String(b)}-${String(a)}`;
+  const pairKey = (a: Room, b: Room): string => idKey(a.id, b.id);
 
   const carve = (path: Point[], id: number): void => {
     for (const { x, y } of path) {
@@ -235,6 +259,234 @@ export function createDungeonBuilder(
     room.exitCount >= (wanted[room.id] as number);
   const naturalMode = (room: Room): Mode =>
     atCapacity(room) ? 'reuse' : 'new';
+
+  const commit = (operation: Operation): void => {
+    for (const path of operation.paths) {
+      carve(path.tiles, path.owner);
+    }
+    for (const exit of operation.exits) {
+      addExit(exit.position, exit.rooms, exit.start, exit.door);
+    }
+    for (const [a, b] of operation.links) {
+      linked.add(idKey(a, b));
+    }
+    for (const [a, b] of operation.joins) {
+      join(a, b);
+    }
+  };
+
+  /** Whether a mirror image of a corridor can be carved next to the tiles of the corridors that are about to be, without touching them. */
+  const isPathValid = (path: OperationPath, pending: Set<number>): boolean => {
+    const last = path.tiles.at(-1) as Point;
+    let previous = path.tiles[path.fixed - 1];
+    for (const [i, tile] of path.tiles.entries()) {
+      const index = tile.y * width + tile.x;
+      if (i < path.fixed) {
+        if (map.corridor[index] !== 1) {
+          return false;
+        }
+        continue;
+      }
+      const direction = previous
+        ? headingTo(previous, tile)
+        : (path.direction as number);
+      const cost = corridorTileCost(map, tile.x, tile.y, direction, {
+        crossing: path.crossing,
+        isTarget: (x, y) => x === last.x && y === last.y,
+        from: previous,
+        pending,
+      });
+      if (cost === undefined || pending.has(index)) {
+        return false;
+      }
+      previous = tile;
+    }
+    return true;
+  };
+
+  /** The operation and rooms of a step together with its mirror images, or `undefined` if some room has no twin to take part. */
+  const mirrorPlan = (
+    operation: Operation,
+    newRooms: Room[],
+  ):
+    | { rooms: Room[]; copies: Map<number, number>; operations: Operation[] }
+    | undefined => {
+    const base = rooms.length;
+    const created = [...newRooms];
+    const copies = new Map<number, number>();
+    const images = transforms.map(() => new Map<number, number>());
+    for (const [i, transform] of transforms.entries()) {
+      for (const room of newRooms) {
+        const image = transform.room(room);
+        const same = created.find(
+          (other) => geometryKey(other) === geometryKey(image),
+        );
+        if (same) {
+          images[i]?.set(room.id, same.id);
+        } else {
+          const twin = { ...image, id: base + created.length };
+          created.push(twin);
+          copies.set(twin.id, room.id);
+          images[i]?.set(room.id, twin.id);
+        }
+      }
+    }
+    const twinOf = (i: number, id: number): number | undefined => {
+      if (id >= base) {
+        return images[i]?.get(id);
+      }
+      const image = (transforms[i] as Transform).room(rooms[id] as Room);
+      return geometry.get(geometryKey(image));
+    };
+
+    const operations = [operation];
+    const seenPaths = new Set<string>(operation.paths.map(pathKey));
+    const seenExits = new Set<number>(
+      operation.exits.map(({ position }) => position.y * width + position.x),
+    );
+    const seenLinks = new Set<string>(
+      operation.links.map(([a, b]) => idKey(a, b)),
+    );
+    const seenJoins = new Set<string>(
+      operation.joins.map(([a, b]) => idKey(a, b)),
+    );
+    for (const [i, transform] of transforms.entries()) {
+      const twin: Operation = { paths: [], exits: [], links: [], joins: [] };
+      for (const path of operation.paths) {
+        const owner = twinOf(i, path.owner);
+        if (owner === undefined) {
+          return undefined;
+        }
+        const image: OperationPath = {
+          ...path,
+          owner,
+          tiles: path.tiles.map(transform.point),
+          direction:
+            path.direction === undefined
+              ? undefined
+              : transform.direction(path.direction),
+        };
+        if (!seenPaths.has(pathKey(image))) {
+          seenPaths.add(pathKey(image));
+          twin.paths.push(image);
+        }
+      }
+      for (const exit of operation.exits) {
+        const ids = exit.rooms.map((id) => twinOf(i, id));
+        if (ids.some((id) => id === undefined)) {
+          return undefined;
+        }
+        const position = transform.point(exit.position);
+        const index = position.y * width + position.x;
+        if (!seenExits.has(index)) {
+          seenExits.add(index);
+          twin.exits.push({
+            position,
+            rooms: ids as number[],
+            door: exit.door,
+            start: exit.start && {
+              outside: transform.point(exit.start.outside),
+              direction: transform.direction(exit.start.direction),
+            },
+          });
+        }
+      }
+      for (const [list, seen, target] of [
+        [operation.links, seenLinks, twin.links],
+        [operation.joins, seenJoins, twin.joins],
+      ] as const) {
+        for (const [a, b] of list) {
+          const [x, y] = [twinOf(i, a), twinOf(i, b)];
+          if (x === undefined || y === undefined) {
+            return undefined;
+          }
+          if (!seen.has(idKey(x, y))) {
+            seen.add(idKey(x, y));
+            target.push([x, y]);
+          }
+        }
+      }
+      operations.push(twin);
+    }
+    return { rooms: created, copies, operations };
+  };
+
+  const place = (
+    operation: Operation,
+    newRooms: Room[] = [],
+    accepts: (rooms: Room[], pending: ReadonlySet<number>) => boolean = () =>
+      true,
+  ): boolean => {
+    const mirrored = transforms.length > 0 && mirrorChance > random();
+    const decided: Operation = mirrored
+      ? {
+          ...operation,
+          exits: operation.exits.map((exit) => ({
+            ...exit,
+            door: exit.door ?? options.doorChance > random(),
+          })),
+        }
+      : operation;
+    // exits of the step that are mirror images of each other share a door
+    for (let pass = 0; mirrored && pass <= transforms.length; ++pass) {
+      for (const transform of transforms) {
+        for (const exit of decided.exits) {
+          const { x, y } = transform.point(exit.position);
+          const image = decided.exits.find(
+            ({ position }) => position.x === x && position.y === y,
+          );
+          if (image) {
+            image.door = exit.door;
+          }
+        }
+      }
+    }
+    const plan = (mirrored ? mirrorPlan(decided, newRooms) : undefined) ?? {
+      rooms: newRooms,
+      copies: new Map<number, number>(),
+      operations: [decided],
+    };
+
+    const pending = new Set<number>();
+    const placedExits: Point[] = [];
+    for (const [i, { paths, exits: added }] of plan.operations.entries()) {
+      for (const path of paths) {
+        if (i > 0 && !isPathValid(path, pending)) {
+          return false;
+        }
+        for (const { x, y } of path.tiles.slice(path.fixed)) {
+          pending.add(y * width + x);
+        }
+      }
+      for (const { position } of added) {
+        if (
+          i > 0 &&
+          (!isExitAllowed(position) ||
+            placedExits.some((other) => touching(other, position)))
+        ) {
+          return false;
+        }
+        placedExits.push(position);
+      }
+    }
+    if (!accepts(plan.rooms, pending)) {
+      return false;
+    }
+
+    for (const room of plan.rooms) {
+      rooms.push(room);
+      carveRoom(grid, room);
+      registerRoom(room);
+      const original = plan.copies.get(room.id);
+      if (original !== undefined) {
+        wanted[room.id] = wanted[original] as number;
+      }
+    }
+    for (const committed of plan.operations) {
+      commit(committed);
+    }
+    return true;
+  };
 
   const isOtherGroup = ({ x, y }: Point, room: Room): boolean => {
     const index = y * width + x;
@@ -312,12 +564,21 @@ export function createDungeonBuilder(
 
   const connectDirectly = (a: Room, b: Room): boolean => {
     const walls = sharedWalls(a, b);
-    if (walls.length === 0) {
-      return false;
+    while (walls.length > 0) {
+      const [wall] = walls.splice(randomInt(random, 0, walls.length - 1), 1);
+      if (
+        wall &&
+        place({
+          paths: [],
+          exits: [{ position: wall, rooms: [a.id, b.id] }],
+          links: [[a.id, b.id]],
+          joins: [],
+        })
+      ) {
+        return true;
+      }
     }
-    addExit(pickRandom(random, walls), [a.id, b.id]);
-    linked.add(pairKey(a, b));
-    return true;
+    return false;
   };
 
   /** Directions of a room's walls, ordered by how well they face a point. */
@@ -339,11 +600,26 @@ export function createDungeonBuilder(
     y: room.y + room.height / 2,
   });
 
-  const startCorridor = (room: Room, start: Start): void => {
-    if (start.exit) {
-      addExit(start.exit, [room.id], start);
-    }
-  };
+  /** The exit that a corridor starts or ends with, if it opens a new one. */
+  const exitOf = (room: Room, start?: Start): OperationExit[] =>
+    start?.exit ? [{ position: start.exit, rooms: [room.id], start }] : [];
+
+  /** A corridor along a path, which may start on a corridor that exists already. */
+  const pathOf = (
+    tiles: Point[],
+    owner: number,
+    crossing: boolean,
+    direction: number,
+  ): OperationPath => ({
+    tiles,
+    owner,
+    crossing,
+    fixed:
+      map.corridor[(tiles[0] as Point).y * width + (tiles[0] as Point).x] === 1
+        ? 1
+        : 0,
+    direction,
+  });
 
   /** The way a corridor from `from` towards `to` is heading, as an index into `DIRECTIONS`. */
   const headingTo = (from: Point, to: Point): number => {
@@ -480,13 +756,15 @@ export function createDungeonBuilder(
           target,
           crossing,
         );
-        if (path) {
-          carve(path, a.id);
-          startCorridor(a, startA);
-          if (startB) {
-            startCorridor(b, startB);
-          }
-          linked.add(pairKey(a, b));
+        if (
+          path &&
+          place({
+            paths: [pathOf(path, a.id, crossing, startA.direction)],
+            exits: [...exitOf(a, startA), ...exitOf(b, startB)],
+            links: [[a.id, b.id]],
+            joins: [],
+          })
+        ) {
           return true;
         }
       }
@@ -561,11 +839,16 @@ export function createDungeonBuilder(
             ? [slot.outside]
             : findCorridor(map, slot.outside, slot.direction, target, crossing);
           const end = path?.at(-1);
-          if (path && end) {
-            const target = owner[end.y * width + end.x] as number;
-            carve(path, room.id);
-            startCorridor(room, slot);
-            join(room.id, target);
+          if (
+            path &&
+            end &&
+            place({
+              paths: [pathOf(path, room.id, crossing, slot.direction)],
+              exits: exitOf(room, slot),
+              links: [],
+              joins: [[room.id, owner[end.y * width + end.x] as number]],
+            })
+          ) {
             return true;
           }
         }
@@ -609,8 +892,23 @@ export function createDungeonBuilder(
         continue;
       }
       const path = findCorridor(map, start, direction, end, false);
-      if (path && path.length > 1) {
-        carve(path, owner[start.y * width + start.x] as number);
+      if (
+        path &&
+        path.length > 1 &&
+        place({
+          paths: [
+            pathOf(
+              path,
+              owner[start.y * width + start.x] as number,
+              false,
+              direction,
+            ),
+          ],
+          exits: [],
+          links: [],
+          joins: [],
+        })
+      ) {
         return;
       }
     }
@@ -701,8 +999,15 @@ export function createDungeonBuilder(
 
     // dead ends branch off corridors and lead nowhere
     if (deadEnds) {
-      for (const corridor of [...corridors]) {
-        if (options.deadEndChance > random()) {
+      const snapshot = [...corridors];
+      const keys = new Map(snapshot.map((tiles, i) => [tilesKey(tiles), i]));
+      for (const [i, corridor] of snapshot.entries()) {
+        // the mirror image of a corridor that has been dealt with is left alone
+        const imaged = transforms.some(
+          (transform) =>
+            (keys.get(tilesKey(corridor.map(transform.point))) ?? i) < i,
+        );
+        if (!imaged && options.deadEndChance > random()) {
           growDeadEnd(corridor);
         }
       }
@@ -718,14 +1023,11 @@ export function createDungeonBuilder(
     exits,
     corridors,
     registerRoom,
+    place,
     atCapacity,
     slotsOf,
     isExitAllowed,
-    addExit,
     ownerOf: ({ x, y }) => owner[y * width + x] as number,
-    carve,
-    join,
-    link: (a, b) => linked.add(pairKey(a, b)),
     connectAll,
     addExtras,
   };
@@ -745,4 +1047,20 @@ export function touching(a: Point, b: Point): boolean {
 
 function manhattan(a: Point, b: Point): number {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}
+
+function geometryKey(room: Pick<Room, 'x' | 'y' | 'width' | 'height'>): string {
+  return `${String(room.x)},${String(room.y)},${String(room.width)},${String(room.height)}`;
+}
+
+/** Identifies a corridor by the tiles it holds, whatever their order. */
+function tilesKey(tiles: Point[]): string {
+  return tiles
+    .map(({ x, y }) => `${String(x)},${String(y)}`)
+    .sort()
+    .join(' ');
+}
+
+function pathKey(path: OperationPath): string {
+  return tilesKey(path.tiles);
 }

@@ -175,6 +175,44 @@
         <input name="verticalBias" type="number" value="0" min="0" step="0.5"
       /></label>
       <label
+        >Layout symmetry (digger)
+        <select name="layoutSymmetry">
+          <option value="none">none</option>
+          <option value="horizontal">horizontal</option>
+          <option value="vertical">vertical</option>
+          <option value="both">both</option>
+          <option value="rotational">rotational</option>
+        </select>
+      </label>
+      <label
+        >Layout symmetry chance (digger)
+        <input
+          name="layoutSymmetryChance"
+          type="number"
+          value="1"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Corridor symmetry (digger)
+        <select name="corridorSymmetry">
+          <option value="none">none</option>
+          <option value="whirlpool">whirlpool</option>
+          <option value="snowflake">snowflake</option>
+        </select>
+      </label>
+      <label
+        >Corridor symmetry chance (digger)
+        <input
+          name="corridorSymmetryChance"
+          type="number"
+          value="1"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
         >Show exits <input name="showExits" type="checkbox" checked
       /></label>
     </form>

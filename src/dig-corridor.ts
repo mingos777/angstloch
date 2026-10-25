@@ -1,7 +1,6 @@
 import { corridorTileCost } from './corridor-tile-cost';
 import { DIRECTIONS } from './directions';
 import type { CorridorMap } from './find-corridor';
-import { horizontalShare } from './pick-direction';
 import { pickRandom } from './pick-random';
 import type { Point } from './point';
 import type { Random } from './random';
@@ -9,8 +8,8 @@ import type { Random } from './random';
 export interface DigSettings {
   lattice: boolean;
   straight: number;
-  horizontalBias: number;
-  verticalBias: number;
+  /** The share of horizontal directions that a corridor favours at a tile. */
+  share: (at: Point) => number;
 }
 
 export interface DugCorridor {
@@ -44,7 +43,6 @@ export function digCorridor(
   steps: number,
 ): DugCorridor | undefined {
   const stride = settings.lattice ? 2 : 1;
-  const share = horizontalShare(settings.horizontalBias, settings.verticalBias);
   const tiles: Point[] = [];
   const pending = new Set<number>();
   let direction = startDirection;
@@ -75,6 +73,7 @@ export function digCorridor(
     // a corridor turns at the end of a step, towards the axis it favours
     if (step < steps - 1) {
       const horizontal = direction % 2 === 1;
+      const share = settings.share(tiles.at(-1) ?? origin);
       const target = horizontal ? 1 - share : share;
       const turn: boolean =
         !turned &&

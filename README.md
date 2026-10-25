@@ -111,7 +111,7 @@ console.log(grid.toString());
 console.log(`${rooms.length} rooms covering ${fill * 100}% of the map`);
 ```
 
-> **Work in progress.** Symmetry and prefabricated rooms are on the way. Existing options and result fields will keep working as documented here.
+> **Work in progress.** Symmetry for the room-first generator and prefabricated rooms are on the way. Existing options and result fields will keep working as documented here.
 
 There are two dungeon generators. They take the same [`DungeonOptions`](#dungeonoptions), return the same [`DungeonResult`](#dungeonresult), and differ in how rooms and corridors come about:
 
@@ -199,7 +199,7 @@ const { grid, rooms, exits } = generateDigDungeon({
 
 1. It starts with one room in the middle of the map.
 2. It repeats the following until `fill` and `roomCount` are met, or the map is full (300 attempts in a row fail):
-   - Pick where to dig from. Usually that is a new exit on the wall of a room that has fewer exits than it wanted (see [Exits per room](#exits-per-room)), but with a `branchChance` it is a tile of an existing corridor. The direction is random, tipped by `horizontalBias` and `verticalBias`.
+   - Pick where to dig from. Usually that is a new exit on the wall of a room that has fewer exits than it wanted (see [Exits per room](#exits-per-room)), but with a `branchChance` it is a tile of an existing corridor. The direction is random, tipped by `horizontalBias` and `verticalBias`, and by [corridor symmetry](#symmetry) if set.
    - Dig a corridor of `corridorLength` tiles. It mostly goes straight, as set by `straight`, and turns at most every other step. It follows the same rules as the [corridors of the room-first generator](#connections): it never runs alongside another corridor or passes diagonally beside one.
    - Put a room of a size within `roomWidth` and `roomHeight` at the end, with a gap in its wall where the corridor arrives. If the corridor or the room does not fit, because it hits something or comes within `roomSpacing` of another room, the attempt is dropped and nothing is dug.
 3. It gives rooms the exits they want, and adds loops and dead ends, the way the room-first generator does.
@@ -208,7 +208,7 @@ Every room is connected to the first one by the corridor it was dug from, so all
 
 A `corridorLength` with a minimum of 0 sometimes skips the corridor and builds the new room right against the wall of its parent, with a single door in the wall between them, which needs `roomSpacing: 1`. With `lattice` placement, corridor lengths are rounded to what fits the lattice.
 
-`DigDungeonOptions` add two options to `DungeonOptions`:
+`DigDungeonOptions` add two options to `DungeonOptions`, as well as the four [symmetry options](#symmetry):
 
 | Option           | Default              | Description                                                                                                                                |
 | ---------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -216,6 +216,58 @@ A `corridorLength` with a minimum of 0 sometimes skips the corridor and builds t
 | `branchChance`   | `0.3`                | Chance that a new corridor is dug from an existing corridor instead of from a room, from 0 to 1.                                           |
 
 The other options work as described in [`DungeonOptions`](#dungeonoptions). `roomSpacing` is the least number of wall tiles between the floors of two rooms, `fill` and `roomCount` decide when digging stops, and `placement: 'lattice'` puts rooms and corridors on the lattice of a maze. `sizeUniformity` applies, too. `partition` and `spacingUniformity` belong to `generateRoomDungeon` only.
+
+### Symmetry
+
+_Only `generateDigDungeon` supports symmetry so far; the room-first generator will follow._
+
+```ts
+import { generateDigDungeon } from 'angstloch';
+
+const { grid } = generateDigDungeon({
+  width: 61,
+  height: 41,
+  layoutSymmetry: 'both',
+});
+```
+
+There are two independent kinds of symmetry, each with a chance. They can be used together. At a chance of 1 the symmetry is applied everywhere. At 0 it is ignored completely, and the result is the same as with `none`. In between, it is applied to that share of the dungeon: the more, the closer to symmetric.
+
+| Option                   | Default | Description                                                                                                                         |
+| ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `layoutSymmetry`         | `none`  | Mirrors or rotates the layout of the dungeon about the centre of the map: `none`, `horizontal`, `vertical`, `both` or `rotational`. |
+| `layoutSymmetryChance`   | `1`     | How often the layout is symmetric, from 0 to 1.                                                                                     |
+| `corridorSymmetry`       | `none`  | Makes corridors follow the pattern of a maze: `none`, `whirlpool` or `snowflake`.                                                   |
+| `corridorSymmetryChance` | `1`     | How strongly corridors follow `corridorSymmetry`, from 0 to 1.                                                                      |
+
+#### Layout symmetry
+
+`layoutSymmetry` makes the dungeon look the same when mirrored or turned:
+
+- `horizontal` mirrors it from left to right: the left half is the mirror image of the right half.
+- `vertical` mirrors it from top to bottom.
+- `both` does both at once, so that the dungeon is made of four mirrored quarters.
+- `rotational` turns it by 180° about the centre. The result looks the same upside down.
+
+Rooms, corridors, exits and doors are all mirrored. A room and its _twins_ get the same exits, and an exit and its twins are all open or all have a door, whatever `doorChance` is. Loops and dead ends are mirrored, too. Rooms that lie on an axis are their own twins, and so is the first room, which sits in the middle of the map. Every room is still reachable, and all the rules of corridors apply as usual.
+
+`layoutSymmetryChance` is rolled for every room and corridor that is dug, and for every extra exit, loop and dead end. When the roll fails, the room or corridor gets no twins. Rooms without twins cannot take twins to anything they grow, so the unsymmetric parts stay unsymmetric. Where a mirrored room, corridor or exit would not fit, because it would collide with something, the whole step is skipped, which keeps a dungeon at chance 1 perfectly symmetric.
+
+Things to know:
+
+- `roomCount` and `fill` count every room, twins included. As rooms come in sets of up to four, the room count can end up a little short of `roomCount.max`, and a set that would exceed it is not built.
+- The axes run through the centre of the map. With `lattice` placement, a map with an even width or height is treated as one tile smaller, so that the axis falls on a lattice tile, and the last row or column stays empty as extra border: an 80 by 50 map is symmetric as if it were 79 by 49.
+- The first room must sit exactly on the axis, which needs its size to have the same parity as the map (and, on the lattice, the right position on it). If its random size does not, it is made one step (2 on the lattice) wider, or narrower if it is as wide as it can be. It can therefore stray one step outside `roomWidth` or `roomHeight`, but only when the range has a single size.
+- Symmetry changes what the generator makes, so the same seed gives another dungeon than without it.
+
+#### Corridor symmetry
+
+`corridorSymmetry` is the symmetry of `generateMaze`, applied to the direction that the digger picks for corridors. It steers corridors by where they are on the map:
+
+- `snowflake` makes corridors radiate from the centre. Where a tile is further from the centre horizontally than vertically, corridors there run horizontally, and the other way round.
+- `whirlpool` makes them twirl around the centre, with the same rule turned by 90°.
+
+`corridorSymmetryChance` is how often a choice of direction follows the pattern, instead of `horizontalBias` and `verticalBias`. A corridor decides its direction at its start and whenever it turns, so `straight` limits the effect: corridors that never turn keep the direction they started in. Corridor symmetry shapes only the corridors that the digger digs. It leaves the extra links of the finishing step (extra exits, loops and dead ends) alone, and it does not make the layout symmetric.
 
 ### `DungeonOptions`
 
@@ -304,7 +356,7 @@ for (const room of rooms) {
 
 ## Playground
 
-A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger.
+A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to the digger.
 
 ## Development
 

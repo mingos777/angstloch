@@ -11,12 +11,7 @@ export function horizontalShare(
     : 0.5;
 }
 
-/** Picks one of the four directions, favouring horizontal ones or vertical ones by the biases. */
-export function pickDirection(
-  random: Random,
-  horizontalBias: number,
-  verticalBias: number,
-): number {
-  const horizontal = random() < horizontalShare(horizontalBias, verticalBias);
-  return pickRandom(random, horizontal ? [1, 3] : [0, 2]);
+/** Picks one of the four directions, horizontal ones with a probability of `share`. */
+export function pickDirection(random: Random, share: number): number {
+  return pickRandom(random, random() < share ? [1, 3] : [0, 2]);
 }

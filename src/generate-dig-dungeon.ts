@@ -1,12 +1,15 @@
 import { assertFraction } from './assert-fraction';
 import { assertRange } from './assert-range';
 import { carveRoom } from './carve-room';
+import { createSteering } from './create-steering';
+import { createTransforms } from './create-transforms';
 import { createRoomPlan } from './create-room-plan';
 import { digCorridor } from './dig-corridor';
 import type { DigDungeonOptions } from './dig-dungeon-options';
 import { createDungeonBuilder } from './dungeon-builder';
 import { touching } from './dungeon-builder';
 import type { ExitSlot } from './dungeon-builder';
+import type { OperationExit } from './dungeon-operation';
 import type { DungeonResult } from './dungeon-result';
 import { Grid } from './grid';
 import { pickDirection } from './pick-direction';
@@ -15,6 +18,8 @@ import { pickRoomSize } from './pick-room-size';
 import type { Point } from './point';
 import { randomInt } from './random-int';
 import { resolveDungeonOptions } from './resolve-dungeon-options';
+import { resolveSymmetryOptions } from './resolve-symmetry-options';
+import { symmetricExtent } from './symmetric-extent';
 import type { Room } from './room';
 import { EDGE_CLEARANCE } from './room-plan';
 import { roomBeyond } from './room-beyond';
@@ -41,6 +46,7 @@ export function generateDigDungeon(options: DigDungeonOptions): DungeonResult {
   const branchChance = options.branchChance ?? 0.3;
   assertRange('corridorLength', corridorLength, 0);
   assertFraction('branchChance', branchChance);
+  const symmetry = resolveSymmetryOptions(options);
 
   const grid = new Grid(width, height);
   const rooms: Room[] = [];
@@ -53,63 +59,104 @@ export function generateDigDungeon(options: DigDungeonOptions): DungeonResult {
   }
 
   const lattice = placement === 'lattice';
+  const layout = symmetry.layoutSymmetry;
+  const transforms =
+    layout !== 'none' && symmetry.layoutSymmetryChance > 0
+      ? createTransforms(layout, width, height, lattice)
+      : [];
   const builder = createDungeonBuilder(grid, rooms, random, {
     ...resolved,
     lattice,
+    layout: { transforms, chance: symmetry.layoutSymmetryChance },
   });
-  const settings = { ...resolved, lattice };
-  let covered = 0;
-
-  const addRoom = (room: Room): Room => {
-    const placed = { ...room, id: rooms.length };
-    rooms.push(placed);
-    carveRoom(grid, placed);
-    builder.registerRoom(placed);
-    covered += placed.width * placed.height;
-    return placed;
+  const settings = {
+    ...resolved,
+    lattice,
+    share: createSteering({ ...resolved, ...symmetry, lattice }),
   };
+  const area = width * height;
+  const coverage = (): number =>
+    rooms.reduce((sum, room) => sum + room.width * room.height, 0) / area;
 
   const pickSize = (): { width: number; height: number } => ({
     width: pickRoomSize(random, plan.widths, plan.step, plan.sizeUniformity),
     height: pickRoomSize(random, plan.heights, plan.step, plan.sizeUniformity),
   });
 
-  const first = pickSize();
-  const centre = (size: number, mapSize: number): number => {
+  // a room that is its own mirror image sits on the axis, which also takes
+  // the right size: one step more or less than a size that would not fit
+  const mirroredAxes = {
+    x: ['horizontal', 'both', 'rotational'].includes(layout),
+    y: ['vertical', 'both', 'rotational'].includes(layout),
+  };
+  const align = (size: number, mapSize: number, max: number): number => {
+    const extent = symmetricExtent(mapSize, lattice);
+    const sits = (s: number): boolean =>
+      (extent - s) % 2 === 0 && (!lattice || ((extent - s) / 2) % 2 === 1);
+    if (sits(size)) {
+      return size;
+    }
+    const larger = size + plan.step;
+    return larger <= max || size - plan.step < 1 ? larger : size - plan.step;
+  };
+  const centre = (size: number, mapSize: number, mirrored: boolean): number => {
+    if (mirrored) {
+      return (symmetricExtent(mapSize, lattice) - size) / 2;
+    }
     const x = Math.max(EDGE_CLEARANCE, Math.floor((mapSize - size) / 2));
     return plan.step === 2 && x % 2 === 0 ? x - 1 : x;
   };
-  addRoom({
+
+  const first = pickSize();
+  const active = transforms.length > 0;
+  if (active && mirroredAxes.x) {
+    first.width = align(first.width, width, plan.widths.max);
+  }
+  if (active && mirroredAxes.y) {
+    first.height = align(first.height, height, plan.heights.max);
+  }
+  const start: Room = {
     id: 0,
-    x: centre(first.width, width),
-    y: centre(first.height, height),
+    x: centre(first.width, width, active && mirroredAxes.x),
+    y: centre(first.height, height, active && mirroredAxes.y),
     ...first,
     exits: [],
     exitCount: 0,
     doorCount: 0,
-  });
+  };
+  rooms.push(start);
+  carveRoom(grid, start);
+  builder.registerRoom(start);
 
-  /** Whether a new room fits where it is, apart from the corridor that leads to it. */
-  const fits = (room: Room, dug: ReadonlySet<number>): boolean => {
-    if (
-      room.x < EDGE_CLEARANCE ||
-      room.y < EDGE_CLEARANCE ||
-      room.x + room.width > width - EDGE_CLEARANCE ||
-      room.y + room.height > height - EDGE_CLEARANCE ||
-      rooms.some((other) => roomsConflict(other, room, plan.spacing))
-    ) {
+  /** Whether new rooms fit where they are, apart from the corridors that lead to them. */
+  const accepts = (candidates: Room[], dug: ReadonlySet<number>): boolean => {
+    if (rooms.length + candidates.length > roomCount.max) {
       return false;
     }
-    // neither the room nor the wall around it may hold a corridor
-    for (let y = room.y - 1; y <= room.y + room.height; ++y) {
-      for (let x = room.x - 1; x <= room.x + room.width; ++x) {
-        const index = y * width + x;
-        if (builder.map.corridor[index] === 1 || dug.has(index)) {
-          return false;
+    return candidates.every((room, i) => {
+      if (
+        room.x < EDGE_CLEARANCE ||
+        room.y < EDGE_CLEARANCE ||
+        room.x + room.width > width - EDGE_CLEARANCE ||
+        room.y + room.height > height - EDGE_CLEARANCE ||
+        rooms.some((other) => roomsConflict(other, room, plan.spacing)) ||
+        candidates
+          .slice(i + 1)
+          .some((other) => roomsConflict(other, room, plan.spacing))
+      ) {
+        return false;
+      }
+      // neither the room nor the wall around it may hold a corridor
+      for (let y = room.y - 1; y <= room.y + room.height; ++y) {
+        for (let x = room.x - 1; x <= room.x + room.width; ++x) {
+          const index = y * width + x;
+          if (builder.map.corridor[index] === 1 || dug.has(index)) {
+            return false;
+          }
         }
       }
-    }
-    return true;
+      return true;
+    });
   };
 
   /** Digs a corridor from a room or a corridor to a new room, and returns whether there was space for both. */
@@ -123,17 +170,13 @@ export function generateDigDungeon(options: DigDungeonOptions): DungeonResult {
     const branching =
       hasCorridors && (wanting.length === 0 || random() < branchChance);
 
-    const direction = pickDirection(
-      random,
-      resolved.horizontalBias,
-      resolved.verticalBias,
-    );
     const length = randomInt(random, corridorLength.min, corridorLength.max);
     const steps = lattice ? Math.ceil(length / 2) : length;
 
     let parent: Room;
     let slot: ExitSlot | undefined;
     let origin: Point;
+    let direction: number;
     if (branching) {
       const corridor = pickRandom(random, builder.corridors);
       const tiles = corridor.filter(
@@ -144,8 +187,16 @@ export function generateDigDungeon(options: DigDungeonOptions): DungeonResult {
       }
       origin = pickRandom(random, tiles);
       parent = rooms[builder.ownerOf(origin)] as Room;
+      direction = pickDirection(random, settings.share(origin));
     } else {
       parent = pickRandom(random, wanting);
+      direction = pickDirection(
+        random,
+        settings.share({
+          x: parent.x + parent.width / 2,
+          y: parent.y + parent.height / 2,
+        }),
+      );
       const slots = builder.slotsOf(parent, direction);
       if (slots.length === 0) {
         return false;
@@ -160,22 +211,27 @@ export function generateDigDungeon(options: DigDungeonOptions): DungeonResult {
       if (!slot) {
         return false;
       }
-      const room = roomBeyond(
-        random,
-        slot.exit,
-        direction,
-        size.width,
-        size.height,
-        plan.step,
+      const placed = {
+        ...roomBeyond(
+          random,
+          slot.exit,
+          direction,
+          size.width,
+          size.height,
+          plan.step,
+        ),
+        id: rooms.length,
+      };
+      return builder.place(
+        {
+          paths: [],
+          exits: [{ position: slot.exit, rooms: [parent.id, placed.id] }],
+          links: [[parent.id, placed.id]],
+          joins: [[parent.id, placed.id]],
+        },
+        [placed],
+        accepts,
       );
-      if (!fits(room, new Set())) {
-        return false;
-      }
-      const placed = addRoom(room);
-      builder.addExit(slot.exit, [parent.id, placed.id]);
-      builder.link(parent, placed);
-      builder.join(parent.id, placed.id);
-      return true;
     }
 
     const dug = digCorridor(
@@ -193,41 +249,55 @@ export function generateDigDungeon(options: DigDungeonOptions): DungeonResult {
     }
     const heading = DIRECTIONS[dug.direction] as Point;
     const wall = { x: end.x + heading.x, y: end.y + heading.y };
-    const room = roomBeyond(
-      random,
-      wall,
-      dug.direction,
-      size.width,
-      size.height,
-      plan.step,
-    );
-    const dugTiles = new Set(dug.tiles.map(({ x, y }) => y * width + x));
-    if (
-      !builder.isExitAllowed(wall) ||
-      (slot && touching(slot.exit, wall)) ||
-      !fits(room, dugTiles)
-    ) {
+    const placed = {
+      ...roomBeyond(
+        random,
+        wall,
+        dug.direction,
+        size.width,
+        size.height,
+        plan.step,
+      ),
+      id: rooms.length,
+    };
+    if (!builder.isExitAllowed(wall) || (slot && touching(slot.exit, wall))) {
       return false;
     }
 
-    builder.carve(dug.tiles, parent.id);
-    const placed = addRoom(room);
+    const exits: OperationExit[] = [
+      {
+        position: wall,
+        rooms: [placed.id],
+        start: { outside: end, direction: (dug.direction + 2) % 4 },
+      },
+    ];
     if (slot) {
-      builder.addExit(slot.exit, [parent.id], slot);
+      exits.unshift({ position: slot.exit, rooms: [parent.id], start: slot });
     }
-    builder.addExit(wall, [placed.id], {
-      outside: end,
-      direction: (dug.direction + 2) % 4,
-    });
-    builder.link(parent, placed);
-    builder.join(parent.id, placed.id);
-    return true;
+    return builder.place(
+      {
+        paths: [
+          {
+            tiles: branching ? [origin, ...dug.tiles] : dug.tiles,
+            owner: parent.id,
+            crossing: false,
+            fixed: branching ? 1 : 0,
+            direction,
+          },
+        ],
+        exits,
+        links: [[parent.id, placed.id]],
+        joins: [[parent.id, placed.id]],
+      },
+      [placed],
+      accepts,
+    );
   };
 
   let failures = 0;
   while (
     rooms.length < roomCount.max &&
-    (rooms.length < roomCount.min || covered / (width * height) < fill) &&
+    (rooms.length < roomCount.min || coverage() < fill) &&
     failures < MAX_FAILURES
   ) {
     failures = grow(failures >= STALLED_AFTER) ? 0 : failures + 1;
@@ -238,6 +308,6 @@ export function generateDigDungeon(options: DigDungeonOptions): DungeonResult {
     grid,
     rooms,
     exits: builder.exits,
-    fill: covered / (width * height),
+    fill: coverage(),
   };
 }

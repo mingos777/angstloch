@@ -1,5 +1,10 @@
 import { generateDigDungeon, generateRoomDungeon } from '../src';
-import type { Placement, RoomPartition } from '../src';
+import type {
+  CorridorSymmetry,
+  LayoutSymmetry,
+  Placement,
+  RoomPartition,
+} from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { drawGrid } from './draw-grid';
 
@@ -54,6 +59,10 @@ function render(): void {
               max: value('corridorLengthMax'),
             },
             branchChance: value('branchChance'),
+            layoutSymmetry: data.get('layoutSymmetry') as LayoutSymmetry,
+            layoutSymmetryChance: value('layoutSymmetryChance'),
+            corridorSymmetry: data.get('corridorSymmetry') as CorridorSymmetry,
+            corridorSymmetryChance: value('corridorSymmetryChance'),
           })
         : generateRoomDungeon({
             ...shared,
