@@ -6,16 +6,20 @@ import type {
   RoomPartition,
 } from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
+import { downloadCanvas } from './download-canvas';
 import { drawGrid } from './draw-grid';
+import type { DisplayMode } from './draw-grid';
 
 const form = document.querySelector<HTMLFormElement>('#controls');
+const display = document.querySelector<HTMLSelectElement>('#display');
+const download = document.querySelector<HTMLButtonElement>('#download');
 const canvas = document.querySelector<HTMLCanvasElement>('#map');
 const error = document.querySelector<HTMLElement>('#error');
 const stats = document.querySelector<HTMLElement>('#stats');
 const context = canvas?.getContext('2d');
 
 function render(): void {
-  if (!form || !canvas || !error || !stats || !context) {
+  if (!form || !display || !canvas || !error || !stats || !context) {
     return;
   }
   const data = new FormData(form);
@@ -72,25 +76,28 @@ function render(): void {
     error.textContent = '';
     const doors = exits.filter((exit) => exit.door).length;
     stats.textContent = `${String(rooms.length)} rooms, ${String(exits.length)} exits (${String(doors)} with doors), fill ${fill.toFixed(3)}`;
-    drawGrid(canvas, context, grid, tileSize);
-    if (data.get('showExits')) {
-      // open exits, which have no door, are marked with a dot
-      context.fillStyle = '#4a7fc8';
-      for (const { position, door } of exits) {
-        if (!door) {
-          context.fillRect(
-            position.x * tileSize + tileSize / 4,
-            position.y * tileSize + tileSize / 4,
-            tileSize / 2,
-            tileSize / 2,
-          );
-        }
-      }
-    }
+    // open exits, which have no door, are highlighted
+    const openExits = data.get('showExits')
+      ? exits.filter((exit) => !exit.door).map((exit) => exit.position)
+      : [];
+    drawGrid(
+      canvas,
+      context,
+      grid,
+      tileSize,
+      display.value as DisplayMode,
+      openExits,
+    );
   } catch (e) {
     error.textContent = e instanceof Error ? e.message : String(e);
   }
 }
 
 form?.addEventListener('input', render);
+display?.addEventListener('input', render);
+download?.addEventListener('click', () => {
+  if (canvas) {
+    downloadCanvas(canvas, 'angstloch-dungeon.png');
+  }
+});
 render();

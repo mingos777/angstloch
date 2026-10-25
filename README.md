@@ -373,6 +373,10 @@ for (const room of rooms) {
 
 A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators.
 
+Both pages have a **Display** switch. `simple` paints plain coloured squares. `roguelike` shows the map the way a roguelike would, as coloured ASCII glyphs on a black background: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
+
+The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png` or `angstloch-dungeon.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
+
 ## Development
 
 ```

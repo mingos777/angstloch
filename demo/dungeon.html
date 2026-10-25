@@ -217,6 +217,14 @@
       /></label>
     </form>
     <p id="stats"></p>
+    <div class="view">
+      <label for="display">Display</label>
+      <select id="display">
+        <option value="simple">simple</option>
+        <option value="roguelike">roguelike</option>
+      </select>
+      <button id="download" type="button">Download PNG</button>
+    </div>
     <canvas id="map"></canvas>
     <p id="error"></p>
     <script type="module" src="./dungeon.ts"></script>
