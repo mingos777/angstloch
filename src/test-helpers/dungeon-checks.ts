@@ -1,9 +1,9 @@
-import type { LayoutSymmetry } from '../layout-symmetry';
-import type { DungeonResult } from '../dungeon-result';
-import type { Grid } from '../grid';
-import type { Point } from '../point';
-import type { Room } from '../room';
-import { Tile } from '../tile';
+import type { LayoutSymmetry } from '../rooms/layout-symmetry';
+import type { DungeonResult } from '../dungeon/dungeon-result';
+import type { Grid } from '../core/grid';
+import type { Point } from '../core/point';
+import type { Room } from '../rooms/room';
+import { Tile } from '../core/tile';
 
 export function overlap(a: Room, b: Room, gap: number) {
   return (

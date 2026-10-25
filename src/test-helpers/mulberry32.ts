@@ -1,4 +1,4 @@
-import type { Random } from '../random';
+import type { Random } from '../core/random';
 
 /** A small seedable PRNG for tests and the playground. */
 export function mulberry32(seed: number): Random {
