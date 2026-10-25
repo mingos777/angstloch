@@ -458,7 +458,15 @@ In `lattice` mode the size ranges are narrowed to odd numbers: `{ min: 4, max: 1
 
 ### Connections
 
-Rooms are linked shortest link first, between rooms that are not connected yet, so the links form a tree. For each link:
+Rooms are joined in a tree, which means one link fewer than there are rooms. Extra links for exits and loops come on top of it. `connection` decides which links make the tree:
+
+- `'nearest'` (the default) links the closest rooms first, between rooms that are not connected yet.
+- `'bsp'` joins rooms the way a BSP dungeon does. The rooms are cut in two, by a vertical or a horizontal cut, and each half is cut again, until single rooms are left. A cut runs across the axis where the centers of the rooms are more spread out, and it splits the rooms in half by their order along that axis. Every cut then gets one link, between the closest pair of rooms on its two sides. The smallest cuts are joined first, so rooms are joined into small clusters, and the clusters are then joined into larger ones. The cuts are worked out from where the rooms are, so `bsp` connections work with any `partition` and placement, with templated rooms and with symmetry, and not only with `partition: 'bsp'`. The result has long, straight links between clusters, where `nearest` has many short ones.
+- `'bsp-random'` cuts the rooms in the same way, but joins a random room on one side of a cut to a random room on the other, as the textbook BSP algorithm does. The links are often long and cross the map, which makes a more tangled dungeon with more corridor crossings, where far-apart rooms are joined directly.
+
+With the BSP connections, if the corridor between the chosen pair of a cut cannot be built, the next pair is tried (the next closest for `'bsp'`, another random one for `'bsp-random'`). When no pair can be joined, the rooms are left for the nearest-first rule, and then for the recovery described at the end of this section. The rooms themselves are the same with every connection: only the corridors differ.
+
+For each link, whichever way it was chosen:
 
 - If the two rooms face each other across exactly one wall tile (`roomSpacing: 1` makes this common), a single door in that wall joins them. This exit belongs to both rooms.
 - Otherwise a corridor is routed between the rooms. Each room's end of it is a new exit on the wall that faces the other room, or, if the room has all the exits it wants, a branch off a corridor it has already (see [Exits per room](#exits-per-room)).
@@ -522,7 +530,7 @@ A `corridorLength` with a minimum of 0 sometimes skips the corridor and builds t
 | `corridorLength` | `{ min: 1, max: 8 }` | Length of the corridor dug to the next room, in tiles, a `Range` of at least 0. 0 builds the room straight against the room it grows from. |
 | `branchChance`   | `0.3`                | Chance that a new corridor is dug from an existing corridor instead of from a room, from 0 to 1.                                           |
 
-The other options work as described in [`DungeonOptions`](#dungeonoptions). `roomSpacing` is the least number of wall tiles between the floors of two rooms, `fill` and `roomCount` decide when digging stops, and `placement: 'lattice'` puts rooms and corridors on the lattice of a maze. `sizeUniformity` applies, too. `partition` and `spacingUniformity` belong to `generateRoomDungeon` only.
+The other options work as described in [`DungeonOptions`](#dungeonoptions). `roomSpacing` is the least number of wall tiles between the floors of two rooms, `fill` and `roomCount` decide when digging stops, and `placement: 'lattice'` puts rooms and corridors on the lattice of a maze. `sizeUniformity` applies, too. `partition`, `spacingUniformity` and `connection` belong to `generateRoomDungeon` only.
 
 ### Symmetry
 
@@ -589,7 +597,7 @@ Corridor symmetry does not make the layout symmetric.
 
 ### `DungeonOptions`
 
-`DungeonOptions` are the options shared by all dungeon generators. `RoomDungeonOptions`, the options of `generateRoomDungeon`, add `partition` and `spacingUniformity`. [`DigDungeonOptions`](#the-digger), the options of `generateDigDungeon`, add `corridorLength` and `branchChance`.
+`DungeonOptions` are the options shared by all dungeon generators. `RoomDungeonOptions`, the options of `generateRoomDungeon`, add `partition`, `spacingUniformity` and `connection`. [`DigDungeonOptions`](#the-digger), the options of `generateDigDungeon`, add `corridorLength` and `branchChance`.
 
 | Option                   | Default                      | Description                                                                                                                                                                                                                               |
 | ------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -618,10 +626,11 @@ Corridor symmetry does not make the layout symmetric.
 
 `RoomDungeonOptions` adds:
 
-| Option              | Default     | Description                                                                                  |
-| ------------------- | ----------- | -------------------------------------------------------------------------------------------- |
-| `partition`         | `'scatter'` | How rooms are placed, `'scatter'` or `'bsp'`, see [Placement of rooms](#placement-of-rooms). |
-| `spacingUniformity` | `0`         | How evenly rooms are spread over the map, from 0 to 1.                                       |
+| Option              | Default     | Description                                                                                                 |
+| ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
+| `partition`         | `'scatter'` | How rooms are placed, `'scatter'` or `'bsp'`, see [Placement of rooms](#placement-of-rooms).                |
+| `connection`        | `'nearest'` | How rooms are joined by corridors, `'nearest'`, `'bsp'` or `'bsp-random'`, see [Connections](#connections). |
+| `spacingUniformity` | `0`         | How evenly rooms are spread over the map, from 0 to 1.                                                      |
 
 If a size range does not fit between the map edges, it is clamped to what fits. If not even the smallest room fits, no rooms are placed, and no error is thrown.
 
@@ -788,7 +797,7 @@ A template that cannot be placed will always throw a `TemplatePlacementError` in
 
 ## Playground
 
-A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons, the caves, the forests and the noise each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
+A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons, the caves, the forests and the noise each have their own page, and the dungeon page switches between the room-first generator and the digger, and has a **Connection** select (nearest, bsp or bsp-random) next to the partition for the room-first one. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
 
 All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background, in the colors of an ANSI terminal: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500), grass `.` (#00aa00), tree `T` (#55ff55), road `.` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
 

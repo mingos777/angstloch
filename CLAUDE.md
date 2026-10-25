@@ -2,11 +2,23 @@
 
 Angstloch is a map generator library for roguelike games on a 2D square grid. It is written in modern TypeScript and will be published on NPM for browser-based roguelikes to consume.
 
+**Read `ROADMAP.md` at the start of every session.** It says where the library stands, what is planned next, the design decisions behind the plans, and what was rejected.
+
 ## Rules
+
+### Workflow
+
+- **Design first, build when told.** Talk a feature through with options, a recommendation and a list of open questions. Record the decisions. Do not start implementing until the user says so, even when their answers to the design questions seem to settle everything.
+- **One task at a time.** Split a feature into small tasks. Stop after each one with a short report (what changed, what the tests cover, anything that surprised you) and let the user review it.
+- **The playground follows every task.** Each task that adds or changes behavior also extends `demo/`, so the user can see it and react before the next task builds on it.
+- **Defaults are the user's call.** They tune defaults by looking at the playground, and many defaults in the README came from that, so do not change them unasked.
+- **Playground colors** come from the `Color` constant in `demo/draw-grid.ts`, the ANSI terminal palette of the user's game. Keep the glyph colors listed in the README in sync with `GLYPHS` there, and do not overwrite the user's choices.
+- **American English** in code, identifiers, comments, error messages and docs (center, color, behavior), although the user writes British English.
+- Before reporting a task as done, run `npm run typecheck`, `npm run lint`, `npm run format:check` and `npm test`.
 
 ### Git
 
-- **Never commit, push, or otherwise modify git history.** The user reviews every task and commits on their own.
+- **Never commit, push, or otherwise modify git history.** The user reviews every task and commits on their own. Moving files with plain `mv` is fine.
 
 ### Code style
 
@@ -40,10 +52,10 @@ Angstloch is a map generator library for roguelike games on a 2D square grid. It
 - No runtime dependencies. Core code must not use DOM or Node APIs, so it runs in a browser, Node, or a web worker.
 - Determinism: never call `Math.random` directly in generator code. Generators accept an injected `Random` (`() => number` returning a float in [0, 1), same contract as `Math.random`), resolved via `resolveRandom`, which defaults to `Math.random`. Users can plug in any PRNG (mulberry32, etc.).
 - API contract: each generator is a function `generateX(options: XOptions)` taking a single options object. `width` and `height` are required; `random?: Random` and all algorithm-specific fields are optional with documented defaults. Each algorithm has its own typed options interface extending a shared base (`width`, `height`, `random`); never use `any`. Adding optional fields is fine, but never change or remove existing ones, since the external contract should stay constant. Generators are pure: no global state, no mutation of the caller's options. Invalid dimensions (non-positive or non-integer) throw a `RangeError`.
-- Data model: maps are a `Grid` (flat `Uint8Array`, `get`/`set`/`inBounds`/`clone`/`toString`). `Tile` values are part of the contract: `Wall` 0, `Floor` 1, `Door` 2 (a potential door placement). Add new values, never renumber. Positions are plain `{ x, y }` (`Point`), y grows downwards. `Grid#get` outside the grid returns `Wall`; `set` outside throws.
+- Data model: maps are a `Grid` (flat `Uint8Array`, `get`/`set`/`inBounds`/`clone`/`toString`). `Tile` values are part of the contract: `Wall` 0, `Floor` 1, `Door` 2 (a potential door placement), `Grass` 3, `Tree` 4, `Road` 5. Add new values, never renumber. Positions are plain `{ x, y }` (`Point`), y grows downwards. `Grid#get` outside the grid returns `Wall`; `set` outside throws.
 - Results: generators never mutate their inputs and return a result object (`{ grid, ...extras }`), never a bare grid. Extras describe the map, e.g. a dungeon reports its rooms (count, position, dimensions), a maze reports `start` and `exits`. Any composition with other maps is left to the caller.
 - Only a single `Random` float is injected. Derive integers and picks with the shared helpers (`randomInt`, `pickRandom`).
-- Mazes and dungeons are the current scope. Towns, caves with water and similar come much later.
+- Scope: mazes, dungeons, caves, forests and roads exist. Towns, water and the rest of the plans are in `ROADMAP.md`.
 - Reference material: the previous attempt lives in `../angstloch-old` (only the maze generator was finished) and rot.js 2.2.1 in `../ur/node_modules/rot-js`. Reimplement algorithms our way instead of copying code.
 
 ## Layout

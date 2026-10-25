@@ -35,6 +35,7 @@ export type { Random } from './core/random';
 export type { Range } from './core/range';
 export type { Room } from './rooms/room';
 export type {
+  RoomConnection,
   RoomDungeonOptions,
   RoomPartition,
 } from './rooms/room-dungeon-options';

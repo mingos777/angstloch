@@ -1,4 +1,5 @@
 import { assertFraction } from '../core/assert-fraction';
+import { assertConnection } from './assert-connection';
 import { assertPartition } from './assert-partition';
 import { carveRoom } from '../rooms/carve-room';
 import { carveTemplate } from '../rooms/templates/carve-template';
@@ -30,8 +31,10 @@ export function generateRoomDungeon(
   const resolved = resolveDungeonOptions(options);
   const { width, height, random, placement } = resolved;
   const partition = options.partition ?? 'scatter';
+  const connection = options.connection ?? 'nearest';
   const spacingUniformity = options.spacingUniformity ?? 0;
   assertPartition(partition);
+  assertConnection(connection);
   assertFraction('spacingUniformity', spacingUniformity);
   const symmetry = resolveSymmetryOptions(options);
   const lattice = placement === 'lattice';
@@ -97,6 +100,7 @@ export function generateRoomDungeon(
         random,
         {
           ...resolved,
+          connection,
           lattice,
           layout: { transforms, chance: symmetry.layoutSymmetryChance },
           steering: steered ? steering : undefined,

@@ -3,6 +3,7 @@ import type {
   CorridorSymmetry,
   LayoutSymmetry,
   Placement,
+  RoomConnection,
   RoomPartition,
 } from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
@@ -81,6 +82,7 @@ function render(): void {
         : generateRoomDungeon({
             ...shared,
             partition: data.get('partition') as RoomPartition,
+            connection: data.get('connection') as RoomConnection,
             spacingUniformity: value('spacingUniformity'),
           });
     error.textContent = '';

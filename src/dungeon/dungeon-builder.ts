@@ -1,3 +1,6 @@
+import { distanceBetween } from './distance-between';
+import { planBspLinks } from './plan-bsp-links';
+import type { RoomConnection } from '../rooms/room-dungeon-options';
 import { carveRoom } from '../rooms/carve-room';
 import { corridorTileCost } from './corridor-tile-cost';
 import { DIRECTIONS } from '../core/directions';
@@ -22,6 +25,8 @@ import { Tile } from '../core/tile';
 import type { Transform } from '../rooms/templates/create-transforms';
 
 export interface DungeonBuilderOptions {
+  /** How rooms are joined. Defaults to `nearest`. */
+  connection?: RoomConnection;
   lattice: boolean;
   doorChance: number;
   straight: number;
@@ -1187,6 +1192,26 @@ export function createDungeonBuilder(
   };
 
   const connectAll = (): number[] => {
+    if (options.connection === 'bsp' || options.connection === 'bsp-random') {
+      // every cut gets one corridor, between the first pair of rooms that can be joined
+      const plan = planBspLinks(
+        rooms,
+        options.connection === 'bsp-random' ? random : undefined,
+      );
+      for (const cut of plan) {
+        for (const { a, b } of cut) {
+          if (groupOf(a.id) === groupOf(b.id)) {
+            // the sides of the cut are joined already
+            break;
+          }
+          if (connect(a, b)) {
+            join(a.id, b.id);
+            break;
+          }
+        }
+      }
+    }
+    // joins what is not joined yet, which is everything without a plan and is the fallback with one
     const edges: Edge[] = rooms.flatMap((a, i) =>
       rooms
         .slice(i + 1)
@@ -1310,13 +1335,6 @@ export function createDungeonBuilder(
     addExtras,
     connectStubs,
   };
-}
-
-function distanceBetween(a: Room, b: Room): number {
-  return (
-    (a.x + a.width / 2 - b.x - b.width / 2) ** 2 +
-    (a.y + a.height / 2 - b.y - b.height / 2) ** 2
-  );
 }
 
 /** Whether two tiles are the same or next to each other, diagonally too. */
