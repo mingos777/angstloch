@@ -12,7 +12,7 @@ export interface Room {
   width: number;
   /** Height in tiles. */
   height: number;
-  /** Indices into `DungeonResult#exits` of the room's exits, doors or not. */
+  /** Indices into `DungeonResult#exits` (or `MazeResult#roomExits`) of the room's exits, doors or not. */
   exits: number[];
   /** Number of exits, which is `exits.length`. */
   exitCount: number;

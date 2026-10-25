@@ -75,7 +75,67 @@
       <label
         >Exits <input name="exits" type="number" value="0" min="0"
       /></label>
+      <label
+        >Room count min
+        <input name="roomCountMin" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Room count max
+        <input name="roomCountMax" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Room width min
+        <input name="roomWidthMin" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Room width max
+        <input name="roomWidthMax" type="number" value="7" min="1"
+      /></label>
+      <label
+        >Room height min
+        <input name="roomHeightMin" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Room height max
+        <input name="roomHeightMax" type="number" value="7" min="1"
+      /></label>
+      <label
+        >Size uniformity
+        <input
+          name="sizeUniformity"
+          type="number"
+          value="0"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Exits per room min
+        <input name="exitsPerRoomMin" type="number" value="1" min="1"
+      /></label>
+      <label
+        >Exits per room max
+        <input name="exitsPerRoomMax" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Door chance
+        <input
+          name="doorChance"
+          type="number"
+          value="1"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Show room gaps <input name="showExits" type="checkbox" checked
+      /></label>
+      <label
+        >Outline templates <input name="showTemplates" type="checkbox" checked
+      /></label>
+      <label>Use templates <input name="useTemplates" type="checkbox" /></label>
     </form>
+    <p id="stats"></p>
     <div class="view">
       <label for="display">Display</label>
       <select id="display">
@@ -86,6 +146,7 @@
     </div>
     <canvas id="map"></canvas>
     <p id="error"></p>
+    <section id="templates"></section>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

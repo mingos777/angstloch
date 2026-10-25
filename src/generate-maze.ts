@@ -1,21 +1,17 @@
 import { assertDimensions } from './assert-dimensions';
+import { assertFraction } from './assert-fraction';
+import { assertRange } from './assert-range';
 import { carveExit } from './carve-exit';
+import { carveMaze } from './carve-maze';
+import { findMazeStart } from './find-maze-start';
 import { Grid } from './grid';
 import type { MazeOptions } from './maze-options';
 import type { MazeResult } from './maze-result';
-import { pickRandom } from './pick-random';
+import { openMazeRooms } from './open-maze-rooms';
+import { prepareMazeRooms } from './prepare-maze-rooms';
 import type { Point } from './point';
 import { randomInt } from './random-int';
 import { resolveRandom } from './resolve-random';
-import { Tile } from './tile';
-
-/** Moves between neighboring maze cells, which sit two tiles apart. */
-const STEPS: readonly Point[] = [
-  { x: 0, y: -2 },
-  { x: 2, y: 0 },
-  { x: 0, y: 2 },
-  { x: -2, y: 0 },
-];
 
 /**
  * Generates a maze with the recursive backtracker algorithm. Corridors run
@@ -40,140 +36,51 @@ export function generateMaze(options: MazeOptions): MazeResult {
   const random = resolveRandom(options.random);
   const cellsX = Math.floor((width - 1) / 2);
   const cellsY = Math.floor((height - 1) / 2);
-  const start = options.start ?? {
-    x: 1 + 2 * Math.floor(cellsX / 2),
-    y: 1 + 2 * Math.floor(cellsY / 2),
-  };
-  assertStart(start, cellsX, cellsY);
+  if (options.start) {
+    assertStart(options.start, cellsX, cellsY);
+  }
+  const exitsPerRoom = options.exitsPerRoom ?? { min: 1, max: 3 };
+  const doorChance = options.doorChance ?? 1;
+  assertRange('exitsPerRoom', exitsPerRoom, 1);
+  assertFraction('doorChance', doorChance);
+  if ((options.rooms || options.templates) && symmetry !== 'none') {
+    throw new RangeError(
+      'rooms and templates cannot be combined with a symmetry, since rooms break the pattern',
+    );
+  }
 
   const grid = new Grid(width, height);
-  const maxFilled = cellsX * cellsY;
+  const { rooms, openings, isBlocked, reachExits } = prepareMazeRooms(
+    random,
+    grid,
+    options,
+    options.start,
+    doorChance,
+  );
+  const start = options.start ?? findMazeStart(width, height, isBlocked);
 
-  const isInMap = (position: Point, step: Point): boolean => {
-    const x = position.x + step.x;
-    const y = position.y + step.y;
-    return x >= 1 && x <= width - 2 && y >= 1 && y <= height - 2;
-  };
-
-  const isConnected = (position: Point, step: Point): boolean =>
-    grid.get(position.x + step.x / 2, position.y + step.y / 2) === Tile.Floor;
-
-  const isVisited = (position: Point, step: Point): boolean =>
-    grid.get(position.x + step.x, position.y + step.y) === Tile.Floor;
-
-  const dig = (position: Point, step: Point): void => {
-    grid.set(position.x + step.x / 2, position.y + step.y / 2, Tile.Floor);
-    grid.set(position.x + step.x, position.y + step.y, Tile.Floor);
-  };
-
-  const isDeadEnd = (position: Point): boolean =>
-    STEPS.filter(
-      (step) => isInMap(position, step) && isConnected(position, step),
-    ).length === 1;
-
-  const pickOnAxis = (
-    steps: readonly Point[],
-    horizontal: boolean,
-  ): Point | undefined => {
-    const onAxis = steps.filter((step) =>
-      horizontal ? step.y === 0 : step.x === 0,
-    );
-    return onAxis.length > 0 ? pickRandom(random, onAxis) : undefined;
-  };
-
-  const pickWeighted = (
-    steps: readonly Point[],
-    horizontalWeight: number,
-    verticalWeight: number,
-  ): Point | undefined => {
-    const total = horizontalWeight + verticalWeight;
-    if (total <= 0) {
-      return undefined;
-    }
-    return pickOnAxis(steps, random() * total < horizontalWeight);
-  };
-
-  const pickStraight = (
-    position: Point,
-    steps: readonly Point[],
-  ): Point | undefined => {
-    const straightSteps = steps.filter(
-      (step) =>
-        grid.get(position.x - step.x / 2, position.y - step.y / 2) ===
-        Tile.Floor,
-    );
-    return straightSteps.length > 0
-      ? pickRandom(random, straightSteps)
-      : undefined;
-  };
-
-  const pickSymmetric = (
-    position: Point,
-    steps: readonly Point[],
-  ): Point | undefined => {
-    const dx = position.x - Math.floor(width / 2);
-    const dy = position.y - Math.floor(height / 2);
-    const [ox, oy] = symmetry === 'whirlpool' ? [dy, -dx] : [dx, dy];
-    const horizontal =
-      Math.abs(ox) === Math.abs(oy)
-        ? random() < 0.5
-        : Math.abs(ox) > Math.abs(oy);
-    return pickOnAxis(steps, horizontal);
-  };
-
-  // Direction rules are tried in order; the first that yields a step wins.
-  const selectStep = (position: Point, steps: readonly Point[]): Point =>
-    (straight > random() ? pickStraight(position, steps) : undefined) ??
-    (symmetry !== 'none' && symmetryChance > random()
-      ? pickSymmetric(position, steps)
-      : undefined) ??
-    (horizontalBias !== verticalBias
-      ? pickWeighted(steps, horizontalBias, verticalBias)
-      : undefined) ??
-    pickRandom(random, steps);
-
-  const createLoop = (position: Point): void => {
-    const steps = STEPS.filter(
-      (step) =>
-        isInMap(position, step) &&
-        !isConnected(position, step) &&
-        isVisited(position, step),
-    );
-    if (steps.length > 0) {
-      dig(position, selectStep(position, steps));
-    }
-  };
-
-  grid.set(start.x, start.y, Tile.Floor);
-  const visited: Point[] = [start];
-  let filled = 1;
-
-  for (;;) {
-    const current = visited.at(-1);
-    if (current === undefined) {
-      break;
-    }
-
-    // once enough is carved, the stack is still unwound so that loops can form
-    const steps =
-      filled / maxFilled >= fill
-        ? []
-        : STEPS.filter(
-            (step) => isInMap(current, step) && !isVisited(current, step),
-          );
-    if (steps.length > 0) {
-      const step = selectStep(current, steps);
-      dig(current, step);
-      visited.push({ x: current.x + step.x, y: current.y + step.y });
-      ++filled;
-    } else {
-      visited.pop();
-      // loops are only considered at dead ends
-      if (isDeadEnd(current) && loopChance > random()) {
-        createLoop(current);
-      }
-    }
-  }
+  carveMaze({
+    grid,
+    random,
+    start,
+    horizontalBias,
+    verticalBias,
+    loopChance,
+    fill,
+    symmetry,
+    symmetryChance,
+    straight,
+    isBlocked,
+  });
+  reachExits();
+  const roomExits = openMazeRooms(
+    grid,
+    random,
+    rooms,
+    openings,
+    exitsPerRoom,
+    doorChance,
+  );
 
   const exits: Point[] = [];
   for (let i = randomInt(random, minExits, maxExits); i > 0; --i) {
@@ -183,7 +90,7 @@ export function generateMaze(options: MazeOptions): MazeResult {
     }
   }
 
-  return { grid, start, exits };
+  return { grid, start, exits, rooms, roomExits };
 }
 
 function assertStart(start: Point, cellsX: number, cellsY: number): void {

@@ -13,6 +13,7 @@ export { Grid } from './grid';
 export type { LayoutSymmetry } from './layout-symmetry';
 export type { MazeOptions, MazeSymmetry } from './maze-options';
 export type { MazeResult } from './maze-result';
+export type { MazeRoomOptions } from './maze-room-options';
 export type { Point } from './point';
 export type { Position } from './position';
 export type { Random } from './random';

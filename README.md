@@ -73,28 +73,96 @@ A maze is carved with a recursive backtracker. Corridors run along odd coordinat
 
 ### `MazeOptions`
 
-| Option            | Default       | Description                                                                                                                      |
-| ----------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `width`, `height` | required      | Map size in tiles, at least 3.                                                                                                   |
-| `random`          | `Math.random` | Source of randomness.                                                                                                            |
-| `horizontalBias`  | `0`           | Weight of horizontal corridors against `verticalBias`. Only the ratio matters, so set both; a lone value against 0 means always. |
-| `verticalBias`    | `0`           | Weight of vertical corridors against `horizontalBias`.                                                                           |
-| `loopChance`      | `0`           | Chance of turning a dead end into a loop: 0 is a perfect maze, 1 a braid maze.                                                   |
-| `fill`            | `1`           | Fraction of the maze to carve, from 0 to 1.                                                                                      |
-| `symmetry`        | `'none'`      | `'whirlpool'` twirls corridors around the map center, `'snowflake'` makes them radiate from it.                                  |
-| `symmetryChance`  | `1`           | How strongly symmetry is enforced, from 0 to 1.                                                                                  |
-| `straight`        | `0`           | Preference for continuing straight, from 0 to 1.                                                                                 |
-| `minExits`        | `0`           | Minimum number of exits to add on the map border.                                                                                |
-| `maxExits`        | `minExits`    | Maximum number of exits.                                                                                                         |
-| `start`           | near center   | Where carving starts. Must be a cell with odd coordinates.                                                                       |
+| Option            | Default              | Description                                                                                                                                               |
+| ----------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `width`, `height` | required             | Map size in tiles, at least 3.                                                                                                                            |
+| `random`          | `Math.random`        | Source of randomness.                                                                                                                                     |
+| `horizontalBias`  | `0`                  | Weight of horizontal corridors against `verticalBias`. Only the ratio matters, so set both; a lone value against 0 means always.                          |
+| `verticalBias`    | `0`                  | Weight of vertical corridors against `horizontalBias`.                                                                                                    |
+| `loopChance`      | `0`                  | Chance of turning a dead end into a loop: 0 is a perfect maze, 1 a braid maze.                                                                            |
+| `fill`            | `1`                  | Fraction of the maze to carve, from 0 to 1.                                                                                                               |
+| `symmetry`        | `'none'`             | `'whirlpool'` twirls corridors around the map center, `'snowflake'` makes them radiate from it.                                                           |
+| `symmetryChance`  | `1`                  | How strongly symmetry is enforced, from 0 to 1.                                                                                                           |
+| `straight`        | `0`                  | Preference for continuing straight, from 0 to 1.                                                                                                          |
+| `minExits`        | `0`                  | Minimum number of exits to add on the map border.                                                                                                         |
+| `maxExits`        | `minExits`           | Maximum number of exits.                                                                                                                                  |
+| `start`           | near center          | Where carving starts. Must be a cell with odd coordinates. Rooms keep away from it, and without a `start` the nearest cell that is not in a room is used. |
+| `templates`       | none                 | Prefabricated [room templates](#templates-in-mazes), placed first.                                                                                        |
+| `rooms`           | none                 | Rectangular [rooms](#rooms-in-mazes) to place in the maze.                                                                                                |
+| `exitsPerRoom`    | `{ min: 1, max: 3 }` | Number of openings per room, a `Range`. Must be at least 1.                                                                                               |
+| `doorChance`      | `1`                  | Chance that a room's opening gets a door, from 0 to 1. Openings without a door are plain gaps in the wall.                                                |
 
 ### `MazeResult`
 
-| Field   | Description                                 |
-| ------- | ------------------------------------------- |
-| `grid`  | The maze.                                   |
-| `start` | The cell where carving started.             |
-| `exits` | Door tiles on the map border, one per exit. |
+| Field       | Description                                                                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grid`      | The maze.                                                                                                                                                      |
+| `start`     | The cell where carving started.                                                                                                                                |
+| `exits`     | Door tiles on the map border, one per exit.                                                                                                                    |
+| `rooms`     | The [rooms](#rooms-in-mazes), in the order they were placed. Empty without the `rooms` option. Each is a [`Room`](#room) whose `exits` index into `roomExits`. |
+| `roomExits` | The openings of the rooms into the maze, each an [`Exit`](#exit) whose `door` says whether it got a door. They are not the `exits` on the map border.          |
+
+### Rooms in mazes
+
+```ts
+import { generateMaze } from 'angstloch';
+
+const { grid, rooms, roomExits } = generateMaze({
+  width: 61,
+  height: 41,
+  rooms: { count: { min: 3, max: 5 }, width: { min: 5, max: 9 } },
+  doorChance: 0.5,
+});
+```
+
+Rooms are placed first and the maze is carved around them. Rooms sit on the lattice of the maze: they start on odd coordinates and have odd dimensions. At least three wall tiles separate the floors of two rooms, which leaves room for a maze cell between them. A room's walls are part of the maze's walls, and it opens onto the maze through gaps in them.
+
+`MazeRoomOptions`, the value of `rooms`:
+
+| Option           | Default              | Description                                                                                          |
+| ---------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `count`          | `{ min: 1, max: 1 }` | Number of rooms, a `Range`. The number is drawn from it. Fewer rooms are placed when no more fit.    |
+| `width`          | `{ min: 3, max: 7 }` | Room width in tiles, a `Range`. Only odd widths are used.                                            |
+| `height`         | `{ min: 3, max: 7 }` | Room height in tiles, a `Range`. Only odd heights are used.                                          |
+| `sizeUniformity` | `0`                  | How alike room sizes are, from 0 (anything within the ranges) to 1 (every room has the middle size). |
+
+Each room draws its number of openings from `exitsPerRoom`, and every opening is a gap in the wall that leads to a maze cell, opened as a door with the chance `doorChance`. The result stays connected: when a room cuts off a stretch of the maze, or leaves a room that nobody reaches, extra openings are made where they join the parts, so a room may have more openings than `exitsPerRoom` asks for. A room gets fewer when no carved maze cell is next to its walls, which happens with a low `fill`.
+
+Without `rooms` and `templates` the maze is generated exactly as before. Rooms cannot be combined with a `symmetry`, which throws a `RangeError`, since rooms break the pattern. Invalid `rooms` values, `exitsPerRoom` or `doorChance` also throw a `RangeError`. `fill` counts only the cells outside the rooms.
+
+### Templates in mazes
+
+```ts
+import { generateMaze, TemplateCell, type RoomTemplate } from 'angstloch';
+
+const { Floor: F, Wall: W, Exit: E } = TemplateCell;
+
+const closet: RoomTemplate = {
+  cells: [
+    [W, E, W],
+    [W, F, W],
+    [W, W, W],
+  ],
+  count: { min: 2, max: 4 },
+};
+
+const { grid, rooms } = generateMaze({
+  width: 61,
+  height: 41,
+  templates: [closet],
+});
+```
+
+`templates` takes the same [`RoomTemplate`](#room-templates) objects as the dungeons, with the same `count`, `rotate`, `mirror`, `positions`, `areas` and `positionAccuracy`. They are placed first, before the ordinary `rooms`, which keep away from them, and the maze is carved around them. A template that cannot be placed throws a [`TemplatePlacementError`](#room-templates). `templateSymmetry` does not exist for mazes.
+
+A maze is a lattice, so templates are placed [on the lattice](#placement): a template's bounding box starts on even coordinates, its dimensions must be odd, and every `Exit` and `Door` that leads outside must face a tile with odd coordinates, which is where the maze has its cells. A template that has no variant that fits throws a `RangeError`. At least three wall tiles separate a template's footprint from another room's.
+
+- The exit cells of a template open straight onto a maze cell. `Door` cells are always doors and `Exit` cells are doors with the chance `doorChance`. Every `Exit` and `Door` is opened, and if `fill` left the cell in front of it uncarved, a passage is carved from the nearest carved cell. Should that be impossible, a `TemplatePlacementError` is thrown.
+- `OptionalExit` cells are opened as far as `exitsPerRoom` asks, counting the fixed exits. More are opened where they join parts of the map that would be cut off.
+- The maze never digs through a template's walls or floors. `Unused` cells are free space like any other, so the maze may wind into a notch of a template's bounding box that is open to the outside.
+- `start` must not be inside a templated room, which throws a `RangeError`. Without a `start`, the nearest free cell to the middle is used.
+
+Templated rooms are in `rooms`, listed before the ordinary ones, with `template`, `rotation` and `mirrored` set, and their openings are in `roomExits`. `rooms.count` counts only ordinary rooms. A `symmetry` cannot be combined with `templates`.
 
 ## Dungeons
 
@@ -356,17 +424,17 @@ for (const room of rooms) {
 
 ### `Room`
 
-| Field             | Description                                                                  |
-| ----------------- | ---------------------------------------------------------------------------- |
-| `id`              | The room's index in `rooms`.                                                 |
-| `x`, `y`          | Position of the room's top-left floor tile. The room's wall is not included. |
-| `width`, `height` | Dimensions of the room's floor in tiles.                                     |
-| `exits`           | Indices into `DungeonResult#exits` of the room's exits.                      |
-| `exitCount`       | Number of exits of the room.                                                 |
-| `doorCount`       | Number of exits of the room that have a door.                                |
-| `template`        | Templated rooms only: the index of the room's template in `templates`.       |
-| `rotation`        | Templated rooms only: the clockwise rotation the template was placed in.     |
-| `mirrored`        | Templated rooms only: whether the template was placed mirrored.              |
+| Field             | Description                                                                         |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| `id`              | The room's index in `rooms`.                                                        |
+| `x`, `y`          | Position of the room's top-left floor tile. The room's wall is not included.        |
+| `width`, `height` | Dimensions of the room's floor in tiles.                                            |
+| `exits`           | Indices into `DungeonResult#exits` (or `MazeResult#roomExits`) of the room's exits. |
+| `exitCount`       | Number of exits of the room.                                                        |
+| `doorCount`       | Number of exits of the room that have a door.                                       |
+| `template`        | Templated rooms only: the index of the room's template in `templates`.              |
+| `rotation`        | Templated rooms only: the clockwise rotation the template was placed in.            |
+| `mirrored`        | Templated rooms only: whether the template was placed mirrored.                     |
 
 For a templated room, `x`, `y`, `width` and `height` describe the template's bounding box, walls included, as the floor of such a room need not be a rectangle. Ordinary rooms have no `template`, `rotation` or `mirrored`.
 
@@ -486,6 +554,8 @@ A template that cannot be placed will always throw a `TemplatePlacementError` in
 A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
 
 Both pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
+
+The maze page has the same room controls: the count, size and exits of ordinary [rooms](#rooms-in-mazes) (a maximum count of 0 means no rooms), the door chance, and the same Templates panel under the map, which is shared with the dungeon page. Tick **Use templates** to place them in the maze, mind that they must fit the lattice. Templated rooms are outlined, and room openings without a door are highlighted by **Show room gaps**.
 
 The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png` or `angstloch-dungeon.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
 
