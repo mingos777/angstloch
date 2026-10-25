@@ -6,6 +6,8 @@ Currently available:
 
 - [`generateMaze`](#mazes): perfect and braid mazes.
 - [`generateCave`](#caves): organic caves, grown with a cellular automaton. _Work in progress._
+- [`createSimplexNoise`](#noise): smooth 2D noise that can be stretched and turned, for terrain-like maps. Forests are built on it.
+- [`generateForest`](#forests): forests of scattered trees with clearings and denser stands, from noise. _Work in progress._
 - [`generateRoomDungeon`](#dungeons): room-first dungeons: rooms are placed first and joined by corridors afterwards. _Work in progress._
 - [`generateDigDungeon`](#the-digger): dungeons that are dug: corridors and rooms grow out of a first room. _Work in progress._
 
@@ -22,7 +24,7 @@ grid.get(x, y); // the tile at the position; anything outside the grid is a Wall
 grid.set(x, y, Tile.Floor); // throws a RangeError outside the grid
 grid.inBounds(x, y);
 grid.clone();
-grid.toString(); // '#' wall, '.' floor, '+' door, one line per row
+grid.toString(); // '#' wall, '.' floor, '+' door, '"' grass, 'T' tree, one line per row
 ```
 
 Positions are plain `{ x, y }` objects (`Point`). `x` grows to the right and `y` grows downwards.
@@ -34,6 +36,8 @@ The numeric values of `Tile` are part of the public contract and never change; n
 | `Tile.Wall`  | 0     | Solid rock.                                             |
 | `Tile.Floor` | 1     | Passable floor.                                         |
 | `Tile.Door`  | 2     | A potential door placement. What to put there is yours. |
+| `Tile.Grass` | 3     | Open ground of an outdoor map.                          |
+| `Tile.Tree`  | 4     | A tree. Whether it blocks movement or sight is yours.   |
 
 ### Options
 
@@ -245,6 +249,101 @@ const { grid, regions } = generateCave({
   connect: 'largest',
 });
 const spawn = regions[0]?.center;
+```
+
+## Noise
+
+Noise is a smooth, random-looking landscape of values: neighboring positions get similar values, so it forms hills and valleys, not static. It is the basis of outdoor maps, where it can say how dense the trees are or how high the ground is.
+
+```ts
+import {
+  createFractalNoise,
+  createSimplexNoise,
+  transformNoise,
+} from 'angstloch';
+
+const noise = transformNoise(
+  createFractalNoise(createSimplexNoise(random), { octaves: 2 }),
+  { scaleX: 60, scaleY: 20, rotation: 30 },
+);
+const height = noise(x, y); // x and y are tile positions
+```
+
+A `NoiseFunction` is `(x, y) => number`. It returns a float from -1 to 1 for any position, including negative ones, and the same position always gives the same value. Positions are in noise units, not tiles: the noise has features about one unit wide, so tile coordinates have to be divided by a number to zoom the noise to a useful size. `transformNoise` does that, and can stretch and turn the noise as well. Generators that take a noise function treat it this way too, and apply the transform to it. You can pass any function with that shape, such as one from another noise library.
+
+- `createSimplexNoise(random?)` creates 2D simplex noise. The `Random` shuffles the table that the noise is built from, so a given random source always gives the same landscape and another one gives a different landscape. The random source is not used when the noise is sampled. It defaults to `Math.random`. The values are spread over almost the whole range from -1 to 1 and average out around 0.
+- `createFractalNoise(noise, options?)` adds layers of `noise` together, each finer and weaker than the one before, so there is fine detail on top of broad shapes. The result stays within -1 and 1.
+
+| Option        | Default | Meaning                                                                                                       |
+| ------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `octaves`     | 3       | Number of layers. 1 is the plain noise. A whole number, 1 or more.                                            |
+| `persistence` | 0.5     | How much each layer counts against the one before it, from 0 (only the first layer) to 1 (all layers alike).  |
+| `lacunarity`  | 2       | How much finer each layer is than the one before it: its positions are multiplied by this. A positive number. |
+
+Invalid `FractalNoiseOptions` throw a `RangeError`.
+
+- `transformNoise(noise, options?)` turns noise into a function of tile positions. A position is rotated clockwise about the origin (the top-left corner of the map, with y growing downwards) and then divided by the scales along the rotated axes.
+
+| Option     | Default | Meaning                                                                          |
+| ---------- | ------- | -------------------------------------------------------------------------------- |
+| `scaleX`   | 1       | Size in tiles of a feature along the x axis, before rotation. A positive number. |
+| `scaleY`   | 1       | Size in tiles of a feature along the y axis, before rotation. A positive number. |
+| `rotation` | 0       | Clockwise rotation in degrees, any number. The stretched axes turn with it.      |
+
+Different scales stretch the shapes: with `scaleX: 80` and `scaleY: 20` they are four times as long as they are wide, and they run left to right. A `rotation` of 90 makes them run top to bottom, and 45 makes them run diagonally, down and to the right. Positions are rotated before they are scaled, so the shapes turn without being sheared. Rotating about the origin only changes which part of the endless noise is seen, and the seed already decides that. An invalid scale or a rotation that is not a finite number throws a `RangeError`.
+
+## Forests
+
+```ts
+import { generateForest } from 'angstloch';
+
+const { grid, density } = generateForest({ width: 120, height: 70 });
+console.log(grid.toString());
+```
+
+A forest is made from a [noise](#noise) map that says how dense the trees are: dense where the noise is high and open where it is low. Every tile then gets a tree with the chance that the map gives it. So a wood is a place where trees are likely, not a solid block, and its edge is ragged. Trees are `Tile.Tree` and the ground between them is `Tile.Grass`. Whether a tree blocks movement or sight is for the game to decide; the generator makes no connectivity guarantee.
+
+The chance of a tree is set at the two ends of the noise: `minDensity` where the noise is at its lowest and `maxDensity` where it is at its highest. In between the chance rises evenly with the noise. With the defaults, 0 and 0.25, the lowest parts are bare and the thickest woods are a quarter full of trees, so the trees stand apart. Raise `maxDensity` for tighter woods: 1 packs the thickest parts solid. Both values can be anything from 0 to 1, and `minDensity` may be the larger of the two, which puts the trees where the noise is low. The noise is sampled at the center of each tile, and `random` both seeds the built-in noise and rolls the chance for each tile, so the same seed always gives the same forest. The noise rarely reaches the very ends of its range, so the chances rarely do either.
+
+### `ForestOptions`
+
+| Option        | Default       | Meaning                                                                                                                                                                 |
+| ------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `width`       |               | Map width in tiles. Required.                                                                                                                                           |
+| `height`      |               | Map height in tiles. Required.                                                                                                                                          |
+| `random`      | `Math.random` | Source of randomness.                                                                                                                                                   |
+| `minDensity`  | 0             | The chance of a tree where the noise is at its lowest, from 0 to 1.                                                                                                     |
+| `maxDensity`  | 0.25          | The chance of a tree where the noise is at its highest, from 0 to 1. With the same value as `minDensity`, trees are scattered evenly.                                   |
+| `scaleX`      | 40            | Size in tiles of a feature of the noise along the x axis, before rotation. Larger values make broader woods and glades. A positive number.                              |
+| `scaleY`      | 40            | The same along the y axis. Different scales stretch the woods.                                                                                                          |
+| `rotation`    | 0             | Clockwise rotation of the noise in degrees. A stretched wood runs diagonally with a rotation of 45. See [`transformNoise`](#noise).                                     |
+| `octaves`     | 1             | Layers of the built-in noise, each finer than the one before. With 1 there is a single layer, and `persistence` and `lacunarity` do nothing. A whole number, 1 or more. |
+| `persistence` | 0.2           | How much each layer counts against the one before it, from 0 to 1. Only matters with more than one octave.                                                              |
+| `lacunarity`  | 1             | How much finer each layer is than the one before it. A positive number. Only matters with more than one octave.                                                         |
+| `noise`       | built-in      | A [`NoiseFunction`](#noise) to use instead of the built-in simplex noise.                                                                                               |
+| `groundTile`  | `Tile.Grass`  | The tile for ground without a tree. Any `Tile` value, for instance `Tile.Floor`.                                                                                        |
+| `treeTile`    | `Tile.Tree`   | The tile for a tree, for instance `Tile.Wall` for a forest that blocks like rock.                                                                                       |
+
+An injected `noise` takes the place of the built-in simplex noise: it receives positions in noise units, which is the tile center divided by the scales after the rotation, and returns a number from -1 to 1. Anything outside that range is limited to it. Since it replaces the built-in noise, `octaves`, `persistence` and `lacunarity` do not apply to it; wrap it in [`createFractalNoise`](#noise) if you want layers. `scaleX`, `scaleY` and `rotation` apply to it as they do to the built-in noise.
+
+Non-positive or non-integer dimensions, a `minDensity` or `maxDensity` outside 0 to 1, a `groundTile` or `treeTile` that is not a `Tile` value, and invalid noise options (see [Noise](#noise)) throw a `RangeError`.
+
+### `ForestResult`
+
+- `grid`: the map.
+- `density`: the chance of a tree on every tile, from `minDensity` to `maxDensity`, as a `Float32Array` that runs row by row, so `density[y * grid.width + x]`. A game can use it to tell thick woods from glades, for instance to put mushrooms or a hunter's hut where the trees are few.
+
+```ts
+const { grid, density } = generateForest({
+  width: 200,
+  height: 100,
+  scaleX: 80,
+  scaleY: 20,
+  rotation: 30,
+  maxDensity: 0.45,
+});
+const isGlade = (x: number, y: number) =>
+  (density[y * grid.width + x] ?? 0) < 0.1;
 ```
 
 ## Dungeons
@@ -634,13 +733,17 @@ A template that cannot be placed will always throw a `TemplatePlacementError` in
 
 ## Playground
 
-A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons and the caves each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
+A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons, the caves, the forests and the noise each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
 
-All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
+All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500), grass `.` (#55aa55), tree `T` (#1f7a2e) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
 
 The maze page has the same room controls: the count, size and exits of ordinary [rooms](#rooms-in-mazes) (a maximum count of 0 means no rooms), the door chance, and the same Templates panel under the map, which is shared with the dungeon page. Tick **Use templates** to place them in the maze, mind that they must fit the lattice. Templated rooms are outlined, and room openings without a door are highlighted by **Show room gaps**.
 
 The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png`, `angstloch-dungeon.png` or `angstloch-cave.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
+
+The forest page has a control for every `ForestOptions` field, a switch between grass-and-tree and floor-and-wall tiles, and a **density** display that paints the chance of a tree on every tile, stretched over the range from `minDensity` to `maxDensity`: white for thick woods and black for glades, so you can see what the noise settings do before the trees are rolled. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
+
+The noise page paints a `NoiseFunction` as gray squares, black for -1 and white for 1, with controls for the size, the seed, the fractal options and the transform: `scaleX`, `scaleY` and `rotation`. The fractal controls start at the defaults of `createFractalNoise`, and the scales start at 40, which is a size that shows a few features on the default map. The stats line shows the lowest, highest and mean value.
 
 The cave page has a control for every `CaveOptions` field. The limits are blank by default, which means the defaults of the chosen neighborhood. The stats line shows the number of floor tiles, regions and exits, and **Mark region centers** highlights the `center` of every region, which makes it easy to see what `connect` and `minRegionSize` do to the caverns.
 

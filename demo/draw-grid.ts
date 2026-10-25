@@ -7,6 +7,8 @@ const COLORS = {
   [Tile.Wall]: '#26262c',
   [Tile.Floor]: '#d8d2c4',
   [Tile.Door]: '#c8783c',
+  [Tile.Grass]: '#8fb36a',
+  [Tile.Tree]: '#2f5d34',
 };
 
 const SIMPLE_EXIT_COLOR = '#4a7fc8';
@@ -15,6 +17,8 @@ const GLYPHS = {
   [Tile.Wall]: { glyph: '#', color: '#555555' },
   [Tile.Floor]: { glyph: '.', color: '#aaaaaa' },
   [Tile.Door]: { glyph: '+', color: '#aa5500' },
+  [Tile.Grass]: { glyph: '.', color: '#55aa55' },
+  [Tile.Tree]: { glyph: 'T', color: '#1f7a2e' },
 };
 
 const EXIT_GLYPH = { glyph: '.', color: '#5555ff' };

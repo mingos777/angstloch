@@ -48,10 +48,11 @@ Angstloch is a map generator library for roguelike games on a 2D square grid. It
 
 ## Layout
 
-- `src/`: library source; `src/index.ts` is the public entry point. Tests sit next to their sources. Directories, with imports only pointing down the list (`dungeon` may also use `maze`):
+- `src/`: library source; `src/index.ts` is the public entry point. Tests sit next to their sources. Directories, with imports only pointing down the list (`dungeon` may also use `maze`, and `forest/` uses `noise/`):
   - `core/`: grid, tiles, points, ranges, randomness helpers, option assertions.
   - `rooms/`: code shared by mazes and dungeons: room placement, room plans, symmetry options and the shared dungeon options. `rooms/templates/` holds the room templates.
-  - `maze/`, `dungeon/` (room-first and digger) and `cave/`: one generator each, with `generate-*.ts` as the entry point.
+  - `noise/`: noise functions (simplex, fractal) for outdoor generators. It only uses `core/`.
+  - `maze/`, `dungeon/` (room-first and digger), `cave/` and `forest/`: one generator each, with `generate-*.ts` as the entry point.
   - `test-helpers/`: seedable PRNG and dungeon checks for tests.
 - `demo/`: visual playground, run with `npm run dev`. Not published.
 - `dist/`: build output (gitignored).

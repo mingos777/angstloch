@@ -5,6 +5,8 @@ const SYMBOLS: Record<Tile, string> = {
   [Tile.Wall]: '#',
   [Tile.Floor]: '.',
   [Tile.Door]: '+',
+  [Tile.Grass]: '"',
+  [Tile.Tree]: 'T',
 };
 
 /** A rectangular grid of tiles, stored row by row in a flat typed array. */
@@ -47,7 +49,7 @@ export class Grid {
     return copy;
   }
 
-  /** Renders the grid as text: `#` wall, `.` floor, `+` door. */
+  /** Renders the grid as text: `#` wall, `.` floor, `+` door, `"` grass, `T` tree. */
   toString(): string {
     const rows: string[] = [];
     for (let y = 0; y < this.height; ++y) {

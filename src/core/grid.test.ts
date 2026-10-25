@@ -92,15 +92,17 @@ describe('Grid', () => {
 
   it('renders every tile kind', () => {
     // given
-    const grid = new Grid(3, 1);
+    const grid = new Grid(5, 1);
     grid.set(1, 0, Tile.Floor);
     grid.set(2, 0, Tile.Door);
+    grid.set(3, 0, Tile.Grass);
+    grid.set(4, 0, Tile.Tree);
 
     // when
     const text = grid.toString();
 
     // then
-    expect(text).toBe('#.+');
+    expect(text).toBe('#.+"T');
   });
 
   it('clones into an independent grid', () => {
