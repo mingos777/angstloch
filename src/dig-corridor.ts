@@ -8,7 +8,7 @@ import type { Random } from './random';
 export interface DigSettings {
   lattice: boolean;
   straight: number;
-  /** The share of horizontal directions that a corridor favours at a tile. */
+  /** The share of horizontal directions that a corridor favors at a tile. */
   share: (at: Point) => number;
 }
 
@@ -70,7 +70,7 @@ export function digCorridor(
       last = tile;
     }
 
-    // a corridor turns at the end of a step, towards the axis it favours
+    // a corridor turns at the end of a step, towards the axis it favors
     if (step < steps - 1) {
       const horizontal = direction % 2 === 1;
       const share = settings.share(tiles.at(-1) ?? origin);

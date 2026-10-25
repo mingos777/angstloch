@@ -2,7 +2,7 @@ import type { BaseOptions } from './base-options';
 import type { Point } from './point';
 
 /**
- * How corridors are forced into a pattern around the map centre:
+ * How corridors are forced into a pattern around the map center:
  * `whirlpool` twirls them around it, `snowflake` makes them radiate from it.
  */
 export type MazeSymmetry = 'none' | 'whirlpool' | 'snowflake';
@@ -26,6 +26,6 @@ export interface MazeOptions extends BaseOptions {
   minExits?: number;
   /** Maximum number of exits to add. Defaults to `minExits`. */
   maxExits?: number;
-  /** Where carving starts. Must be a cell with odd coordinates. Defaults to near the centre. */
+  /** Where carving starts. Must be a cell with odd coordinates. Defaults to near the center. */
   start?: Point;
 }

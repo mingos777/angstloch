@@ -6,7 +6,7 @@ import type { Point } from './point';
 import { mulberry32 } from './test-helpers/mulberry32';
 import { Tile } from './tile';
 
-const NEIGHBOURS: readonly Point[] = [
+const NEIGHBORS: readonly Point[] = [
   { x: 0, y: -1 },
   { x: 1, y: 0 },
   { x: 0, y: 1 },
@@ -42,8 +42,8 @@ function cells(grid: Grid) {
   return floors(grid).filter(({ x, y }) => x % 2 === 1 && y % 2 === 1);
 }
 
-function neighbourCount(grid: Grid, { x, y }: Point) {
-  return NEIGHBOURS.filter((n) => grid.get(x + n.x, y + n.y) !== Tile.Wall)
+function neighborCount(grid: Grid, { x, y }: Point) {
+  return NEIGHBORS.filter((n) => grid.get(x + n.x, y + n.y) !== Tile.Wall)
     .length;
 }
 
@@ -52,7 +52,7 @@ function reachable(grid: Grid, from: Point) {
   const seen = new Set([`${String(from.x)},${String(from.y)}`]);
   const queue = [from];
   for (let point = queue.shift(); point; point = queue.shift()) {
-    for (const n of NEIGHBOURS) {
+    for (const n of NEIGHBORS) {
       const next = { x: point.x + n.x, y: point.y + n.y };
       const key = `${String(next.x)},${String(next.y)}`;
       if (grid.get(next.x, next.y) !== Tile.Wall && !seen.has(key)) {
@@ -79,11 +79,11 @@ function corners(grid: Grid) {
 }
 
 /**
- * Horizontal share of the passages in the wedges left and right of the centre
+ * Horizontal share of the passages in the wedges left and right of the center
  * (`sides`) and above and below it (`ends`).
  */
 function horizontalShares(grid: Grid) {
-  const centre = {
+  const center = {
     x: Math.floor(grid.width / 2),
     y: Math.floor(grid.height / 2),
   };
@@ -93,7 +93,7 @@ function horizontalShares(grid: Grid) {
   };
   for (const { x, y } of floors(grid)) {
     const wedge =
-      Math.abs(x - centre.x) > Math.abs(y - centre.y) ? 'sides' : 'ends';
+      Math.abs(x - center.x) > Math.abs(y - center.y) ? 'sides' : 'ends';
     if (x % 2 === 0 && y % 2 === 1) {
       counts[wedge].horizontal++;
     } else if (x % 2 === 1 && y % 2 === 0) {
@@ -163,7 +163,7 @@ describe('generateMaze', () => {
   it('leaves dead ends in a perfect maze', () => {
     // given / when
     const { grid } = maze();
-    const deadEnds = cells(grid).filter((c) => neighbourCount(grid, c) === 1);
+    const deadEnds = cells(grid).filter((c) => neighborCount(grid, c) === 1);
 
     // then
     expect(deadEnds.length).toBeGreaterThan(0);
@@ -172,7 +172,7 @@ describe('generateMaze', () => {
   it('removes all dead ends when the loop chance is 1', () => {
     // given / when
     const { grid } = maze({ loopChance: 1 });
-    const deadEnds = cells(grid).filter((c) => neighbourCount(grid, c) === 1);
+    const deadEnds = cells(grid).filter((c) => neighborCount(grid, c) === 1);
 
     // then
     expect(deadEnds).toHaveLength(0);
@@ -210,7 +210,7 @@ describe('generateMaze', () => {
     expect(floors(grid)).toHaveLength(1);
   });
 
-  it('starts near the centre by default', () => {
+  it('starts near the center by default', () => {
     // given / when
     const { start, grid } = maze();
 
@@ -421,7 +421,7 @@ describe('generateMaze', () => {
     },
   );
 
-  it('radiates corridors from the centre with snowflake symmetry', () => {
+  it('radiates corridors from the center with snowflake symmetry', () => {
     // given
     const options = { width: 41, height: 41, symmetry: 'snowflake' } as const;
 
@@ -433,7 +433,7 @@ describe('generateMaze', () => {
     expect(shares.ends).toBeLessThan(0.25);
   });
 
-  it('twirls corridors around the centre with whirlpool symmetry', () => {
+  it('twirls corridors around the center with whirlpool symmetry', () => {
     // given
     const options = { width: 41, height: 41, symmetry: 'whirlpool' } as const;
 

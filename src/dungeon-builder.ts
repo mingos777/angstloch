@@ -30,7 +30,7 @@ export interface DungeonBuilderOptions {
   deadEndChance: number;
   /** Mirror images that every addition to the dungeon is repeated as, and how often. */
   layout?: { transforms: Transform[]; chance: number };
-  /** The share of horizontal directions that corridors favour at a tile, which makes routed corridors follow a pattern. */
+  /** The share of horizontal directions that corridors favor at a tile, which makes routed corridors follow a pattern. */
   steering?: (at: Point) => number;
 }
 
@@ -62,8 +62,8 @@ const TURN_COST = 6;
 /** Largest random cost of a tile at no `straight`. */
 const MAX_NOISE = 1.5;
 
-/** Neighbours of every room that may get an extra link. */
-const LOOP_NEIGHBOURS = 3;
+/** Neighbors of every room that may get an extra link. */
+const LOOP_NEIGHBORS = 3;
 
 /** How far apart the ends of a loop are at the very least, in tiles. */
 const MIN_LOOP_SPAN = 6;
@@ -626,7 +626,7 @@ export function createDungeonBuilder(
     return [first, second, (second + 2) % 4, (first + 2) % 4];
   };
 
-  const centreOf = (room: Room): Point => ({
+  const centerOf = (room: Room): Point => ({
     x: room.x + room.width / 2,
     y: room.y + room.height / 2,
   });
@@ -778,7 +778,7 @@ export function createDungeonBuilder(
     modes: [Mode, Mode],
     crossing: boolean,
   ): boolean => {
-    for (const startA of startsFor(a, modes[0], centreOf(b))) {
+    for (const startA of startsFor(a, modes[0], centerOf(b))) {
       for (const { target, start: startB } of targetsFor(b, modes[1], startA)) {
         const path = findCorridor(
           map,
@@ -839,10 +839,10 @@ export function createDungeonBuilder(
   const joinCorridor = (room: Room): boolean => {
     let nearest: Point | undefined;
     let nearestDistance = Infinity;
-    const centre = centreOf(room);
+    const center = centerOf(room);
     for (let y = 0; y < height; ++y) {
       for (let x = 0; x < width; ++x) {
-        const distance = manhattan({ x, y }, centre);
+        const distance = manhattan({ x, y }, center);
         if (distance < nearestDistance && isOtherGroup({ x, y }, room)) {
           nearest = { x, y };
           nearestDistance = distance;
@@ -987,7 +987,7 @@ export function createDungeonBuilder(
   };
 
   const addExtras = (deadEnds: boolean): void => {
-    // rooms that want more exits get links to their nearest neighbours
+    // rooms that want more exits get links to their nearest neighbors
     for (const room of rooms) {
       for (const other of byDistance(
         room,
@@ -1006,21 +1006,21 @@ export function createDungeonBuilder(
       }
     }
 
-    // loops are extra links between neighbouring rooms
-    const neighbours = new Map<string, Edge>();
+    // loops are extra links between neighboring rooms
+    const neighbors = new Map<string, Edge>();
     for (const room of rooms) {
       for (const other of byDistance(
         room,
         rooms.filter((r) => r !== room),
-      ).slice(0, LOOP_NEIGHBOURS)) {
-        neighbours.set(pairKey(room, other), {
+      ).slice(0, LOOP_NEIGHBORS)) {
+        neighbors.set(pairKey(room, other), {
           a: room,
           b: other,
           distance: distanceBetween(room, other),
         });
       }
     }
-    for (const { a, b } of [...neighbours.values()].sort(
+    for (const { a, b } of [...neighbors.values()].sort(
       (p, q) => p.distance - q.distance,
     )) {
       if (!linked.has(pairKey(a, b)) && options.loopChance > random()) {

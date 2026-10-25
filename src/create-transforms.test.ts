@@ -56,7 +56,7 @@ describe('createTransforms', () => {
     expect(image).toEqual({ x: 2, y: 7 });
   });
 
-  it('turns tiles around the centre for rotational symmetry', () => {
+  it('turns tiles around the center for rotational symmetry', () => {
     // given
     const [transform] = createTransforms('rotational', 21, 11, false);
 

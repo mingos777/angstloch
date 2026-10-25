@@ -4,7 +4,7 @@ import type { RoomDungeonOptions } from './room-dungeon-options';
 import type { Room } from './room';
 import { mulberry32 } from './test-helpers/mulberry32';
 import {
-  NEIGHBOURS,
+  NEIGHBORS,
   SEEDS,
   allTiles,
   asymmetry,
@@ -421,7 +421,7 @@ describe('generateRoomDungeon', () => {
       // then
       const adjacent = exits.every(({ position, rooms: ids }) =>
         ids.every((id) =>
-          NEIGHBOURS.some(({ x, y }) =>
+          NEIGHBORS.some(({ x, y }) =>
             inRoom(rooms[id] as Room, position.x + x, position.y + y),
           ),
         ),
@@ -529,7 +529,7 @@ describe('generateRoomDungeon', () => {
           grid.get(x, y) !== Tile.Wall &&
           !roomAt(rooms, x, y) &&
           !isExit(x, y) &&
-          NEIGHBOURS.some(({ x: dx, y: dy }) => roomAt(rooms, x + dx, y + dy)),
+          NEIGHBORS.some(({ x: dx, y: dy }) => roomAt(rooms, x + dx, y + dy)),
       );
       expect(leaks).toEqual([]);
     });
@@ -854,13 +854,13 @@ describe('generateRoomDungeon', () => {
 });
 
 function nearestDistances(rooms: Room[]) {
-  const centres = rooms.map((r) => ({
+  const centers = rooms.map((r) => ({
     x: r.x + r.width / 2,
     y: r.y + r.height / 2,
   }));
-  return centres.map((a, i) =>
+  return centers.map((a, i) =>
     Math.min(
-      ...centres
+      ...centers
         .filter((_, j) => j !== i)
         .map((b) => Math.hypot(a.x - b.x, a.y - b.y)),
     ),
@@ -1303,7 +1303,7 @@ describe('generateRoomDungeon with bsp', () => {
     expect(rooms).toHaveLength(12);
   });
 
-  it('centres rooms in their areas at full spacing uniformity', () => {
+  it('centers rooms in their areas at full spacing uniformity', () => {
     // given
     const options = {
       partition: 'bsp',

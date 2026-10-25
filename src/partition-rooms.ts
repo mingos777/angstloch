@@ -1,5 +1,5 @@
 import { blend } from './blend';
-import { createCentreRoom } from './create-centre-room';
+import { createCenterRoom } from './create-center-room';
 import { pickRoomSize } from './pick-room-size';
 import { EDGE_CLEARANCE } from './room-plan';
 import type { RoomPlacer, RoomPlan } from './room-plan';
@@ -198,8 +198,8 @@ function partition(random: Random, plan: RoomPlan): Placed[] {
  * chance below 1, rooms of its own in the mirrored areas.
  */
 function partitionSymmetric(random: Random, plan: RoomPlan): Room[] {
-  const centre = createCentreRoom(random, plan);
-  if (!centre) {
+  const center = createCenterRoom(random, plan);
+  if (!center) {
     return [];
   }
   const lattice = plan.step === 2;
@@ -246,10 +246,10 @@ function partitionSymmetric(random: Random, plan: RoomPlan): Room[] {
     }),
   ]);
   return [
-    centre,
+    center,
     ...groups
       .filter((group) =>
-        group.every((room) => !roomsConflict(room, centre, plan.spacing)),
+        group.every((room) => !roomsConflict(room, center, plan.spacing)),
       )
       .flat(),
   ].map((room, id) => ({ ...room, id }));

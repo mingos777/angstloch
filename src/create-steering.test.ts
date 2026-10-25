@@ -29,7 +29,7 @@ describe('createSteering', () => {
     expect(share).toBe(0.75);
   });
 
-  it('favours no axis without a symmetry and without biases', () => {
+  it('favors no axis without a symmetry and without biases', () => {
     // given
     const steering = createSteering(base);
 
@@ -40,7 +40,7 @@ describe('createSteering', () => {
     expect(share).toBe(0.5);
   });
 
-  it('radiates horizontally where the centre is horizontally further with snowflake', () => {
+  it('radiates horizontally where the center is horizontally further with snowflake', () => {
     // given
     const steering = createSteering({ ...base, corridorSymmetry: 'snowflake' });
 
@@ -62,7 +62,7 @@ describe('createSteering', () => {
     expect(shares).toEqual([0, 1]);
   });
 
-  it('favours no axis on the diagonals', () => {
+  it('favors no axis on the diagonals', () => {
     // given
     const steering = createSteering({ ...base, corridorSymmetry: 'snowflake' });
 

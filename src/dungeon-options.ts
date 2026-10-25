@@ -19,7 +19,7 @@ export interface DungeonOptions extends BaseOptions, SymmetryOptions {
   roomHeight?: Range;
   /** How alike room sizes are, from 0 (anything within the ranges) to 1 (every room has the middle size). Defaults to 0. */
   sizeUniformity?: number;
-  /** Number of rooms to place. Generation stops once `max` is reached; `fill` is only honoured once `min` is reached. Defaults to at least 1 and no upper limit. */
+  /** Number of rooms to place. Generation stops once `max` is reached; `fill` is only honored once `min` is reached. Defaults to at least 1 and no upper limit. */
   roomCount?: Range;
   /** Fewest wall tiles between the floors of two rooms, at least 1. With 1 rooms may sit right next to each other and share a door; with 3 or more a corridor fits between them. With `lattice` placement it is rounded up to an odd number. Defaults to 1. */
   roomSpacing?: number;
@@ -27,7 +27,7 @@ export interface DungeonOptions extends BaseOptions, SymmetryOptions {
   fill?: number;
   /** Number of exits per room, whether they have doors or not. Each room draws its own number from the range. A room with fewer links than that gets more, which makes loops; a room with more links shares its exits and the corridors branch off outside. Best effort: a room may end up with more or fewer exits if routing demands it. Defaults to 1 to 3. */
   exitsPerRoom?: Range;
-  /** Chance of adding an extra corridor between two nearby rooms that are connected already, from 0 to 1. Each pair of neighbours gets one roll. Defaults to 0.1. */
+  /** Chance of adding an extra corridor between two nearby rooms that are connected already, from 0 to 1. Each pair of neighbors gets one roll. Defaults to 0.1. */
   loopChance?: number;
   /** Chance that a corridor sprouts a branch that leads nowhere, from 0 to 1. Defaults to 0. */
   deadEndChance?: number;

@@ -28,7 +28,7 @@ Angstloch is a map generator library for roguelike games on a 2D square grid. It
 
 - All logic is covered by unit tests, colocated as `*.test.ts` next to the source.
 - Coverage threshold is 80% (lines, functions, branches, statements), enforced by `npm test`. Don't chase 100%.
-- Test one behaviour per test.
+- Test one behavior per test.
 - Structure each test body with `// given`, `// when` and `// then` comments separating the setup, the action and the assertions.
 
 ### Documentation

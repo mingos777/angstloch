@@ -14,7 +14,7 @@ export function overlap(a: Room, b: Room, gap: number) {
   );
 }
 
-export const NEIGHBOURS = [
+export const NEIGHBORS = [
   { x: 0, y: -1 },
   { x: 1, y: 0 },
   { x: 0, y: 1 },
@@ -41,7 +41,7 @@ export function reachableFrom(result: DungeonResult, room: Room) {
   const seen = new Set([key(room.x, room.y)]);
   const queue = [{ x: room.x, y: room.y }];
   for (let point = queue.shift(); point; point = queue.shift()) {
-    for (const n of NEIGHBOURS) {
+    for (const n of NEIGHBORS) {
       const x = point.x + n.x;
       const y = point.y + n.y;
       if (grid.get(x, y) !== Tile.Wall && !seen.has(key(x, y))) {
@@ -85,7 +85,7 @@ export function corridorTiles(result: DungeonResult) {
 export function deadEnds(result: DungeonResult) {
   return corridorTiles(result).filter(
     ({ x, y }) =>
-      NEIGHBOURS.filter((n) => result.grid.get(x + n.x, y + n.y) !== Tile.Wall)
+      NEIGHBORS.filter((n) => result.grid.get(x + n.x, y + n.y) !== Tile.Wall)
         .length === 1,
   );
 }
@@ -104,7 +104,7 @@ export function cycles(result: DungeonResult) {
       continue;
     }
     nodes.add(node(x, y));
-    for (const n of [NEIGHBOURS[1], NEIGHBOURS[2]]) {
+    for (const n of [NEIGHBORS[1], NEIGHBORS[2]]) {
       const nx = x + (n as Point).x;
       const ny = y + (n as Point).y;
       const [a, b] = [node(x, y), node(nx, ny)];

@@ -9,7 +9,7 @@ import { randomInt } from './random-int';
 import { resolveRandom } from './resolve-random';
 import { Tile } from './tile';
 
-/** Moves between neighbouring maze cells, which sit two tiles apart. */
+/** Moves between neighboring maze cells, which sit two tiles apart. */
 const STEPS: readonly Point[] = [
   { x: 0, y: -2 },
   { x: 2, y: 0 },

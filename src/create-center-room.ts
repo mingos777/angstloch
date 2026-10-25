@@ -12,7 +12,7 @@ import { symmetricExtent } from './symmetric-extent';
  * one step more, or less if there is no room for more. Returns `undefined` if
  * no such room fits the map.
  */
-export function createCentreRoom(
+export function createCenterRoom(
   random: Random,
   plan: RoomPlan,
 ): Room | undefined {
@@ -33,7 +33,7 @@ export function createCentreRoom(
     const larger = size + plan.step;
     return larger <= max || size - plan.step < 1 ? larger : size - plan.step;
   };
-  const centre = (size: number, mapSize: number, mirror: boolean): number => {
+  const center = (size: number, mapSize: number, mirror: boolean): number => {
     if (mirror) {
       return (symmetricExtent(mapSize, lattice) - size) / 2;
     }
@@ -56,8 +56,8 @@ export function createCentreRoom(
   }
   const room: Room = {
     id: 0,
-    x: centre(width, plan.width, mirrorsX),
-    y: centre(height, plan.height, mirrorsY),
+    x: center(width, plan.width, mirrorsX),
+    y: center(height, plan.height, mirrorsY),
     width,
     height,
     exits: [],

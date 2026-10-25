@@ -39,7 +39,7 @@ export interface CorridorMap {
   corridor: Uint8Array;
   /** Extra cost per tile that makes corridors wander. */
   noise: Float32Array;
-  /** Share of horizontal directions that corridors favour at each tile, which overrides the costs of moving horizontally and vertically. */
+  /** Share of horizontal directions that corridors favor at each tile, which overrides the costs of moving horizontally and vertically. */
   steer?: Float32Array;
   /** Cost of moving one tile horizontally. */
   horizontalCost: number;

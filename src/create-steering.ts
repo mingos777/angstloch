@@ -17,10 +17,10 @@ export interface SteeringOptions {
 
 /**
  * Returns a function that gives the share of horizontal directions that a
- * corridor at a tile should favour. It is the share that the biases ask for,
+ * corridor at a tile should favor. It is the share that the biases ask for,
  * except that with a corridor symmetry, the choice follows the pattern of a
  * maze for as often as the chance says: `snowflake` goes horizontally where
- * the tile is further from the centre horizontally than vertically, and
+ * the tile is further from the center horizontally than vertically, and
  * `whirlpool` the other way round.
  */
 export function createSteering(
@@ -33,14 +33,14 @@ export function createSteering(
   ) {
     return () => share;
   }
-  const centreX = (symmetricExtent(options.width, options.lattice) - 1) / 2;
-  const centreY = (symmetricExtent(options.height, options.lattice) - 1) / 2;
+  const centerX = (symmetricExtent(options.width, options.lattice) - 1) / 2;
+  const centerY = (symmetricExtent(options.height, options.lattice) - 1) / 2;
   return ({ x, y }) => {
     if (options.corridorSymmetryChance <= options.random()) {
       return share;
     }
-    const dx = x - centreX;
-    const dy = y - centreY;
+    const dx = x - centerX;
+    const dy = y - centerY;
     const [ox, oy] =
       options.corridorSymmetry === 'whirlpool' ? [dy, -dx] : [dx, dy];
     return Math.abs(ox) === Math.abs(oy)

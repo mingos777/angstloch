@@ -1,7 +1,7 @@
 import { assertFraction } from './assert-fraction';
 import { assertRange } from './assert-range';
 import { carveRoom } from './carve-room';
-import { createCentreRoom } from './create-centre-room';
+import { createCenterRoom } from './create-center-room';
 import { createSteering } from './create-steering';
 import { createRoomPlan } from './create-room-plan';
 import { digCorridor } from './dig-corridor';
@@ -81,7 +81,7 @@ export function generateDigDungeon(options: DigDungeonOptions): DungeonResult {
   });
 
   // a room that is its own mirror image sits on the axis
-  const start = createCentreRoom(random, plan);
+  const start = createCenterRoom(random, plan);
   if (!start) {
     return { grid, rooms, exits: [], fill: 0 };
   }

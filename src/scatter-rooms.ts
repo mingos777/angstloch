@@ -1,4 +1,4 @@
-import { createCentreRoom } from './create-centre-room';
+import { createCenterRoom } from './create-center-room';
 import { EDGE_CLEARANCE } from './room-plan';
 import type { RoomPlacer } from './room-plan';
 import { pickRoomSize } from './pick-room-size';
@@ -50,11 +50,11 @@ export const scatterRooms: RoomPlacer = (random, plan) => {
   };
   if (plan.transforms.length > 0) {
     // a symmetric layout starts with a room that is its own mirror image
-    const centre = createCentreRoom(random, plan);
-    if (!centre) {
+    const center = createCenterRoom(random, plan);
+    if (!center) {
       return rooms;
     }
-    add(centre);
+    add(center);
   }
 
   /** The room and its distinct mirror images. */

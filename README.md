@@ -81,12 +81,12 @@ A maze is carved with a recursive backtracker. Corridors run along odd coordinat
 | `verticalBias`    | `0`           | Weight of vertical corridors against `horizontalBias`.                                                                           |
 | `loopChance`      | `0`           | Chance of turning a dead end into a loop: 0 is a perfect maze, 1 a braid maze.                                                   |
 | `fill`            | `1`           | Fraction of the maze to carve, from 0 to 1.                                                                                      |
-| `symmetry`        | `'none'`      | `'whirlpool'` twirls corridors around the map centre, `'snowflake'` makes them radiate from it.                                  |
+| `symmetry`        | `'none'`      | `'whirlpool'` twirls corridors around the map center, `'snowflake'` makes them radiate from it.                                  |
 | `symmetryChance`  | `1`           | How strongly symmetry is enforced, from 0 to 1.                                                                                  |
 | `straight`        | `0`           | Preference for continuing straight, from 0 to 1.                                                                                 |
 | `minExits`        | `0`           | Minimum number of exits to add on the map border.                                                                                |
 | `maxExits`        | `minExits`    | Maximum number of exits.                                                                                                         |
-| `start`           | near centre   | Where carving starts. Must be a cell with odd coordinates.                                                                       |
+| `start`           | near center   | Where carving starts. Must be a cell with odd coordinates.                                                                       |
 
 ### `MazeResult`
 
@@ -164,20 +164,20 @@ Exits are never next to each other, not even diagonally, so no room has two door
 
 If a room cannot be linked to any other room, it is joined to the nearest corridor instead, with a corridor of its own or, when a corridor passes right outside its wall, with nothing but an exit. A room that cannot be reached at all, because other rooms box it in, is dropped from the dungeon.
 
-As a result every room can always be reached from every other room, but a crowded map can end up with fewer rooms than `roomCount.min` asks for, or with a lower `fill` than the target. This is most likely with a `roomSpacing` of 2 in `free` placement: rooms two tiles apart have no room for a corridor between them and no single wall to share a door in, so a room surrounded on all sides by such neighbours is dropped. Use 1 or 3 and more to avoid that.
+As a result every room can always be reached from every other room, but a crowded map can end up with fewer rooms than `roomCount.min` asks for, or with a lower `fill` than the target. This is most likely with a `roomSpacing` of 2 in `free` placement: rooms two tiles apart have no room for a corridor between them and no single wall to share a door in, so a room surrounded on all sides by such neighbors is dropped. Use 1 or 3 and more to avoid that.
 
 ### Exits per room
 
-Both generators honour `exitsPerRoom`. It is a `Range`. Every room draws its own wanted number of exits from it, so `{ min: 1, max: 1 }` means one exit each, `{ min: 2, max: 4 }` means several and `{ min: 1, max: 3 }` (the default) is random with at least one.
+Both generators honor `exitsPerRoom`. It is a `Range`. Every room draws its own wanted number of exits from it, so `{ min: 1, max: 1 }` means one exit each, `{ min: 2, max: 4 }` means several and `{ min: 1, max: 3 }` (the default) is random with at least one.
 
-- A room with fewer links than it wants gets extra links to its nearest neighbours, which makes loops.
+- A room with fewer links than it wants gets extra links to its nearest neighbors, which makes loops.
 - A room with more links than it wants uses its exits for several corridors: the extra corridors branch off the ones leaving through its exits, outside the wall.
 
-This is best effort. A door shared with another room counts as an exit for both of them, and a room that cannot branch off anywhere, or has no neighbour to link to, gets one more exit or one fewer than wanted. Connectivity always takes priority.
+This is best effort. A door shared with another room counts as an exit for both of them, and a room that cannot branch off anywhere, or has no neighbor to link to, gets one more exit or one fewer than wanted. Connectivity always takes priority.
 
 ### Loops
 
-In both generators, after the rooms are connected, `loopChance` adds extra corridors between rooms that are connected already. Each room is considered with its three nearest neighbours, and every such pair that is not linked yet gets one roll. A loop is never made by crossing another corridor and respects `exitsPerRoom`, so it is only added where there is room for it. At 0 the corridors form a tree (with the odd exception where a corridor had to cross another); at 1 every pair of neighbours is linked where possible.
+In both generators, after the rooms are connected, `loopChance` adds extra corridors between rooms that are connected already. Each room is considered with its three nearest neighbors, and every such pair that is not linked yet gets one roll. A loop is never made by crossing another corridor and respects `exitsPerRoom`, so it is only added where there is room for it. At 0 the corridors form a tree (with the odd exception where a corridor had to cross another); at 1 every pair of neighbors is linked where possible.
 
 ### Dead ends
 
@@ -235,7 +235,7 @@ There are two independent kinds of symmetry, each with a chance. They can be use
 
 | Option                   | Default | Description                                                                                                                         |
 | ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `layoutSymmetry`         | `none`  | Mirrors or rotates the layout of the dungeon about the centre of the map: `none`, `horizontal`, `vertical`, `both` or `rotational`. |
+| `layoutSymmetry`         | `none`  | Mirrors or rotates the layout of the dungeon about the center of the map: `none`, `horizontal`, `vertical`, `both` or `rotational`. |
 | `layoutSymmetryChance`   | `1`     | How often the layout is symmetric, from 0 to 1.                                                                                     |
 | `corridorSymmetry`       | `none`  | Makes corridors follow the pattern of a maze: `none`, `whirlpool` or `snowflake`.                                                   |
 | `corridorSymmetryChance` | `1`     | How strongly corridors follow `corridorSymmetry`, from 0 to 1.                                                                      |
@@ -247,7 +247,7 @@ There are two independent kinds of symmetry, each with a chance. They can be use
 - `horizontal` mirrors it from left to right: the left half is the mirror image of the right half.
 - `vertical` mirrors it from top to bottom.
 - `both` does both at once, so that the dungeon is made of four mirrored quarters.
-- `rotational` turns it by 180° about the centre. The result looks the same upside down.
+- `rotational` turns it by 180° about the center. The result looks the same upside down.
 
 Rooms, corridors, exits and doors are all mirrored. A room and its _twins_ get the same exits (as far as the usual [exit counts](#exits-per-room) allow), and an exit and its twins are all open or all have a door, whatever `doorChance` is. Loops and dead ends are mirrored, too. Rooms that lie on an axis are their own twins. Both generators put a room in the middle of the map that is its own twin: the digger starts with it, and the room-first generator places it before all others. Every room is still reachable, and all the rules of corridors apply as usual.
 
@@ -256,7 +256,7 @@ Rooms, corridors, exits and doors are all mirrored. A room and its _twins_ get t
 Things to know:
 
 - `roomCount` and `fill` count every room, twins included. As rooms come in sets of up to four, the room count can end up a little short of `roomCount.max`, and a set that would exceed it is not built.
-- The axes run through the centre of the map. With `lattice` placement, a map with an even width or height is treated as one tile smaller, so that the axis falls on a lattice tile, and the last row or column stays empty as extra border: an 80 by 50 map is symmetric as if it were 79 by 49.
+- The axes run through the center of the map. With `lattice` placement, a map with an even width or height is treated as one tile smaller, so that the axis falls on a lattice tile, and the last row or column stays empty as extra border: an 80 by 50 map is symmetric as if it were 79 by 49.
 - The first room must sit exactly on the axis, which needs its size to have the same parity as the map (and, on the lattice, the right position on it). If its random size does not, it is made one step (2 on the lattice) wider, or narrower if it is as wide as it can be. It can therefore stray one step outside `roomWidth` or `roomHeight`, but only when the range has a single size.
 - Symmetry changes what the generator makes, so the same seed gives another dungeon than without it.
 
@@ -270,8 +270,8 @@ How each generator applies the layout symmetry:
 
 `corridorSymmetry` is the symmetry of `generateMaze`, applied to the direction of corridors. It steers corridors by where they are on the map:
 
-- `snowflake` makes corridors radiate from the centre. Where a tile is further from the centre horizontally than vertically, corridors there run horizontally, and the other way round.
-- `whirlpool` makes them twirl around the centre, with the same rule turned by 90°.
+- `snowflake` makes corridors radiate from the center. Where a tile is further from the center horizontally than vertically, corridors there run horizontally, and the other way round.
+- `whirlpool` makes them twirl around the center, with the same rule turned by 90°.
 
 `corridorSymmetryChance` is how often the pattern applies, instead of `horizontalBias` and `verticalBias`. `straight` limits the effect:
 
@@ -292,7 +292,7 @@ Corridor symmetry does not make the layout symmetric.
 | `roomWidth`              | `{ min: 3, max: 7 }`         | Room width in tiles, a `Range` of at least 1.                                                                                                                                                                                             |
 | `roomHeight`             | `{ min: 3, max: 7 }`         | Room height in tiles, a `Range` of at least 1.                                                                                                                                                                                            |
 | `sizeUniformity`         | `0`                          | How alike room sizes are, from 0 to 1. At 0 every size in the ranges is equally likely. Higher values pull sizes towards the middle of the ranges, and at 1 all rooms are the same size.                                                  |
-| `roomCount`              | `{ min: 1, max: unbounded }` | Number of rooms, a `Range` of at least 0. Generation never exceeds `max`, and `fill` is only honoured once `min` is reached.                                                                                                              |
+| `roomCount`              | `{ min: 1, max: unbounded }` | Number of rooms, a `Range` of at least 0. Generation never exceeds `max`, and `fill` is only honored once `min` is reached.                                                                                                               |
 | `roomSpacing`            | `1`                          | Fewest wall tiles between the floors of two rooms, a whole number of at least 1. With 1, rooms can sit right next to each other and share a door. With 3 or more a corridor fits between rooms.                                           |
 | `fill`                   | `0.12`                       | Target share of the map covered by room floors, from 0 to 1. Corridors do not count. The last room may overshoot the target. Above roughly 0.15 the map gets cramped; below 0.1 it is sparse.                                             |
 | `exitsPerRoom`           | `{ min: 1, max: 3 }`         | Number of exits per room, a `Range` of at least 1. See [Exits per room](#exits-per-room).                                                                                                                                                 |
@@ -302,7 +302,7 @@ Corridor symmetry does not make the layout symmetric.
 | `straight`               | `0.5`                        | Preference of corridors for going straight, from 0 to 1. At 0 corridors wander; at 1 they turn as little as possible.                                                                                                                     |
 | `horizontalBias`         | `0`                          | Weight of horizontal corridor sections against `verticalBias`. Only the ratio matters, so set both; a lone value against 0 means always. The bias makes corridors prefer to leave rooms sideways (or up and down) and to detour that way. |
 | `verticalBias`           | `0`                          | Weight of vertical corridor sections against `horizontalBias`.                                                                                                                                                                            |
-| `layoutSymmetry`         | `none`                       | Mirrors or rotates the layout about the centre of the map: `none`, `horizontal`, `vertical`, `both` or `rotational`. See [Symmetry](#symmetry).                                                                                           |
+| `layoutSymmetry`         | `none`                       | Mirrors or rotates the layout about the center of the map: `none`, `horizontal`, `vertical`, `both` or `rotational`. See [Symmetry](#symmetry).                                                                                           |
 | `layoutSymmetryChance`   | `1`                          | How often the layout is symmetric, from 0 to 1.                                                                                                                                                                                           |
 | `corridorSymmetry`       | `none`                       | Makes corridors follow a maze pattern: `none`, `whirlpool` or `snowflake`.                                                                                                                                                                |
 | `corridorSymmetryChance` | `1`                          | How strongly corridors follow `corridorSymmetry`, from 0 to 1.                                                                                                                                                                            |
@@ -373,7 +373,7 @@ for (const room of rooms) {
 
 A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze and the dungeons each have their own page, and the dungeon page switches between the room-first generator and the digger. The symmetry controls apply to both generators.
 
-Both pages have a **Display** switch. `simple` paints plain coloured squares. `roguelike` shows the map the way a roguelike would, as coloured ASCII glyphs on a black background: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
+Both pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
 
 The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png` or `angstloch-dungeon.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
 

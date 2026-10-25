@@ -3,23 +3,23 @@ import type { Grid, Point } from '../src';
 
 export type DisplayMode = 'simple' | 'roguelike';
 
-const COLOURS = {
+const COLORS = {
   [Tile.Wall]: '#26262c',
   [Tile.Floor]: '#d8d2c4',
   [Tile.Door]: '#c8783c',
 };
 
-const SIMPLE_EXIT_COLOUR = '#4a7fc8';
+const SIMPLE_EXIT_COLOR = '#4a7fc8';
 
 const GLYPHS = {
-  [Tile.Wall]: { glyph: '#', colour: '#555555' },
-  [Tile.Floor]: { glyph: '.', colour: '#aaaaaa' },
-  [Tile.Door]: { glyph: '+', colour: '#aa5500' },
+  [Tile.Wall]: { glyph: '#', color: '#555555' },
+  [Tile.Floor]: { glyph: '.', color: '#aaaaaa' },
+  [Tile.Door]: { glyph: '+', color: '#aa5500' },
 };
 
-const EXIT_GLYPH = { glyph: '.', colour: '#5555ff' };
+const EXIT_GLYPH = { glyph: '.', color: '#5555ff' };
 
-/** Whether all eight neighbours are walls (out of bounds counts as wall). */
+/** Whether all eight neighbors are walls (out of bounds counts as wall). */
 function isBuried(grid: Grid, x: number, y: number): boolean {
   for (let dy = -1; dy <= 1; ++dy) {
     for (let dx = -1; dx <= 1; ++dx) {
@@ -33,7 +33,7 @@ function isBuried(grid: Grid, x: number, y: number): boolean {
 
 /**
  * Resizes the canvas to fit the grid and paints every tile, either as plain
- * coloured squares or as coloured ASCII glyphs on black. `exits` are floor
+ * colored squares or as colored ASCII glyphs on black. `exits` are floor
  * tiles that get highlighted.
  */
 export function drawGrid(
@@ -50,11 +50,11 @@ export function drawGrid(
   if (mode === 'simple') {
     for (let y = 0; y < grid.height; ++y) {
       for (let x = 0; x < grid.width; ++x) {
-        context.fillStyle = COLOURS[grid.get(x, y)];
+        context.fillStyle = COLORS[grid.get(x, y)];
         context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
       }
     }
-    context.fillStyle = SIMPLE_EXIT_COLOUR;
+    context.fillStyle = SIMPLE_EXIT_COLOR;
     for (const { x, y } of exits) {
       context.fillRect(
         x * tileSize + tileSize / 4,
@@ -75,9 +75,9 @@ export function drawGrid(
     x: number,
     y: number,
     glyph: string,
-    colour: string,
+    color: string,
   ): void => {
-    context.fillStyle = colour;
+    context.fillStyle = color;
     context.fillText(glyph, (x + 0.5) * tileSize, (y + 0.5) * tileSize);
   };
   for (let y = 0; y < grid.height; ++y) {
@@ -86,14 +86,14 @@ export function drawGrid(
       if (tile === Tile.Wall && isBuried(grid, x, y)) {
         continue;
       }
-      const { glyph, colour } = GLYPHS[tile];
-      glyphAt(x, y, glyph, colour);
+      const { glyph, color } = GLYPHS[tile];
+      glyphAt(x, y, glyph, color);
     }
   }
   for (const { x, y } of exits) {
     // repaint the cell so the glyph underneath doesn't show through
     context.fillStyle = '#000000';
     context.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-    glyphAt(x, y, EXIT_GLYPH.glyph, EXIT_GLYPH.colour);
+    glyphAt(x, y, EXIT_GLYPH.glyph, EXIT_GLYPH.color);
   }
 }
