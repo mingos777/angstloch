@@ -1,3 +1,5 @@
+import { brushOffsets } from './brush-offsets';
+
 /**
  * Marks the tiles of a road of the given width around a centerline tile.
  * Narrow roads are squares, and wider ones have rounded corners so that a
@@ -11,18 +13,11 @@ export function stampRoadBrush(
   y: number,
   width: number,
 ): void {
-  const start = -Math.floor((width - 1) / 2);
-  const middle = (width - 1) / 2;
-  for (let j = 0; j < width; ++j) {
-    for (let i = 0; i < width; ++i) {
-      if (Math.hypot(i - middle, j - middle) > width / 2) {
-        continue;
-      }
-      const tileX = x + start + i;
-      const tileY = y + start + j;
-      if (tileX >= 0 && tileY >= 0 && tileX < mapWidth && tileY < mapHeight) {
-        covered[tileY * mapWidth + tileX] = 1;
-      }
+  for (const offset of brushOffsets(width)) {
+    const tileX = x + offset.x;
+    const tileY = y + offset.y;
+    if (tileX >= 0 && tileY >= 0 && tileX < mapWidth && tileY < mapHeight) {
+      covered[tileY * mapWidth + tileX] = 1;
     }
   }
 }

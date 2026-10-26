@@ -10,11 +10,13 @@ Implemented, documented and reviewed:
 - **Dungeons**: room-first (`generateRoomDungeon`, with `partition: 'scatter' | 'bsp'` and `connection: 'nearest' | 'bsp' | 'bsp-random'`) and the digger (`generateDigDungeon`), layout and corridor symmetry, room templates (rotations, mirroring, exits, doors).
 - **Caves** (`generateCave`): cellular automaton, regions, tunnels between caverns (`connect`) with optional loops (`tunnelLoops`), exits, layout symmetry (`layoutSymmetry`, with its own chances for the noise and for tunnels).
 - **Noise** (`createSimplexNoise`, `createFractalNoise`, `transformNoise`): public building blocks, no dependencies. It stays in this package; extracting it into a separate library was considered and rejected (the forest needs a default noise, and the code is small and isolated in `src/noise/`).
+- **Noise caves** (`generateNoiseCave`): a cave from thresholded noise, with `shape: 'blobs' | 'veins'`, `fill` as a quantile and `cornerBias`; the connection half it shares with `generateCave` lives in `src/cave/finish-cave.ts`.
 - **Forests** (`generateForest`): noise-driven tree density, roads with crossings and branches, exact roads from a `specs` list, `clearance`, `falloff` and `distance`, `Tile.Grass`, `Tile.Tree`, `Tile.Road`, and clearings (radii are `Range`s), with optional paths to them and clearings at the dead ends of branches (`at: 'branch-end'`).
+- **Mines** (`generateMine`): four layouts (`fishbone`, `veins`, `pillars`, `rings`), noise caverns, rooms and room templates with doors, and exits. See Mines under the design decisions.
 
 The tile values are part of the public contract and never change: `Wall` 0, `Floor` 1, `Door` 2, `Grass` 3, `Tree` 4, `Road` 5.
 
-The source layout and its import rule (imports only point down: `core`, then `rooms` and `noise`, then `roads`, then the generators) are in `CLAUDE.md`.
+The source layout and its import rule (imports only point down: `core`, then `rooms` and `noise`, then `roads`, then the generators, which may also use `cave/` and `maze/` as listed) are in `CLAUDE.md`.
 
 ## Design decisions worth keeping
 
@@ -22,6 +24,16 @@ The source layout and its import rule (imports only point down: `core`, then `ro
 - **Clearings are placed, never found in the density map**, so one is guaranteed. Plain discs were rejected, the user wants irregular shapes (domain warping with a flood fill). Radii are approximate, since the ragged edge varies the real size by up to about 40%. A clearing that finds no room is dropped, with no relaxing, since there is no minimum count (a minimum count would be the case for relaxing).
 - **Clearings at branch ends are never dropped for overlapping.** Two that merge look natural, and several paths may lead to one glade. They take the branch ends in the order the branches were laid, and come last in the `clearings` result.
 - **Exact roads (`roads.specs`) replace the generated network** rather than adding to it, and placement is best effort: geometry is clamped or cut short, and only a bad parent index and similar mistakes throw.
+- **Mines are one generator with a `layout` option**, not a mode of the digger (the digger's short-link options would be dead in a mine) and not four generators (the layouts share the carving core, widths, density, caverns, rooms and exits). Layout-specific options are marked as such in the README and ignored by the other layouts. Layouts do not mix; an array of layouts could be added later, additively. The code is in `src/mine/` and builds on `src/roads/` (centerlines, brushes), `src/noise/` and the cave exit code and noise cave generator.
+  - **Shape of the code.** `carvePassage` and `tracePassage` carve and trace a winding passage of a width, between two tiles or from a tile at an angle. A layout lays the tunnels (`lay-fishbone`, `lay-veins`, `lay-pillars`, `lay-rings`), and `generateMine` then adds caverns (`lay-caverns`), rooms (`lay-rooms`) and exits. `MinePassage.kind` says what a tunnel is: `shaft`, `adit`, `vein`, `ring`, `spoke` or `tunnel`.
+  - **`density`** is the target share of floor, best effort: it stops short without throwing when there is no room. The defaults are 0.15, 0.35 for `pillars` (its halls need room to show pillars) and 0.3 for `rings` (it only picks the ring count). For pillars it only sizes the halls, and the veins between them follow `hallVeins`.
+  - **fishbone**: a straight main shaft (windiness 0.1, `angle` random if omitted, width 2 to 3) through a point near the middle, and adits (width 1 to 2, windiness 0.4, length 15 to 50) off random tiles of any tunnel at 45 to 90 degrees. An adit stops short of other tunnels with a wall between, so it ends in a dead end. `loops` is the chance that it breaks through instead. Things that were hard to get right: adits ignore their parent only until they pull clear of it, a dead end must touch the mine in one place only, and a shaft that winds off the map is cut to the stretch around its origin.
+  - **veins**: junctions on a jittered grid (`veinSpacing`), the shortest spanning tree always dug, then extra links between near neighbors, shortest first with some shuffling, until `density`. So the web-ness is set by `density`, and `loops` is fishbone only.
+  - **pillars**: a few halls (`halls`, `hallSize`, `hallRagged`, 4 tiles of rock apart, shrinking to fit when the size comes from `density`) joined by `hallVeins` veins between random tiles of two halls, so several can join one pair. Pillars (`pillarSize`, `pillarSpacing`, `pillarRagged`, `pillarJitter`) stand on a lattice centered in a hall, and each needs floor all round it and never covers a vein. Veins that run side by side can shut in rock of any size, which is not a pillar.
+  - **rings**: concentric ovals fitted to the map (`rings`, `ringWidth`, `ringWobble`), closed loops that wobble by smooth noise, joined by at least one radial spoke per pair of rings (`spokes`). Ovals and not circles, so that a wide map is filled. There is no common main shaft, since the spokes do that job.
+  - **Caverns**: `caverns`, `cavernSize` and `cavernFill`, from `generateNoiseCave` keeping the largest region. Each goes at the best of 20 random places in the rock (the nearest to the mine) and never overlaps floor. It touches the mine or is joined by a short tunnel, and is left out when it finds no room.
+  - **Rooms and templates**: `rooms` (as for mazes, but any size), `templates` (the shared `RoomTemplate`), `exitsPerRoom` (1 to 3) and `doorChance` (1), copied from the maze. In rock only, 2 tiles clear of the mine and of each other. An ordinary room that finds no spot or cannot be joined is left out, and a template that cannot be placed or joined throws a `TemplatePlacementError`. Every opening gets a winding tunnel to the nearest floor round any room in the way. No two openings of a room are next to each other, diagonals included. Ordinary rooms use their own spot search, since the shared template placement scan was too slow with the whole mine as one obstacle (15 seconds for ten rooms on 200 by 120); templates still use the shared code.
+  - **The border**: a ring of wall always closes the map in, except for the exits. There is no `borderWalls` option.
 - **BSP corridors** are derived from room positions (a median split along the most spread axis), not from the real partition tree, so they work with every placement, templates and symmetry.
 
 ## Backlog
@@ -30,18 +42,7 @@ Roughly in the order the user wants them. Each needs a design talk before it is 
 
 ### Caves
 
-- **Rooms and templates inside caves**, like [rooms in mazes](#mazes-and-rooms): rectangular rooms and `RoomTemplate`s placed in the cave, joined to the caverns. The cave regions and tunnels are there to build on.
-- **Noise caverns** (designed, not built): a cave made by thresholding noise (`src/noise/`) instead of running the automaton. Decisions:
-  - A separate generator, `generateNoiseCave`, with its own `NoiseCaveOptions`, as the two dungeon generators are separate. Not a `mode` on `generateCave`, since the automaton and noise fields would each be dead in the other mode.
-  - The second half of `generateCave` (filling small regions, `connect`, exits, region description) is extracted into a function in `cave/`, and the connection options (`minRegionSize`, `connect`, `tunnel*`, `layoutSymmetry*`, `minExits`, `maxExits`) into an interface that both option types extend. `CaveOptions` does not change for callers. Nothing moves out of `cave/`.
-  - `fill` is a proportion of walls from 0 to 1 (default about 0.45), applied as a quantile: every tile is sampled and the threshold is chosen so that about that share are walls. This keeps `fill` predictable whatever the scale, octaves or custom noise. A raw `threshold` could be added later.
-  - Noise options as in the forest (`scaleX`, `scaleY`, `rotation`, `octaves`, `persistence`, `lacunarity`, `noise`), with defaults suited to caves: smaller features (about 12 tiles) and 3 octaves for ragged edges. The caller stretches blobs with the scales and rotation. These defaults are a first guess, to be tuned in the playground.
-  - An optional smoothing pass (`iterations`, reusing `smoothCave`), defaulting to 0 for now.
-  - Layout symmetry: each tile samples the noise at its canonical twin (the lowest-index mirror image, as in `createCaveNoise`) with chance `layoutSymmetryChance`, and at its own position otherwise. The quantile is taken after that substitution.
-  - `borderWalls` stays as it is: the outer ring is forced to wall.
-  - Task split: (1) extract the shared half, a pure refactor; (2) `generateNoiseCave` with tests, README and public export; (3) the playground gets a cave type switch with the noise controls.
-  - `shape: 'blobs' | 'veins'` (default `blobs`), part of this feature. `blobs` makes floor of the low (or high) part of the noise. `veins` makes floor of the tiles nearest the noise's midpoint, so the floor follows its zero crossings: a network of winding corridors instead of caverns. It takes the absolute value of the noise before the quantile step, so `fill` still sets the share of walls (a higher `fill` makes thinner veins). Symmetry and everything after the noise work the same for both. It overlaps with the mines idea.
-  - Task 2 therefore also covers `shape`, with tests and README for both shapes, and the playground (task 3) gets a shape switch.
+- **Rooms and templates inside caves**, like rooms in mazes and mines: rectangular rooms and `RoomTemplate`s placed in the cave, joined to the caverns. The cave regions and tunnels are there to build on, and the room code of `src/mine/` could be reused. Not wanted in the near future.
 - **Water and lava**: needs new `Tile` values and a rule that keeps lakes from cutting the map in two. Much later.
 
 ### Forests and roads
@@ -60,9 +61,19 @@ All of this is optional follow-up to the finished forest.
 - **Castle or fortress**: probably a variant of the town machinery (concentric walls, towers, gatehouse, keep, courtyards). Decide when designing the town.
 - The tile model for buildings needs a decision before building (`Road` exists; building interiors, walls and floors may reuse `Wall` and `Floor` or get new values).
 
-### Mines and catacombs
+### Mines, follow-ups
 
-The user loves this one. A first idea: long straight shafts with side branches and the occasional chamber, between a maze and the digger. It may be a mode of the digger and not a separate generator.
+Nothing is planned, and everything here is optional:
+
+- **Symmetry** for mines was deferred; it would fit the cave's layout symmetry.
+- **Cave-ins**: parts of a mine cut off by a collapse, which the always-connected rule rules out now.
+- **Mixed layouts**, for example pillar halls joined by a fishbone, as an array of layouts.
+- **Entrances that face the other hall** for the veins between pillar halls, and a `ringShape` option (circles, not ovals).
+- **Rooms in caves** (see Caves) could reuse the room code of the mine.
+
+### Catacombs
+
+Undecided. They feel like a very structured variant of the digger (rigid, often on a lattice, with niches along the walls and a few crypts from room templates), and may or may not get a generator of their own. The mine is done, so this can be designed now. The carving core and the room and cavern code of `src/mine/` may carry over.
 
 ### Lakes and rivers
 
