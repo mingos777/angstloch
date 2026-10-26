@@ -2,7 +2,7 @@ import { createTransforms } from './create-transforms';
 import { decideTemplateDoors } from './decide-template-doors';
 import type { DungeonOptions } from '../dungeon-options';
 import { effectiveSpacing } from '../effective-spacing';
-import type { LayoutSymmetry } from '../layout-symmetry';
+import type { LayoutSymmetry } from '../../core/layout-symmetry';
 import { placeRoomTemplates } from './place-room-templates';
 import type { Random } from '../../core/random';
 import type { ResolvedDungeonOptions } from '../resolve-dungeon-options';

@@ -1,15 +1,8 @@
 import { assertFraction } from '../core/assert-fraction';
+import { assertLayoutSymmetry } from '../core/assert-layout-symmetry';
 import type { CorridorSymmetry } from './corridor-symmetry';
-import type { LayoutSymmetry } from './layout-symmetry';
+import type { LayoutSymmetry } from '../core/layout-symmetry';
 import type { SymmetryOptions } from './symmetry-options';
-
-const LAYOUTS: readonly LayoutSymmetry[] = [
-  'none',
-  'horizontal',
-  'vertical',
-  'both',
-  'rotational',
-];
 
 const CORRIDORS: readonly CorridorSymmetry[] = [
   'none',
@@ -35,11 +28,7 @@ export function resolveSymmetryOptions(
     corridorSymmetry: options.corridorSymmetry ?? 'none',
     corridorSymmetryChance: options.corridorSymmetryChance ?? 1,
   };
-  if (!LAYOUTS.includes(resolved.layoutSymmetry)) {
-    throw new RangeError(
-      `layoutSymmetry must be one of ${LAYOUTS.join(', ')}, got ${resolved.layoutSymmetry}`,
-    );
-  }
+  assertLayoutSymmetry('layoutSymmetry', resolved.layoutSymmetry);
   if (!CORRIDORS.includes(resolved.corridorSymmetry)) {
     throw new RangeError(
       `corridorSymmetry must be one of ${CORRIDORS.join(', ')}, got ${resolved.corridorSymmetry}`,

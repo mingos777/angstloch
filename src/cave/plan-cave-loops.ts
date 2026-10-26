@@ -1,14 +1,11 @@
 import type { CaveLink } from './cave-link';
 import { DIRECTIONS } from '../core/directions';
 import type { Grid } from '../core/grid';
-import { measureCaveWalk } from './measure-cave-walk';
+import { isCaveShortcut } from './is-cave-shortcut';
 import type { Point } from '../core/point';
 
 /** How many of the nearest other caverns each cavern is paired with. */
 const NEIGHBORS = 3;
-/** A tunnel is a shortcut when the walk is longer than the gap times this, plus `SHORTCUT_MARGIN`. */
-const SHORTCUT_FACTOR = 3;
-const SHORTCUT_MARGIN = 4;
 
 /**
  * Lists the tunnels that would make loops in a map whose caverns are joined
@@ -58,11 +55,7 @@ export function planCaveLoops(
           from: { x: start % width, y: Math.floor(start / width) },
           to: { x, y },
         };
-        const walk = measureCaveWalk(grid, link.from, link.to);
-        if (
-          !paired.has(key) &&
-          walk > SHORTCUT_FACTOR * (gap[at] as number) + SHORTCUT_MARGIN
-        ) {
+        if (!paired.has(key) && isCaveShortcut(grid, link)) {
           candidates.push(link);
         }
         paired.add(key);

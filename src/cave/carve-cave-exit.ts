@@ -3,6 +3,7 @@ import { pickRandom } from '../core/pick-random';
 import type { Point } from '../core/point';
 import type { Random } from '../core/random';
 import { Tile } from '../core/tile';
+import type { Transform } from '../rooms/templates/create-transforms';
 
 interface Candidate {
   edge: Point;
@@ -35,6 +36,31 @@ function tunnelLength(
   return undefined;
 }
 
+/** How exits follow the symmetry of the map. */
+export interface CaveExitSymmetry {
+  /** The mirror images of the map, which are the twins of an exit. */
+  images: readonly Transform[];
+  /** The chance that an exit gets twins. */
+  chance: number;
+  /** How many exits there is room for, twins included. */
+  room: number;
+}
+
+/** The step that leads from a border tile into the map. */
+function inwardStep(grid: Grid, { x, y }: Point): Point {
+  if (x === 0) {
+    return { x: 1, y: 0 };
+  }
+  if (x === grid.width - 1) {
+    return { x: -1, y: 0 };
+  }
+  return { x: 0, y: y === 0 ? 1 : -1 };
+}
+
+function isNextTo(a: Point, b: Point): boolean {
+  return Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1;
+}
+
 /** The candidates of one side with the shortest tunnels. */
 function findCandidates(
   grid: Grid,
@@ -46,10 +72,7 @@ function findCandidates(
   for (const edge of edges) {
     const tile = grid.get(edge.x, edge.y);
     const tunnel = tunnelLength(grid, edge, step);
-    const nextToDoor = doors.some(
-      (door) =>
-        Math.abs(door.x - edge.x) <= 1 && Math.abs(door.y - edge.y) <= 1,
-    );
+    const nextToDoor = doors.some((door) => isNextTo(door, edge));
     if (
       (tile === Tile.Wall || tile === Tile.Floor) &&
       tunnel !== undefined &&
@@ -72,14 +95,18 @@ function along(length: number): number[] {
  * border and a straight tunnel leading to the nearest floor, found by going
  * straight in. On each side the exits with the shortest tunnels are the
  * candidates. A door is never next to one of the `doors` that exist already.
- * Returns the door position, or `undefined` when no side can be connected to
- * any floor.
+ * With a `symmetry`, the exit gets twins with the chance `symmetry.chance`:
+ * one at each mirror image of it that a tunnel can reach floor from. The exit
+ * and its twins are all left out when there is not room for them or when two
+ * of their doors would be side by side. Returns the doors that were made, which
+ * is none when no side can be connected to any floor.
  */
 export function carveCaveExit(
   grid: Grid,
   random: Random,
   doors: readonly Point[],
-): Point | undefined {
+  symmetry?: CaveExitSymmetry,
+): Point[] {
   const { width, height } = grid;
   const sides = [
     findCandidates(
@@ -109,13 +136,42 @@ export function carveCaveExit(
   ].filter((candidates) => candidates.length > 0);
 
   if (sides.length === 0) {
-    return undefined;
+    return [];
   }
 
-  const { edge, step, tunnel } = pickRandom(random, pickRandom(random, sides));
-  grid.set(edge.x, edge.y, Tile.Door);
-  for (let i = 1; i <= tunnel; ++i) {
-    grid.set(edge.x + step.x * i, edge.y + step.y * i, Tile.Floor);
+  const picked = pickRandom(random, pickRandom(random, sides));
+  const set = [picked];
+  if (symmetry && symmetry.images.length > 0 && random() < symmetry.chance) {
+    for (const { point } of symmetry.images) {
+      const edge = point(picked.edge);
+      const step = inwardStep(grid, edge);
+      const tile = grid.get(edge.x, edge.y);
+      const tunnel = tunnelLength(grid, edge, step);
+      const own = set.some(
+        (exit) => exit.edge.x === edge.x && exit.edge.y === edge.y,
+      );
+      if (
+        !own &&
+        (tile === Tile.Wall || tile === Tile.Floor) &&
+        tunnel !== undefined
+      ) {
+        set.push({ edge, step, tunnel });
+      }
+    }
+    const crowded = set.some(
+      (exit, i) =>
+        doors.some((door) => i > 0 && isNextTo(door, exit.edge)) ||
+        set.some((other, j) => j > i && isNextTo(other.edge, exit.edge)),
+    );
+    if (crowded || set.length > symmetry.room) {
+      return [];
+    }
   }
-  return edge;
+  for (const { edge, step, tunnel } of set) {
+    grid.set(edge.x, edge.y, Tile.Door);
+    for (let i = 1; i <= tunnel; ++i) {
+      grid.set(edge.x + step.x * i, edge.y + step.y * i, Tile.Floor);
+    }
+  }
+  return set.map(({ edge }) => edge);
 }

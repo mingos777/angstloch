@@ -1,7 +1,7 @@
 import { createTransforms } from './templates/create-transforms';
 import { effectiveSpacing } from './effective-spacing';
 import { fitSizes } from './fit-sizes';
-import type { LayoutSymmetry } from './layout-symmetry';
+import type { LayoutSymmetry } from '../core/layout-symmetry';
 import type { Range } from '../core/range';
 import { EDGE_CLEARANCE } from './room-plan';
 import type { RoomPlan } from './room-plan';

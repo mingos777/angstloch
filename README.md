@@ -208,35 +208,65 @@ The automaton usually leaves several caverns that are not joined to each other. 
 
 A tree of tunnels means one way between any two caverns, so a cave can feel like a corridor with side rooms. `tunnelLoops`, from 0 to 1, adds extra tunnels once the caverns are joined. It only applies to `connect: 'tunnel'`, and it defaults to 0, which adds none.
 
-Each cavern is paired with its three nearest neighbors, measured across the rock between them. A pair is only worth a tunnel when it is a real shortcut: walking over the floor between the closest tiles of the two caverns must take much longer than the gap itself (more than three times the gap plus four steps). So caverns that a short tunnel joins already are skipped, and loops appear where the map would force a long detour. Every pair that passes gets one roll, and with the chance `tunnelLoops` it gets a tunnel, dug like the others, with the same `tunnelStyle`, `tunnelWidth` and `tunnelWindiness`. At 1, every such shortcut is dug. Caverns a single wall apart can get a short tunnel, which reads as a gap in the wall. Tunnels may cross other caverns, as the first ones can. The shortcuts are worked out before any loop is dug, so two loops next to each other may both appear.
+Each cavern is paired with its three nearest neighbors, measured across the rock between them. A pair is only worth a tunnel when it is a real shortcut: walking over the floor between the closest tiles of the two caverns must take much longer than the gap itself (more than three times the gap plus four steps). So caverns that a short tunnel joins already are skipped, and loops appear where the map would force a long detour. Every pair that passes gets one roll, and with the chance `tunnelLoops` it gets a tunnel, dug like the others, with the same `tunnelStyle`, `tunnelWidth` and `tunnelWindiness`. At 1, every such shortcut is dug. Caverns a single wall apart can get a short tunnel, which reads as a gap in the wall. Tunnels may cross other caverns, as the first ones can. The shortcuts are listed before any loop is dug, but each is checked again when its turn comes, so a loop that an earlier one has made pointless is not dug.
+
+### Symmetry
+
+`layoutSymmetry` makes the cave look the same when mirrored or turned. It takes the same values as the [dungeons](#layout-symmetry): `'none'` (the default), `'horizontal'` (left to right), `'vertical'` (top to bottom), `'both'` (four mirrored quarters) or `'rotational'` (turned by 180°, so it looks the same upside down). The axes run through the center of the map; on a map with an odd width or height, the middle column or row is its own mirror image.
+
+The symmetry is made in the starting noise. The tiles are filled in row by row. The first tile of each set of mirror images is random, as usual, and each of its twins copies it with the chance `layoutSymmetryChance`, and is random otherwise. Then the automaton runs as usual. Its rules treat all directions alike, so a symmetric start stays symmetric. At 1 (the default) the cave is perfectly symmetric. At 0 the noise is plain random, and the symmetry has no effect. In between, the cave is roughly symmetric: the stray tiles are mostly smoothed over, so it looks more balanced than the chance suggests, and a value near 0.9 gives a cave that is clearly symmetric but not exact.
+
+```ts
+const { grid } = generateCave({
+  width: 61,
+  height: 41,
+  layoutSymmetry: 'both',
+  layoutSymmetryChance: 0.9,
+});
+```
+
+#### Symmetric tunnels
+
+With `connect: 'tunnel'`, a symmetric start still leaves caverns to join, and a tunnel dug at random would spoil the symmetry. So every tunnel, the ones of `tunnelLoops` included, is copied onto its twins: once it is dug, every tile it turned into floor is turned into floor at its mirror images, too. The copy is made with the chance `tunnelSymmetryChance`, rolled once for every tunnel, so a tunnel either gets all its twins or none. It is a separate option from `layoutSymmetryChance` on purpose: how strictly the tunnels follow the symmetry is a matter of taste, so you can have a cave with a symmetric look and tunnels of its own, or a symmetric cave with a few stray tunnels. At 1 (the default) and with `layoutSymmetryChance` at 1, the finished cave is perfectly symmetric. `tunnelSymmetryChance` has no effect without a `layoutSymmetry`, or with another `connect` than `'tunnel'`.
+
+Things to know:
+
+- Symmetry changes what the generator makes, so the same seed gives another cave than without it.
+- `minRegionSize` keeps the symmetry, since twin caverns are equally large. `connect: 'largest'` fills in all but one cavern, so it also fills in the twin of the one it keeps, and the result is symmetric only if the largest cavern is its own twin, for example because it crosses an axis.
+- Exits follow the symmetry as well, see [Exits](#exits).
 
 ### `CaveOptions`
 
-| Option            | Default                                | Meaning                                                                                                                                                |
-| ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `width`           |                                        | Map width in tiles. Required.                                                                                                                          |
-| `height`          |                                        | Map height in tiles. Required.                                                                                                                         |
-| `random`          | `Math.random`                          | Source of randomness.                                                                                                                                  |
-| `fillChance`      | 0.45                                   | Chance that a tile starts as a wall, from 0 to 1.                                                                                                      |
-| `iterations`      | 4                                      | Number of smoothing passes. 0 leaves the raw noise.                                                                                                    |
-| `neighborhood`    | `'moore'`                              | `'moore'` counts the 8 surrounding tiles, `'von-neumann'` the 4 that share an edge.                                                                    |
-| `birthLimit`      | 5 for `'moore'`, 3 for `'von-neumann'` | Wall neighbors needed to turn a floor tile into a wall. A whole number, 0 or more.                                                                     |
-| `survivalLimit`   | 4 for `'moore'`, 2 for `'von-neumann'` | Wall neighbors needed for a wall tile to stay a wall. A whole number, 0 or more.                                                                       |
-| `borderWalls`     | `true`                                 | Keeps the outermost ring of tiles solid wall.                                                                                                          |
-| `minRegionSize`   | 0                                      | Fills in every cavern smaller than this many tiles. 0 keeps all.                                                                                       |
-| `connect`         | `'tunnel'`                             | What to do with caverns that are not joined: `'tunnel'` digs tunnels between them, `'largest'` fills in all but the largest one, `'none'` leaves them. |
-| `tunnelStyle`     | `'winding'`                            | The shape of tunnels: `'winding'` meanders, `'direct'` has at most one bend.                                                                           |
-| `tunnelWidth`     | 1                                      | The width of tunnels in tiles. A whole number, 1 or more.                                                                                              |
-| `tunnelWindiness` | 0.5                                    | How much `'winding'` tunnels wander, from 0 to 1.                                                                                                      |
-| `tunnelLoops`     | 0                                      | The chance, from 0 to 1, of an extra tunnel where it would be a shortcut between caverns. Applies to `connect: 'tunnel'` only.                         |
+| Option                 | Default                                | Meaning                                                                                                                                                |
+| ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `width`                |                                        | Map width in tiles. Required.                                                                                                                          |
+| `height`               |                                        | Map height in tiles. Required.                                                                                                                         |
+| `random`               | `Math.random`                          | Source of randomness.                                                                                                                                  |
+| `fillChance`           | 0.45                                   | Chance that a tile starts as a wall, from 0 to 1.                                                                                                      |
+| `iterations`           | 4                                      | Number of smoothing passes. 0 leaves the raw noise.                                                                                                    |
+| `neighborhood`         | `'moore'`                              | `'moore'` counts the 8 surrounding tiles, `'von-neumann'` the 4 that share an edge.                                                                    |
+| `birthLimit`           | 5 for `'moore'`, 3 for `'von-neumann'` | Wall neighbors needed to turn a floor tile into a wall. A whole number, 0 or more.                                                                     |
+| `survivalLimit`        | 4 for `'moore'`, 2 for `'von-neumann'` | Wall neighbors needed for a wall tile to stay a wall. A whole number, 0 or more.                                                                       |
+| `borderWalls`          | `true`                                 | Keeps the outermost ring of tiles solid wall.                                                                                                          |
+| `minRegionSize`        | 0                                      | Fills in every cavern smaller than this many tiles. 0 keeps all.                                                                                       |
+| `connect`              | `'tunnel'`                             | What to do with caverns that are not joined: `'tunnel'` digs tunnels between them, `'largest'` fills in all but the largest one, `'none'` leaves them. |
+| `tunnelStyle`          | `'winding'`                            | The shape of tunnels: `'winding'` meanders, `'direct'` has at most one bend.                                                                           |
+| `tunnelWidth`          | 1                                      | The width of tunnels in tiles. A whole number, 1 or more.                                                                                              |
+| `tunnelWindiness`      | 0.5                                    | How much `'winding'` tunnels wander, from 0 to 1.                                                                                                      |
+| `tunnelLoops`          | 0                                      | The chance, from 0 to 1, of an extra tunnel where it would be a shortcut between caverns. Applies to `connect: 'tunnel'` only.                         |
+| `layoutSymmetry`       | `'none'`                               | Mirrors or turns the starting noise about the center of the map: `'none'`, `'horizontal'`, `'vertical'`, `'both'` or `'rotational'`.                   |
+| `layoutSymmetryChance` | 1                                      | How often a tile of the noise copies its twin, from 0 to 1. Only matters with a `layoutSymmetry`.                                                      |
+| `tunnelSymmetryChance` | 1                                      | How often a tunnel, a loop included, gets twins that follow `layoutSymmetry`, from 0 to 1. Applies to `connect: 'tunnel'` only.                        |
 
-The limits are counted out of 8 neighbors for `'moore'` and out of 4 for `'von-neumann'`, which is why the defaults differ. A limit above the number of neighbors can never be reached, so a `birthLimit` of 9 stops floor from ever turning into a wall. A non-positive size, a `fillChance`, `tunnelWindiness` or `tunnelLoops` outside 0 to 1, a `tunnelWidth` that is not a whole number of at least 1, or a limit, `minRegionSize` or `iterations` that is not a whole number of at least 0 throws a `RangeError`.
+The limits are counted out of 8 neighbors for `'moore'` and out of 4 for `'von-neumann'`, which is why the defaults differ. A limit above the number of neighbors can never be reached, so a `birthLimit` of 9 stops floor from ever turning into a wall. A non-positive size, a `fillChance`, `tunnelWindiness`, `tunnelLoops`, `layoutSymmetryChance` or `tunnelSymmetryChance` outside 0 to 1, an unknown `layoutSymmetry`, a `tunnelWidth` that is not a whole number of at least 1, or a limit, `minRegionSize` or `iterations` that is not a whole number of at least 0 throws a `RangeError`.
 
 ### Exits
 
 `minExits` and `maxExits` add openings on the map border, for a game to join the cave to its surroundings. The number of exits is picked between the two. An exit is a `Door` tile on the border and, unless a cavern already reaches the border, a straight tunnel from it to the nearest floor.
 
 Each exit goes on a random side of the map. On that side, the exit is put where the tunnel is shortest, going straight in from the border. Exits are never next to each other, corners are never used, and a side with no floor in line with its border is skipped. When no side can reach any floor, fewer exits than asked for are made, which happens on a map with no floor at all. Exit tunnels are one tile wide whatever `tunnelWidth` is, and they are part of the cavern that they reach.
+
+With a `layoutSymmetry`, an exit gets twins with the chance `layoutSymmetryChance`: an exit and its twins are dug together, one at each mirror image of the exit, and each twin gets the straight tunnel of its own. An exit on an axis is its own twin. The number of exits counts the twins, so `maxExits` is never exceeded, and a set of twins that would not fit in the exits that are left, or that would put two doors side by side (the two middle tiles of a side of even length, for example), is left out. The generator then draws another exit, and gives up after ten such failures in a row, so a cave with a small `maxExits` can have fewer exits than `minExits`. A twin that has no floor in line with its border is left out, which can only happen when the cave is not perfectly symmetric.
 
 ### `CaveResult`
 

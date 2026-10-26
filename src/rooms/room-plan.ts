@@ -1,5 +1,5 @@
 import type { Transform } from './templates/create-transforms';
-import type { LayoutSymmetry } from './layout-symmetry';
+import type { LayoutSymmetry } from '../core/layout-symmetry';
 import type { Random } from '../core/random';
 import type { Range } from '../core/range';
 import type { Room } from './room';

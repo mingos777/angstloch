@@ -1,4 +1,4 @@
-import type { LayoutSymmetry } from '../layout-symmetry';
+import type { LayoutSymmetry } from '../../core/layout-symmetry';
 import type { Point } from '../../core/point';
 import type { Room } from '../room';
 import { symmetricExtent } from '../symmetric-extent';

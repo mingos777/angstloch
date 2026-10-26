@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createTemplateTwin } from './create-template-twin';
 import { createTransforms } from './create-transforms';
 import type { Transform } from './create-transforms';
-import type { LayoutSymmetry } from '../layout-symmetry';
+import type { LayoutSymmetry } from '../../core/layout-symmetry';
 import { findTemplateExits } from './find-template-exits';
 import { TemplateCell } from './template-cell';
 import type { TemplatePlacement } from './template-placement';

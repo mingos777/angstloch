@@ -1,5 +1,5 @@
 import type { CorridorSymmetry } from './corridor-symmetry';
-import type { LayoutSymmetry } from './layout-symmetry';
+import type { LayoutSymmetry } from '../core/layout-symmetry';
 
 /** Options that make a dungeon symmetric. The two kinds of symmetry are independent and can be combined. */
 export interface SymmetryOptions {

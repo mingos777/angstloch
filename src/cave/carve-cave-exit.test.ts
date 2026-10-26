@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { carveCaveExit } from './carve-cave-exit';
+import { createTransforms } from '../rooms/templates/create-transforms';
 import { Grid } from '../core/grid';
 import { Tile } from '../core/tile';
 
@@ -25,7 +26,7 @@ describe('carveCaveExit', () => {
     const grid = withFloor(11, 9, [3, 7], [3, 5]);
 
     // when
-    const exit = carveCaveExit(grid, Math.random, []);
+    const [exit] = carveCaveExit(grid, Math.random, []);
 
     // then
     expect(exit).toBeDefined();
@@ -62,7 +63,7 @@ describe('carveCaveExit', () => {
     grid.set(7, 6, Tile.Floor);
 
     // when
-    const exit = carveCaveExit(grid, () => 0, []);
+    const [exit] = carveCaveExit(grid, () => 0, []);
 
     // then
     expect(exit).toEqual({ x: 3, y: 0 });
@@ -74,7 +75,7 @@ describe('carveCaveExit', () => {
     const grid = withFloor(7, 7, [0, 6], [0, 6]);
 
     // when
-    const exit = carveCaveExit(grid, () => 0, []);
+    const [exit] = carveCaveExit(grid, () => 0, []);
 
     // then
     expect(exit).toBeDefined();
@@ -89,7 +90,7 @@ describe('carveCaveExit', () => {
     const doors = [{ x: 1, y: 0 }];
 
     // when
-    const exit = carveCaveExit(grid, () => 0, doors);
+    const [exit] = carveCaveExit(grid, () => 0, doors);
 
     // then
     expect(exit).toEqual({ x: 3, y: 0 });
@@ -100,7 +101,7 @@ describe('carveCaveExit', () => {
     const grid = withFloor(5, 5, [0, 4], [0, 4]);
 
     // when
-    const exit = carveCaveExit(grid, () => 0, []);
+    const [exit] = carveCaveExit(grid, () => 0, []);
 
     // then
     expect(exit).not.toEqual({ x: 0, y: 0 });
@@ -112,7 +113,7 @@ describe('carveCaveExit', () => {
     const grid = new Grid(9, 9);
 
     // when
-    const exit = carveCaveExit(grid, Math.random, []);
+    const [exit] = carveCaveExit(grid, Math.random, []);
 
     // then
     expect(exit).toBeUndefined();
@@ -123,9 +124,134 @@ describe('carveCaveExit', () => {
     const grid = new Grid(2, 2, Tile.Floor);
 
     // when
-    const exit = carveCaveExit(grid, Math.random, []);
+    const [exit] = carveCaveExit(grid, Math.random, []);
 
     // then
     expect(exit).toBeUndefined();
+  });
+
+  describe('with a symmetry', () => {
+    const horizontal = (
+      chance: number,
+      room: number,
+      width = 11,
+      height = 9,
+    ) => ({
+      images: createTransforms('horizontal', width, height, false),
+      chance,
+      room,
+    });
+
+    it('adds a twin on the mirror image', () => {
+      // given
+      const grid = withFloor(11, 9, [3, 7], [3, 5]);
+
+      // when
+      const exits = carveCaveExit(grid, () => 0, [], horizontal(1, 2));
+
+      // then
+      expect(exits).toEqual([
+        { x: 3, y: 0 },
+        { x: 7, y: 0 },
+      ]);
+      expect(grid.toString().split('\n').slice(0, 4)).toEqual([
+        '###+###+###',
+        '###.###.###',
+        '###.###.###',
+        '###.....###',
+      ]);
+    });
+
+    it('adds the twins of every mirror image with both', () => {
+      // given
+      const grid = withFloor(11, 9, [3, 7], [3, 5]);
+      const both = {
+        images: createTransforms('both', 11, 9, false),
+        chance: 1,
+        room: 4,
+      };
+
+      // when
+      const exits = carveCaveExit(grid, () => 0, [], both);
+
+      // then
+      expect(exits).toEqual([
+        { x: 3, y: 0 },
+        { x: 7, y: 0 },
+        { x: 3, y: 8 },
+        { x: 7, y: 8 },
+      ]);
+    });
+
+    it('adds no twin at a chance of 0', () => {
+      // given
+      const grid = withFloor(11, 9, [3, 7], [3, 5]);
+
+      // when
+      const exits = carveCaveExit(grid, () => 0, [], horizontal(0, 2));
+
+      // then
+      expect(exits).toEqual([{ x: 3, y: 0 }]);
+    });
+
+    it('is its own twin on an axis', () => {
+      // given
+      const grid = withFloor(11, 9, [5, 5], [3, 5]);
+
+      // when
+      const exits = carveCaveExit(grid, () => 0, [], horizontal(1, 2));
+
+      // then
+      expect(exits).toEqual([{ x: 5, y: 0 }]);
+    });
+
+    it('leaves everything out when there is not room for the twins', () => {
+      // given
+      const grid = withFloor(11, 9, [3, 7], [3, 5]);
+      const before = grid.toString();
+
+      // when
+      const exits = carveCaveExit(grid, () => 0, [], horizontal(1, 1));
+
+      // then
+      expect(exits).toEqual([]);
+      expect(grid.toString()).toBe(before);
+    });
+
+    it('leaves everything out when two doors would be side by side', () => {
+      // given
+      const grid = withFloor(10, 9, [4, 5], [3, 5]);
+      const before = grid.toString();
+
+      // when
+      const exits = carveCaveExit(grid, () => 0, [], horizontal(1, 2, 10));
+
+      // then
+      expect(exits).toEqual([]);
+      expect(grid.toString()).toBe(before);
+    });
+
+    it('leaves out a twin that no tunnel can lead to floor from', () => {
+      // given
+      const grid = withFloor(11, 9, [3, 3], [3, 5]);
+
+      // when
+      const exits = carveCaveExit(grid, () => 0, [], horizontal(1, 2));
+
+      // then
+      expect(exits).toEqual([{ x: 3, y: 0 }]);
+    });
+
+    it('leaves everything out when a twin would be next to a door', () => {
+      // given
+      const grid = withFloor(11, 9, [3, 7], [3, 5]);
+      const doors = [{ x: 8, y: 0 }];
+
+      // when
+      const exits = carveCaveExit(grid, () => 0, doors, horizontal(1, 2));
+
+      // then
+      expect(exits).toEqual([]);
+    });
   });
 });

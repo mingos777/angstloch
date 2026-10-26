@@ -1,13 +1,15 @@
 import { assertDimensions } from '../core/assert-dimensions';
 import { assertFraction } from '../core/assert-fraction';
+import { assertLayoutSymmetry } from '../core/assert-layout-symmetry';
 import { assertWholeNumber } from '../core/assert-whole-number';
 import type { CaveNeighborhood, CaveOptions } from './cave-options';
 import type { CaveResult } from './cave-result';
 import { carveCaveExit } from './carve-cave-exit';
 import { connectCaves } from './connect-caves';
+import { createCaveNoise } from './create-cave-noise';
+import { createTransforms } from '../rooms/templates/create-transforms';
 import { describeCaveRegion } from './describe-cave-region';
 import { findCaveRegions } from './find-cave-regions';
-import { Grid } from '../core/grid';
 import type { Point } from '../core/point';
 import { randomInt } from '../core/random-int';
 import { resolveRandom } from '../core/resolve-random';
@@ -21,6 +23,9 @@ const DEFAULT_LIMITS: Record<
   moore: { birthLimit: 5, survivalLimit: 4 },
   'von-neumann': { birthLimit: 3, survivalLimit: 2 },
 };
+
+/** How many times in a row an exit may fail, when it is left out for lack of room or for being crowded, before the generator stops trying. */
+const EXIT_ATTEMPTS = 10;
 
 /**
  * Generates a cave with a cellular automaton: the map starts as random noise
@@ -41,6 +46,9 @@ export function generateCave(options: CaveOptions): CaveResult {
     tunnelWidth = 1,
     tunnelWindiness = 0.5,
     tunnelLoops = 0,
+    tunnelSymmetryChance = 1,
+    layoutSymmetry = 'none',
+    layoutSymmetryChance = 1,
     minExits = 0,
   } = options;
   const {
@@ -57,20 +65,22 @@ export function generateCave(options: CaveOptions): CaveResult {
   assertWholeNumber('tunnelWidth', tunnelWidth, 1);
   assertFraction('tunnelWindiness', tunnelWindiness);
   assertFraction('tunnelLoops', tunnelLoops);
+  assertFraction('tunnelSymmetryChance', tunnelSymmetryChance);
+  assertLayoutSymmetry('layoutSymmetry', layoutSymmetry);
+  assertFraction('layoutSymmetryChance', layoutSymmetryChance);
   assertWholeNumber('minExits', minExits, 0);
   const maxExits = Math.max(minExits, options.maxExits ?? minExits);
   assertWholeNumber('maxExits', maxExits, 0);
   const random = resolveRandom(options.random);
 
-  let grid = new Grid(width, height);
-  for (let y = 0; y < height; ++y) {
-    for (let x = 0; x < width; ++x) {
-      const isBorder =
-        x === 0 || y === 0 || x === width - 1 || y === height - 1;
-      const isWall = (borderWalls && isBorder) || random() < fillChance;
-      grid.set(x, y, isWall ? Tile.Wall : Tile.Floor);
-    }
-  }
+  let grid = createCaveNoise(random, {
+    width,
+    height,
+    fillChance,
+    borderWalls,
+    symmetry: layoutSymmetry,
+    symmetryChance: layoutSymmetryChance,
+  });
   const rules = { birthLimit, survivalLimit, neighborhood, borderWalls };
   for (let i = 0; i < iterations; ++i) {
     grid = smoothCave(grid, rules);
@@ -84,25 +94,32 @@ export function generateCave(options: CaveOptions): CaveResult {
     }
   });
   if (connect === 'tunnel') {
-    connectCaves(
-      grid,
-      random,
-      {
+    connectCaves(grid, random, {
+      tunnel: {
         style: tunnelStyle,
         width: tunnelWidth,
         windiness: tunnelWindiness,
         borderWalls,
       },
-      tunnelLoops,
-    );
+      loops: tunnelLoops,
+      symmetry: layoutSymmetry,
+      symmetryChance: tunnelSymmetryChance,
+    });
   }
 
   const exits: Point[] = [];
-  for (let i = randomInt(random, minExits, maxExits); i > 0; --i) {
-    const exit = carveCaveExit(grid, random, exits);
-    if (exit) {
-      exits.push(exit);
+  const wanted = randomInt(random, minExits, maxExits);
+  const images = createTransforms(layoutSymmetry, width, height, false);
+  for (let misses = 0; exits.length < wanted && misses < EXIT_ATTEMPTS;) {
+    const made = carveCaveExit(grid, random, exits, {
+      images,
+      chance: layoutSymmetryChance,
+      room: wanted - exits.length,
+    });
+    if (made.length === 0) {
+      ++misses;
     }
+    exits.push(...made);
   }
 
   return {

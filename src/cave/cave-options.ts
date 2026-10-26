@@ -1,4 +1,5 @@
 import type { BaseOptions } from '../core/base-options';
+import type { LayoutSymmetry } from '../core/layout-symmetry';
 
 /**
  * Which tiles count as neighbors: `moore` is the 8 tiles around a tile,
@@ -41,6 +42,12 @@ export interface CaveOptions extends BaseOptions {
   tunnelWindiness?: number;
   /** The chance, from 0 to 1, of an extra tunnel at every place where one would make a loop, a shortcut between neighboring caverns that are joined only by a long way round. Applies to `connect: 'tunnel'` only. Defaults to 0, which makes no loops. */
   tunnelLoops?: number;
+  /** Mirrors or rotates the starting noise about the center of the map, which makes the cave symmetric: `horizontal` (left to right), `vertical` (top to bottom), `both` or `rotational` (by 180°). Defaults to `none`. */
+  layoutSymmetry?: LayoutSymmetry;
+  /** How often a tile of the starting noise copies its twin, from 0 (never, so the noise is plain random) to 1 (always, which makes the cave perfectly symmetric). Defaults to 1. */
+  layoutSymmetryChance?: number;
+  /** How often a tunnel, including the tunnels of `tunnelLoops`, has twins that follow `layoutSymmetry`, from 0 (never) to 1 (always, which keeps a perfectly symmetric cave perfectly symmetric). It is rolled for every tunnel, and applies to `connect: 'tunnel'` with a `layoutSymmetry` only. Defaults to 1. */
+  tunnelSymmetryChance?: number;
   /** Minimum number of exits to add on the map border. Defaults to 0. */
   minExits?: number;
   /** Maximum number of exits to add. Defaults to `minExits`. */

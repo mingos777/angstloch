@@ -1,5 +1,10 @@
 import { generateCave } from '../src';
-import type { CaveConnect, CaveNeighborhood, CaveTunnelStyle } from '../src';
+import type {
+  CaveConnect,
+  CaveNeighborhood,
+  CaveTunnelStyle,
+  LayoutSymmetry,
+} from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
 import { drawGrid } from './draw-grid';
@@ -40,6 +45,9 @@ function render(): void {
       tunnelWidth: value('tunnelWidth'),
       tunnelWindiness: value('tunnelWindiness'),
       tunnelLoops: value('tunnelLoops'),
+      layoutSymmetry: data.get('layoutSymmetry') as LayoutSymmetry,
+      layoutSymmetryChance: value('layoutSymmetryChance'),
+      tunnelSymmetryChance: value('tunnelSymmetryChance'),
       minExits: value('minExits'),
       maxExits: value('maxExits'),
     });

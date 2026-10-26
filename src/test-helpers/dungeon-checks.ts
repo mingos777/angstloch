@@ -1,4 +1,4 @@
-import type { LayoutSymmetry } from '../rooms/layout-symmetry';
+import type { LayoutSymmetry } from '../core/layout-symmetry';
 import type { DungeonResult } from '../dungeon/dungeon-result';
 import type { Grid } from '../core/grid';
 import type { Point } from '../core/point';

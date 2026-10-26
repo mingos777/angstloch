@@ -25,7 +25,7 @@ export { generateDigDungeon } from './dungeon/generate-dig-dungeon';
 export { generateMaze } from './maze/generate-maze';
 export { generateRoomDungeon } from './dungeon/generate-room-dungeon';
 export { Grid } from './core/grid';
-export type { LayoutSymmetry } from './rooms/layout-symmetry';
+export type { LayoutSymmetry } from './core/layout-symmetry';
 export type { MazeOptions, MazeSymmetry } from './maze/maze-options';
 export type { MazeResult } from './maze/maze-result';
 export type { MazeRoomOptions } from './maze/maze-room-options';
