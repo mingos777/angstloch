@@ -8,7 +8,7 @@ Implemented, documented and reviewed:
 
 - **Mazes**: recursive backtracker, bias, loops, symmetry (whirlpool, snowflake), exits, ordinary rooms and templated rooms inside mazes.
 - **Dungeons**: room-first (`generateRoomDungeon`, with `partition: 'scatter' | 'bsp'`) and the digger (`generateDigDungeon`), layout and corridor symmetry, room templates (rotations, mirroring, exits, doors).
-- **Caves** (`generateCave`): cellular automaton, regions, tunnels between caverns (`connect`), exits.
+- **Caves** (`generateCave`): cellular automaton, regions, tunnels between caverns (`connect`) with optional loops (`tunnelLoops`), exits.
 - **Noise** (`createSimplexNoise`, `createFractalNoise`, `transformNoise`): public building blocks, no dependencies. It stays in this package; extracting it into a separate library was considered and rejected (the forest needs a default noise, and the code is small and isolated in `src/noise/`).
 - **Forests** (`generateForest`): noise-driven tree density, roads with crossings and branches, `clearance`, `Tile.Grass`, `Tile.Tree`, `Tile.Road`.
 
@@ -39,7 +39,6 @@ Roughly in the order the user wants them. Each needs a design talk before it is 
 - **Rooms and templates inside caves**, like [rooms in mazes](#mazes-and-rooms): rectangular rooms and `RoomTemplate`s placed in the cave, joined to the caverns. The cave regions and tunnels are there to build on.
 - **Symmetric caves.** Roguelikes like an unnatural look. Reuse the layout symmetry of dungeons (`horizontal`, `vertical`, `both`, `rotational`).
 - **Noise caverns**: a cave made by thresholding noise (`src/noise/`) instead of running the automaton. Connectivity, regions and exits from the cave generator should carry over, and may have to move into a shared directory.
-- `tunnelLoops` (0 to 1): extra tunnels between caverns, like `loopChance` in mazes.
 - **Water and lava**: needs new `Tile` values and a rule that keeps lakes from cutting the map in two. Much later.
 
 ### Forests and roads
