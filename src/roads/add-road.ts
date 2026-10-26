@@ -12,7 +12,8 @@ import { stampRoad } from './stamp-road';
  * of them.
  */
 export function addRoad(map: RoadMap, spec: RoadSpec): Road {
-  const { mapWidth, mapHeight, windiness, noise, roads } = map;
+  const { mapWidth, mapHeight, noise, roads } = map;
+  const windiness = spec.windiness ?? map.windiness;
   const index = roads.length;
   const grow = (direction: 1 | -1) =>
     growCenterline({

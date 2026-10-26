@@ -451,6 +451,39 @@ Crossings are laid first and branches after them. A place on a road is chosen at
 
 The result lists every road, in the order they were laid: the main road, then the crossings (all of kind `'road'`), then the branches (kind `'branch'`). `junctions` lists the places where roads meet, and not only the ones that were planned: wherever the centerlines of two roads touch, that is a junction too, and where two roads share a stretch of tiles it counts as one junction, at the first of them. `exits` lists the places where roads reach the border. A branch that ends in the forest has no exit. An invalid range or an angle outside 1 to 179 throws a `RangeError`.
 
+#### Exact roads
+
+For full control, `specs` lists the roads one by one. When it is given, it replaces the generated network: `angle`, `width`, `crossings`, `crossingAngle`, `branches`, `branchWidth`, `branchAngle` and `branchLength` are ignored, and `windiness` is only the default of the entries. An empty list lays no roads. The roads are laid in the order of the list, and the result lists them in that order.
+
+```ts
+const { grid, roads } = generateForest({
+  width: 100,
+  height: 70,
+  roads: {
+    specs: [
+      { origin: { x: 50, y: 35 }, angle: 0, width: 3 }, // 0: the main road
+      { parent: 0, at: 0.3, angle: 90 }, // 1: a crossing at 30% of the main road
+      { kind: 'branch', parent: 1, at: 0.7, length: 20 }, // 2: a branch off the crossing
+      { kind: 'branch', origin: { x: 5, y: 5 }, to: { x: 40, y: 30 } }, // 3: a path between two points
+    ],
+  },
+});
+```
+
+| Entry field | Default                                | Meaning                                                                                                                         |
+| ----------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`      | `'road'`                               | A `'road'` passes through its start in both directions. A `'branch'` leaves it in one.                                          |
+| `width`     | 3 for a road, 1 for a branch           | Width in tiles, a whole number, 1 or more.                                                                                      |
+| `windiness` | `windiness` of the road options        | How much this road winds, from 0 to 1.                                                                                          |
+| `parent`    | none                                   | The index of an earlier entry. The road starts at a tile of that road, and the two make a junction.                             |
+| `at`        | 0.5                                    | Where along the parent the road starts, from 0 (its first tile) to 1 (its last).                                                |
+| `origin`    | a random point near the middle         | Where a free-standing road starts or passes, in tiles. Ignored with a `parent`.                                                 |
+| `angle`     | random, or a right angle to the parent | Direction in degrees, clockwise from east. Ignored with `to`.                                                                   |
+| `length`    | to the edge                            | The most tiles a branch runs. Ignored with `to`.                                                                                |
+| `to`        | none                                   | Where the road ends, in tiles. The road then runs from its start to this point and ends there. Needs an `origin` or a `parent`. |
+
+Placement is best effort and never an error: an `origin` or `to` outside the map is moved onto it, a road runs only as far as the map goes, and a winding road strays a little from its straight line. A `parent` that is not the index of an earlier entry, a `width` or `length` that is not a whole number of at least 1, a `windiness` or `at` outside 0 to 1, an angle or point that is not finite, an unknown `kind`, or a `to` with neither an `origin` nor a `parent` throws a `RangeError`.
+
 ### `ForestOptions`
 
 | Option            | Default       | Meaning                                                                                                                                                                  |

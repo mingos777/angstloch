@@ -1,6 +1,7 @@
 import { assertFraction } from '../core/assert-fraction';
 import { assertRange } from '../core/assert-range';
 import type { Range } from '../core/range';
+import { assertRoadEntries } from './assert-road-entries';
 import type { RoadOptions } from './road-options';
 
 /** Throws a `RangeError` unless the range is whole degrees from 1 to 179. */
@@ -23,6 +24,9 @@ export function assertRoadOptions(options: RoadOptions): void {
   }
   if (windiness !== undefined) {
     assertFraction('roads.windiness', windiness);
+  }
+  if (options.specs) {
+    assertRoadEntries(options.specs);
   }
   for (const [name, range] of [
     ['roads.width', options.width],

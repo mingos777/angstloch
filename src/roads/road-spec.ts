@@ -14,4 +14,6 @@ export interface RoadSpec {
   directions: readonly (1 | -1)[];
   /** Stops a road that leaves the origin after this many tiles. Without it the road runs until it leaves the map. */
   maxLength?: number;
+  /** How much the road winds, from 0 (straight) to 1. Defaults to the windiness of the road map. */
+  windiness?: number;
 }

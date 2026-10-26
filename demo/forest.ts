@@ -1,5 +1,5 @@
 import { generateForest, Tile } from '../src';
-import type { ClearingSpec, DistanceMetric } from '../src';
+import type { ClearingSpec, DistanceMetric, RoadEntry } from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
 import { drawGrid } from './draw-grid';
@@ -105,6 +105,10 @@ function render(): void {
                   min: value('branchLengthMin'),
                   max: value('branchLengthMax'),
                 }
+              : undefined,
+            // exact roads replace the generated network, as the library says
+            specs: data.has('exactRoads')
+              ? (JSON.parse(data.get('roadSpecs') as string) as RoadEntry[])
               : undefined,
           }
         : undefined,

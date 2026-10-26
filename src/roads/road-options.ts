@@ -1,4 +1,5 @@
 import type { Range } from '../core/range';
+import type { RoadEntry } from './road-entry';
 
 /** Options of the roads of a map. */
 export interface RoadOptions {
@@ -20,4 +21,6 @@ export interface RoadOptions {
   branchAngle?: Range;
   /** The length of a branch in tiles, as a `Range` of whole numbers of at least 1. A branch that is not long enough to reach the edge of the map ends in the forest. Without it a branch runs to the edge. */
   branchLength?: Range;
+  /** Exact roads to lay, in place of the generated network: when given, `angle`, `width`, `crossings`, `crossingAngle`, `branches`, `branchWidth`, `branchAngle` and `branchLength` are ignored (`windiness` stays the default of the entries). An empty list lays no roads. Placement is best effort: a road that cannot be laid as asked is bent or cut short. */
+  specs?: RoadEntry[];
 }

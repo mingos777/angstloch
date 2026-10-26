@@ -611,6 +611,81 @@ describe('generateForest', () => {
     }
   });
 
+  it('reports the roads of specs in the order of the list', () => {
+    // given
+    const options = {
+      roads: {
+        windiness: 0,
+        specs: [
+          { origin: { x: 40, y: 30 }, angle: 0 },
+          { kind: 'branch' as const, parent: 0, angle: 90, length: 10 },
+        ],
+      },
+    };
+
+    // when
+    const { roads, junctions } = forest(options);
+
+    // then
+    expect(roads.map((road) => road.kind)).toEqual(['road', 'branch']);
+    expect(junctions.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('lays no generated roads when specs are given', () => {
+    // given
+    const options = {
+      roads: { crossings: { min: 3, max: 3 }, specs: [{}] },
+    };
+
+    // when
+    const { roads } = forest(options);
+
+    // then
+    expect(roads).toHaveLength(1);
+  });
+
+  it('puts no trees on the roads of specs', () => {
+    // given
+    const options = {
+      roads: { specs: [{}, { parent: 0 }] },
+      minDensity: 1,
+      maxDensity: 1,
+    };
+
+    // when
+    const { grid, roads } = forest(options);
+
+    // then
+    expect(roads).toHaveLength(2);
+    for (const road of roads) {
+      for (const { x, y } of road.points) {
+        expect(grid.get(x, y)).toBe(Tile.Road);
+      }
+    }
+  });
+
+  it('reports an exit where a road of specs leaves the map', () => {
+    // given
+    const options = {
+      roads: { windiness: 0, specs: [{ origin: { x: 40, y: 30 }, angle: 0 }] },
+    };
+
+    // when
+    const { exits } = forest(options);
+
+    // then
+    expect(exits).toHaveLength(2);
+  });
+
+  it('rejects invalid specs', () => {
+    // given
+    const generate = () => forest({ roads: { specs: [{ parent: 0 }] } });
+
+    // when / then
+    expect(generate).toThrow(RangeError);
+    expect(generate).toThrow('roads.specs[0].parent');
+  });
+
   it('reports no junctions for a single road', () => {
     // given
     const options = { roads: {} };

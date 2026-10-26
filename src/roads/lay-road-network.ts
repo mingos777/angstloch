@@ -2,6 +2,7 @@ import type { Random } from '../core/random';
 import { randomInt } from '../core/random-int';
 import { addRoad } from './add-road';
 import { findAttachPoint } from './find-attach-point';
+import { layRoadEntries } from './lay-road-entries';
 import type { RoadMap } from './road-map';
 import type { RoadOptions } from './road-options';
 
@@ -11,13 +12,18 @@ const radians = (degrees: number) => (degrees * Math.PI) / 180;
  * Lays the roads of the options on the road map. The main road runs from one
  * border to the opposite one through a point near the middle of the map.
  * Crossings and then branches are attached to the roads that are there. The
- * options must be valid, and `windiness` is the one of the map.
+ * options must be valid, and `windiness` is the one of the map. When the
+ * options have `specs`, those roads are laid instead.
  */
 export function layRoadNetwork(
   map: RoadMap,
   random: Random,
   options: RoadOptions,
 ): void {
+  if (options.specs) {
+    layRoadEntries(map, random, options.specs);
+    return;
+  }
   const { mapWidth, mapHeight } = map;
   const {
     angle = 'random',

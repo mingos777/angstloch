@@ -19,6 +19,7 @@ export type { Road } from './roads/road';
 export type { RoadKind } from './roads/road-kind';
 export type { DistanceMetric } from './roads/distance-metric';
 export type { RoadOptions } from './roads/road-options';
+export type { RoadEntry } from './roads/road-entry';
 export type { Clearing } from './forest/clearing';
 export type { ClearingPathOptions } from './forest/clearing-path-options';
 export type { ClearingSpec } from './forest/clearing-spec';

@@ -7,28 +7,21 @@ Notes for picking the project up in a fresh session, on any computer. The rules 
 Implemented, documented and reviewed:
 
 - **Mazes**: recursive backtracker, bias, loops, symmetry (whirlpool, snowflake), exits, ordinary rooms and templated rooms inside mazes.
-- **Dungeons**: room-first (`generateRoomDungeon`, with `partition: 'scatter' | 'bsp'`) and the digger (`generateDigDungeon`), layout and corridor symmetry, room templates (rotations, mirroring, exits, doors).
+- **Dungeons**: room-first (`generateRoomDungeon`, with `partition: 'scatter' | 'bsp'` and `connection: 'nearest' | 'bsp' | 'bsp-random'`) and the digger (`generateDigDungeon`), layout and corridor symmetry, room templates (rotations, mirroring, exits, doors).
 - **Caves** (`generateCave`): cellular automaton, regions, tunnels between caverns (`connect`) with optional loops (`tunnelLoops`), exits, layout symmetry (`layoutSymmetry`, with its own chances for the noise and for tunnels).
 - **Noise** (`createSimplexNoise`, `createFractalNoise`, `transformNoise`): public building blocks, no dependencies. It stays in this package; extracting it into a separate library was considered and rejected (the forest needs a default noise, and the code is small and isolated in `src/noise/`).
-- **Forests** (`generateForest`): noise-driven tree density, roads with crossings and branches, `clearance`, `Tile.Grass`, `Tile.Tree`, `Tile.Road`, and clearings, with optional paths to them.
+- **Forests** (`generateForest`): noise-driven tree density, roads with crossings and branches, exact roads from a `specs` list, `clearance`, `falloff` and `distance`, `Tile.Grass`, `Tile.Tree`, `Tile.Road`, and clearings, with optional paths to them.
 
 The tile values are part of the public contract and never change: `Wall` 0, `Floor` 1, `Door` 2, `Grass` 3, `Tree` 4, `Road` 5.
 
 The source layout and its import rule (imports only point down: `core`, then `rooms` and `noise`, then `roads`, then the generators) are in `CLAUDE.md`.
 
-## Next up
+## Design decisions worth keeping
 
-### BSP corridors
-
-`partition: 'bsp'` already places rooms by binary space partitioning, but rooms are then joined shortest link first, as a tree (`connectAll` in `src/dungeon/dungeon-builder.ts`). The classic BSP dungeon joins the two halves of every cut instead. Design agreed, not implemented yet:
-
-- A new option on `RoomDungeonOptions`, `connection: 'nearest' | 'bsp'`, default `'nearest'` (today's behavior). The digger does not join pre-placed rooms, so it does not get the option.
-- With `'bsp'`, the rooms are split in two by a vertical or horizontal cut, recursively, and every cut gets one corridor, joining the closest pair of rooms across it. Cuts are processed from the smallest groups up, so rooms join into small clusters first and the clusters are then joined. The result is a tree, like today.
-- The cuts are derived from room positions, not from the real partition tree: each group of rooms is split along the axis where the room centers are most spread out, at the median. The outcome is the same as using the real tree, it needs no change to the partition code, and it works with every placement, templates and symmetry.
-- Across a cut, the closest pair of rooms is tried first. If that corridor is blocked, the next-closest pair is tried, and if every pair is blocked, the existing recovery for stranded rooms applies. A random pair across the cut (as in the textbook algorithm) could be a later variant. Loops, dead ends and exits per room are unchanged and come after the tree.
-- Symmetry: the builder already mirrors every link, so only the order in which pairs are tried changes. Verify with a symmetric test.
-- Task split: 1) a pure function that turns a list of rooms into the ordered cuts (groups of candidate pairs per cut), with tests; 2) the option, wired into `connectAll`, with fallback and symmetry tests; 3) README (the Connections section) and the dungeon playground (a Connection select for the room-first generator).
-- Progress: task 1 is done. `planBspLinks(rooms)` in `src/dungeon/plan-bsp-links.ts` returns the groups of candidate links per cut (children first, closest pair first, the room of the first half as `a`), `RoomLink` is in `room-link.ts`, and `distanceBetween` moved out of the builder into `distance-between.ts`. Task 2 is done: `RoomDungeonOptions.connection` (`RoomConnection`, validated by `assert-connection.ts`) is passed to the builder, and `connectAll` first builds one corridor per BSP cut (the first link of a cut that can be built, skipping cuts whose sides are joined already) and then runs the usual nearest-first pass as the fallback. Note that corridors may cross, so a tree-shaped dungeon can still have a cycle from a crossing, and rooms asking for more exits than 1 add links, so default dungeons have cycles whatever the connection. Task 3 is done too: the README's Connections section, the `connection` option tables and the playground's Connection select. The feature is complete. A fourth step was added at the user's request: `connection: 'bsp-random'` joins a random room on each side of a cut (the textbook algorithm), via an optional `random` argument of `planBspLinks` and the new `shuffle` helper in `core/`.
+- **Forest `clearance` and `falloff` stay separate.** The first version of `clearance` thinned the tree chance gradually, and the user wanted a clear zone. So `clearance` is a hard strip, and `falloff` is a separate soft ramp beyond it.
+- **Clearings are placed, never found in the density map**, so one is guaranteed. Plain discs were rejected, the user wants irregular shapes (domain warping with a flood fill). Radii are approximate, since the ragged edge varies the real size by up to about 40%. A clearing that finds no room is dropped, with no relaxing, since there is no minimum count (a minimum count would be the case for relaxing).
+- **Exact roads (`roads.specs`) replace the generated network** rather than adding to it, and placement is best effort: geometry is clamped or cut short, and only a bad parent index and similar mistakes throw.
+- **BSP corridors** are derived from room positions (a median split along the most spread axis), not from the real partition tree, so they work with every placement, templates and symmetry.
 
 ## Backlog
 
@@ -44,20 +37,8 @@ Roughly in the order the user wants them. Each needs a design talk before it is 
 
 All of this is optional follow-up to the finished forest.
 
-- **A soft falloff beside roads.** `clearance` is a hard strip with no trees. A separate option thins the trees out beyond it. (The first version of `clearance` thinned the chance gradually, and the user wanted a clear zone, so keep the two apart.) Design agreed, in progress:
-  - `falloff`: a whole number of tiles, default 0. Past the clear strip, the tree chance is multiplied by `(d - clearance) / (falloff + 1)`, capped at 1, where `d` is the distance to the nearest road tile. Linear, no curve option. Independent of `clearance`: either works without the other. Does nothing without roads.
-  - `distance: 'chebyshev' | 'manhattan' | 'euclidean'`, default `'chebyshev'` (today's square clearance), measures both `clearance` and `falloff`. The option exists even when `falloff` is 0, since it shapes `clearance`. Euclidean is measured between tile centers, so the ramp is continuous.
-  - Each road tile stamps the square of radius `clearance + falloff + 1` and tiles keep the smallest distance (`roadDistance`, which replaced `roadClearing`).
-  - Tasks: 1) `roadDistance` with the three metrics (done); 2) `falloff` and `distance` in `generateForest`, with tests and README (done); 3) playground controls (done). The feature is complete.
-- **Clearings** (done): glades with ragged edges, free of trees. Documented in the README (Clearings, Paths to clearings). What exists and why:
-  - `ForestOptions.clearings` is a list of `ClearingSpec` (`x`/`y` together or both left out for random placement, `radiusX`, `radiusY`, `angle`, `irregularity` 0.5, `roadDistance` `{ min: 8, max: 25 }`, `path`), `clearingSpacing` (default 0), and `ForestResult.clearings` reports `{ x, y, radiusX, radiusY, angle }`.
-  - Clearings are placed, never found in the density map, so one is guaranteed. Plain discs were rejected, the user wants irregular shapes. The shape is domain warping (two noise samples shift each tile before its distance to the center is measured) with a 4-connected flood fill from the center, so there are no detached specks. The oval comes from the caller's radii and angle; the random anisotropy stretch that was planned for automatic clearings was not built, since random clearings take their radii from the spec too. Radii are approximate: the ragged edge varies the real size by up to about 40%.
-  - The noise is a separate simplex instance seeded from `random`, with its own offset per clearing, used only when clearings exist, so forests without them are unchanged. The edge feeds the forest's `falloff` and `distance` via `roadDistance` on the clearing mask. `clearance` is about roads only.
-  - Random placement: after the clearings with a center, inside the map, apart from earlier clearings by their larger radii plus `clearingSpacing`, and within `roadDistance` of a road when there are roads. A clearing that finds no room is dropped, no relaxing, since there is no minimum count. A minimum count would be the case for relaxing the distance.
-  - Paths: `path: true | { width: 1, windiness: 0.3 }`, off by default, a `'branch'` in `roads` from the nearest road centerline tile (or the nearest border tile without roads, which makes an exit) to the clearing center. `growPinnedLine`, `addPath` and `stampRoad` in `src/roads/` fix both ends of a path, so the same code can end a road in a clearing. `layRoads` was split into `createRoadMap`, `layRoadNetwork` and `collectLaidRoads` so the forest can lay paths with or without the `roads` option.
-  - Not built: placing a clearing at the end of an existing branch automatically (the "road that ends in a clearing" case; the path code allows it), and a found-glade mode.
 - **Glades and pools**, depending on the clearing code: natural openings in the forest, such as a drained lake bed or a pond, made from the clearing shapes. Pools need a water tile (see Water and lava) and a rule that keeps them from cutting the map in two. A found-glade mode (detecting the openings that the noise already leaves) belongs here. Needs a design talk.
-- **A caller-supplied list of road specs** (angle, width, windiness per road) for callers who want exact control.
+- **A road that ends in a clearing**: placing a clearing at the end of an existing branch automatically (`addPath` allows it).
 - **Forest connectivity and regions.** Left out on purpose until the user has seen what forests come out. If wanted, the cave's region and tunnel code would move into a shared directory, with `connect` defaulting to `'none'`, since forests are usually see-through.
 - **Clearings with templates**, to put a ruin or a camp in a glade.
 - **Roads in other generators**: the `src/roads/` module (`layRoads`) is meant to be reused by the village and the town. `RoadNetwork` is currently internal; export it when a generator needs it.
