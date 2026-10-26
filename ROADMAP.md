@@ -31,7 +31,17 @@ Roughly in the order the user wants them. Each needs a design talk before it is 
 ### Caves
 
 - **Rooms and templates inside caves**, like [rooms in mazes](#mazes-and-rooms): rectangular rooms and `RoomTemplate`s placed in the cave, joined to the caverns. The cave regions and tunnels are there to build on.
-- **Noise caverns**: a cave made by thresholding noise (`src/noise/`) instead of running the automaton. Connectivity, regions and exits from the cave generator should carry over, and may have to move into a shared directory.
+- **Noise caverns** (designed, not built): a cave made by thresholding noise (`src/noise/`) instead of running the automaton. Decisions:
+  - A separate generator, `generateNoiseCave`, with its own `NoiseCaveOptions`, as the two dungeon generators are separate. Not a `mode` on `generateCave`, since the automaton and noise fields would each be dead in the other mode.
+  - The second half of `generateCave` (filling small regions, `connect`, exits, region description) is extracted into a function in `cave/`, and the connection options (`minRegionSize`, `connect`, `tunnel*`, `layoutSymmetry*`, `minExits`, `maxExits`) into an interface that both option types extend. `CaveOptions` does not change for callers. Nothing moves out of `cave/`.
+  - `fill` is a proportion of walls from 0 to 1 (default about 0.45), applied as a quantile: every tile is sampled and the threshold is chosen so that about that share are walls. This keeps `fill` predictable whatever the scale, octaves or custom noise. A raw `threshold` could be added later.
+  - Noise options as in the forest (`scaleX`, `scaleY`, `rotation`, `octaves`, `persistence`, `lacunarity`, `noise`), with defaults suited to caves: smaller features (about 12 tiles) and 3 octaves for ragged edges. The caller stretches blobs with the scales and rotation. These defaults are a first guess, to be tuned in the playground.
+  - An optional smoothing pass (`iterations`, reusing `smoothCave`), defaulting to 0 for now.
+  - Layout symmetry: each tile samples the noise at its canonical twin (the lowest-index mirror image, as in `createCaveNoise`) with chance `layoutSymmetryChance`, and at its own position otherwise. The quantile is taken after that substitution.
+  - `borderWalls` stays as it is: the outer ring is forced to wall.
+  - Task split: (1) extract the shared half, a pure refactor; (2) `generateNoiseCave` with tests, README and public export; (3) the playground gets a cave type switch with the noise controls.
+  - `shape: 'blobs' | 'veins'` (default `blobs`), part of this feature. `blobs` makes floor of the low (or high) part of the noise. `veins` makes floor of the tiles nearest the noise's midpoint, so the floor follows its zero crossings: a network of winding corridors instead of caverns. It takes the absolute value of the noise before the quantile step, so `fill` still sets the share of walls (a higher `fill` makes thinner veins). Symmetry and everything after the noise work the same for both. It overlaps with the mines idea.
+  - Task 2 therefore also covers `shape`, with tests and README for both shapes, and the playground (task 3) gets a shape switch.
 - **Water and lava**: needs new `Tile` values and a rule that keeps lakes from cutting the map in two. Much later.
 
 ### Forests and roads

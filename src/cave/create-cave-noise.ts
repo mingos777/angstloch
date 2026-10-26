@@ -1,4 +1,5 @@
 import { createTransforms } from '../rooms/templates/create-transforms';
+import { findCaveTwin } from './find-cave-twin';
 import { Grid } from '../core/grid';
 import type { LayoutSymmetry } from '../core/layout-symmetry';
 import type { Random } from '../core/random';
@@ -41,13 +42,7 @@ export function createCaveNoise(
         grid.set(x, y, Tile.Wall);
         continue;
       }
-      let source = { x, y };
-      for (const { point } of images) {
-        const image = point({ x, y });
-        if (image.y * width + image.x < source.y * width + source.x) {
-          source = image;
-        }
-      }
+      const source = findCaveTwin(images, { x, y }, width);
       const copies =
         (source.x !== x || source.y !== y) && random() < symmetryChance;
       const isWall = copies

@@ -25,7 +25,14 @@
         >Tile size <input name="tileSize" type="number" value="12" min="1"
       /></label>
       <label
-        >Fill chance
+        >Generator
+        <select name="generator">
+          <option value="automaton">automaton</option>
+          <option value="noise">noise</option>
+        </select>
+      </label>
+      <label
+        >Fill chance (automaton)
         <input
           name="fillChance"
           type="number"
@@ -35,23 +42,78 @@
           step="0.01"
       /></label>
       <label
-        >Iterations <input name="iterations" type="number" value="4" min="0"
+        >Iterations (automaton)
+        <input name="iterations" type="number" value="4" min="0"
       /></label>
       <label
-        >Birth limit
+        >Birth limit (automaton)
         <input name="birthLimit" type="number" placeholder="auto" min="0"
       /></label>
       <label
-        >Survival limit
+        >Survival limit (automaton)
         <input name="survivalLimit" type="number" placeholder="auto" min="0"
       /></label>
       <label
-        >Neighborhood
+        >Neighborhood (automaton)
         <select name="neighborhood">
           <option value="moore">moore (8)</option>
           <option value="von-neumann">von-neumann (4)</option>
         </select>
       </label>
+      <label
+        >Shape (noise)
+        <select name="shape">
+          <option value="blobs">blobs</option>
+          <option value="veins">veins</option>
+        </select>
+      </label>
+      <label
+        >Fill (noise)
+        <input
+          name="fill"
+          type="number"
+          value="0.45"
+          min="0"
+          max="1"
+          step="0.01"
+      /></label>
+      <label
+        >Corner bias (noise)
+        <input name="cornerBias" type="number" value="4" min="0"
+      /></label>
+      <label
+        >Scale X (noise)
+        <input name="scaleX" type="number" value="12" min="0.1" step="0.5"
+      /></label>
+      <label
+        >Scale Y (noise)
+        <input name="scaleY" type="number" value="12" min="0.1" step="0.5"
+      /></label>
+      <label
+        >Rotation (noise)
+        <input name="rotation" type="number" value="0" step="5"
+      /></label>
+      <label
+        >Octaves (noise) <input name="octaves" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Persistence (noise)
+        <input
+          name="persistence"
+          type="number"
+          value="0.5"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Lacunarity (noise)
+        <input name="lacunarity" type="number" value="2" min="0.1" step="0.1"
+      /></label>
+      <label
+        >Smoothing passes (noise)
+        <input name="noiseIterations" type="number" value="0" min="0"
+      /></label>
       <label
         >Min region size
         <input name="minRegionSize" type="number" value="0" min="0"

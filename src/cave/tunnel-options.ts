@@ -1,4 +1,4 @@
-import type { CaveTunnelStyle } from './cave-options';
+import type { CaveTunnelStyle } from './cave-connection-options';
 
 /** The settings that shape the tunnels between caverns. */
 export interface TunnelOptions {

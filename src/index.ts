@@ -3,10 +3,14 @@ export type { Area } from './core/area';
 export type { BaseOptions } from './core/base-options';
 export type {
   CaveConnect,
-  CaveNeighborhood,
-  CaveOptions,
+  CaveConnectionOptions,
   CaveTunnelStyle,
-} from './cave/cave-options';
+} from './cave/cave-connection-options';
+export type { CaveNeighborhood, CaveOptions } from './cave/cave-options';
+export type {
+  NoiseCaveOptions,
+  NoiseCaveShape,
+} from './cave/noise-cave-options';
 export type { CaveRegion } from './cave/cave-region';
 export type { CaveResult } from './cave/cave-result';
 export type { CorridorSymmetry } from './rooms/corridor-symmetry';
@@ -15,6 +19,7 @@ export type { DungeonOptions, Placement } from './rooms/dungeon-options';
 export type { DungeonResult } from './dungeon/dungeon-result';
 export type { Exit } from './rooms/exit';
 export { generateCave } from './cave/generate-cave';
+export { generateNoiseCave } from './cave/generate-noise-cave';
 export type { Road } from './roads/road';
 export type { RoadKind } from './roads/road-kind';
 export type { DistanceMetric } from './roads/distance-metric';

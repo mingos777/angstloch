@@ -6,6 +6,7 @@ Currently available:
 
 - [`generateMaze`](#mazes): perfect and braid mazes.
 - [`generateCave`](#caves): organic caves, grown with a cellular automaton.
+- [`generateNoiseCave`](#noise-caves): caves cut out of noise, as rounded caverns or winding corridors.
 - [`createSimplexNoise`](#noise): smooth 2D noise that can be stretched and turned, for terrain-like maps. Forests are built on it.
 - [`generateForest`](#forests): forests of scattered trees with clearings and denser stands, from noise, with roads, crossroads and paths through them.
 - [`generateRoomDungeon`](#dungeons): room-first dungeons: rooms are placed first and joined by corridors afterwards.
@@ -288,6 +289,70 @@ const { grid, regions } = generateCave({
 });
 const spawn = regions[0]?.center;
 ```
+
+### Noise caves
+
+```ts
+import { generateNoiseCave } from 'angstloch';
+
+const { grid, regions } = generateNoiseCave({ width: 60, height: 30 });
+const { grid: tunnels } = generateNoiseCave({
+  width: 60,
+  height: 30,
+  shape: 'veins',
+  fill: 0.8,
+});
+```
+
+`generateNoiseCave` makes a cave from [noise](#noise) instead of an automaton. Every tile gets a score from the noise at its center, and the tiles with the lowest scores become walls. The result goes through the same steps as the automaton's: `minRegionSize`, `connect`, exits, symmetry and `borderWalls` all work as described above, take the same values and have the same defaults, and it returns the same `CaveResult`. Only the way the starting map is made differs.
+
+`fill` is the share of the tiles that become wall, from 0 to 1. It is not a chance per tile, and not a threshold of the noise: the generator looks at the noise of all the tiles and picks the threshold that gives that share, so `fill: 0.45` gives about 45% wall (to within a tile) whatever the scales, the octaves or the noise. With `borderWalls`, the outer ring is walled on top of that, and `fill` counts the inner tiles only.
+
+`shape` says which part of the noise becomes floor:
+
+- `'blobs'` (the default) makes floor of the high part of the noise, which gives rounded caverns with ragged edges.
+- `'veins'` makes floor of the part nearest the midpoint of the noise, so the floor follows the places where the noise crosses 0. That gives a network of winding corridors of about even width, with junctions and dead ends, instead of caverns. `fill` still sets the share of walls, so a higher `fill` makes thinner veins: try 0.7 to 0.9. Veins can leave pockets, which `connect` and `minRegionSize` deal with as for any cave.
+
+`cornerBias` rounds off the corners of the map. Without it, the noise knows nothing about the map, so a cavern can run right into a corner and end in a sharp wedge. With it, the score of every tile near a corner is lowered, by more than the whole range of the noise in the corner itself and by less and less further out, so the corners turn into wall whatever the noise says, and the caverns close off smoothly in a curve before they get there. The value is a distance in tiles from the corner: 4 (the default) pulls the walls in from a quarter circle of radius 4 around each corner, and 0 turns it off and gives the plain threshold. The distance is round, so the corners come out rounded, and straight edges are left alone, so a cavern can still run along the border. The pull applies before `fill` picks the threshold, so `fill` stays the share of walls and a stronger pull leaves less wall elsewhere, and it keeps a symmetry exact. It works without `borderWalls` as well, and with both shapes.
+
+The look of the noise is set with the same options as the [forest](#forestoptions) has: `scaleX` and `scaleY` (the size of a feature in tiles, 12 by default, which suits caverns; larger values make broader ones), `rotation` in degrees, and the layers of the built-in noise, `octaves` (3 by default, which roughens the edges; with 1 the shapes are smooth blobs), `persistence` (0.5) and `lacunarity` (2). Different scales on the two axes and a rotation stretch the caverns, which makes passages that run in one direction. A `noise` function replaces the built-in simplex noise: it takes positions in noise units and returns a number from -1 to 1. The scales and the rotation apply to it, and the octaves do not, so wrap it in `createFractalNoise` for layers. A custom noise should vary over the map, since the tiles that tie at the threshold all become floor, and a constant noise gives a map of floor, or of walls at a `fill` of 1.
+
+`iterations` runs that many passes of the cave automaton over the thresholded noise (the 4-5 rule on 8 neighbors), which rounds off specks and corners. It defaults to 0, which leaves the noise as it is. The smoothing eats thin corridors, so it suits `'blobs'` and spoils `'veins'`.
+
+`layoutSymmetry` works by sampling: a tile reads the noise at its first twin (row by row) with the chance `layoutSymmetryChance`, and at its own position otherwise. The walls are picked after that, so `fill` stays accurate. At 1 (the default) the noise itself is symmetric, and so is the cave, and tunnels and exits follow it as for the automaton's cave (see [Symmetry](#symmetry) and [Exits](#exits)).
+
+#### `NoiseCaveOptions`
+
+| Option                 | Default       | Meaning                                                                                                                              |
+| ---------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `width`                |               | Map width in tiles. Required.                                                                                                        |
+| `height`               |               | Map height in tiles. Required.                                                                                                       |
+| `random`               | `Math.random` | Source of randomness. It seeds the built-in noise and rolls the symmetry, the tunnels and the exits.                                 |
+| `shape`                | `'blobs'`     | `'blobs'` makes floor of the high part of the noise, `'veins'` of the part around its midpoint.                                      |
+| `fill`                 | 0.45          | The share of the tiles that become wall, from 0 to 1.                                                                                |
+| `cornerBias`           | 4             | Rounds off the corners: the distance in tiles from a corner over which the walls are pulled in. A whole number, 0 or more. 0 is off. |
+| `scaleX`               | 12            | Size in tiles of a feature of the noise along the x axis, before rotation. A positive number.                                        |
+| `scaleY`               | 12            | Size in tiles of a feature of the noise along the y axis, before rotation. A positive number.                                        |
+| `rotation`             | 0             | Clockwise rotation of the noise in degrees.                                                                                          |
+| `octaves`              | 3             | Layers of the built-in noise. A whole number, 1 or more.                                                                             |
+| `persistence`          | 0.5           | How much each layer counts against the one before it, from 0 to 1. Only matters with more than one octave.                           |
+| `lacunarity`           | 2             | How much finer each layer is than the one before it. A positive number. Only matters with more than one octave.                      |
+| `noise`                | simplex       | A `NoiseFunction` to use instead of the built-in noise. The scales and the rotation apply to it, the layers do not.                  |
+| `iterations`           | 0             | Passes of the cave automaton to smooth the thresholded noise with. A whole number, 0 or more.                                        |
+| `borderWalls`          | `true`        | As in [`CaveOptions`](#caveoptions).                                                                                                 |
+| `minRegionSize`        | 0             | As in `CaveOptions`.                                                                                                                 |
+| `connect`              | `'tunnel'`    | As in `CaveOptions`.                                                                                                                 |
+| `tunnelStyle`          | `'winding'`   | As in `CaveOptions`.                                                                                                                 |
+| `tunnelWidth`          | 1             | As in `CaveOptions`.                                                                                                                 |
+| `tunnelWindiness`      | 0.5           | As in `CaveOptions`.                                                                                                                 |
+| `tunnelLoops`          | 0             | As in `CaveOptions`.                                                                                                                 |
+| `layoutSymmetry`       | `'none'`      | As in `CaveOptions`, applied to the sampling of the noise.                                                                           |
+| `layoutSymmetryChance` | 1             | How often a tile reads the noise at its twin, from 0 to 1.                                                                           |
+| `tunnelSymmetryChance` | 1             | As in `CaveOptions`.                                                                                                                 |
+| `minExits`             | 0             | As in `CaveOptions`. See [Exits](#exits).                                                                                            |
+| `maxExits`             | `minExits`    | As in `CaveOptions`.                                                                                                                 |
+
+A `RangeError` is thrown for a non-positive size, a `fill`, `persistence` or any chance outside 0 to 1, a non-positive `scaleX`, `scaleY` or `lacunarity`, an `octaves` that is not a whole number of at least 1, or an `iterations` or `cornerBias` that is not a whole number of at least 0, and for the other invalid options as in `CaveOptions`.
 
 ## Noise
 
@@ -975,7 +1040,7 @@ The forest page has a control for every `ForestOptions` field, including a switc
 
 The noise page paints a `NoiseFunction` as gray squares, black for -1 and white for 1, with controls for the size, the seed, the fractal options and the transform: `scaleX`, `scaleY` and `rotation`. The fractal controls start at the defaults of `createFractalNoise`, and the scales start at 40, which is a size that shows a few features on the default map. The stats line shows the lowest, highest and mean value.
 
-The cave page has a control for every `CaveOptions` field. The limits are blank by default, which means the defaults of the chosen neighborhood. The stats line shows the number of floor tiles, regions and exits, and **Mark region centers** highlights the `center` of every region, which makes it easy to see what `connect` and `minRegionSize` do to the caverns.
+The cave page has a control for every `CaveOptions` and `NoiseCaveOptions` field. Its **Generator** select switches between the automaton and the [noise cave](#noise-caves); the controls that belong to one generator only are marked "(automaton)" or "(noise)", and the others (connection, symmetry, exits, border walls) apply to both. The limits are blank by default, which means the defaults of the chosen neighborhood. The stats line shows the number of floor tiles, regions and exits, and **Mark region centers** highlights the `center` of every region, which makes it easy to see what `connect` and `minRegionSize` do to the caverns.
 
 ## Development
 

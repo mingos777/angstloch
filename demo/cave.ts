@@ -1,9 +1,10 @@
-import { generateCave } from '../src';
+import { generateCave, generateNoiseCave } from '../src';
 import type {
   CaveConnect,
   CaveNeighborhood,
   CaveTunnelStyle,
   LayoutSymmetry,
+  NoiseCaveShape,
 } from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
@@ -29,15 +30,10 @@ function render(): void {
     data.get(name) === '' ? undefined : value(name);
 
   try {
-    const { grid, regions, exits } = generateCave({
+    const shared = {
       width: value('width'),
       height: value('height'),
       random: mulberry32(value('seed')),
-      fillChance: value('fillChance'),
-      iterations: value('iterations'),
-      birthLimit: optional('birthLimit'),
-      survivalLimit: optional('survivalLimit'),
-      neighborhood: data.get('neighborhood') as CaveNeighborhood,
       borderWalls: data.has('borderWalls'),
       minRegionSize: value('minRegionSize'),
       connect: data.get('connect') as CaveConnect,
@@ -50,7 +46,30 @@ function render(): void {
       tunnelSymmetryChance: value('tunnelSymmetryChance'),
       minExits: value('minExits'),
       maxExits: value('maxExits'),
-    });
+    };
+    const { grid, regions, exits } =
+      data.get('generator') === 'noise'
+        ? generateNoiseCave({
+            ...shared,
+            shape: data.get('shape') as NoiseCaveShape,
+            fill: value('fill'),
+            cornerBias: value('cornerBias'),
+            scaleX: value('scaleX'),
+            scaleY: value('scaleY'),
+            rotation: value('rotation'),
+            octaves: value('octaves'),
+            persistence: value('persistence'),
+            lacunarity: value('lacunarity'),
+            iterations: value('noiseIterations'),
+          })
+        : generateCave({
+            ...shared,
+            fillChance: value('fillChance'),
+            iterations: value('iterations'),
+            birthLimit: optional('birthLimit'),
+            survivalLimit: optional('survivalLimit'),
+            neighborhood: data.get('neighborhood') as CaveNeighborhood,
+          });
     error.textContent = '';
     const floors = grid
       .toString()
