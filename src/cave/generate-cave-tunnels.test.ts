@@ -161,6 +161,8 @@ describe('generateCave with tunnels', () => {
     ['tunnelWidth', { tunnelWidth: 0 }],
     ['tunnelWidth', { tunnelWidth: 1.5 }],
     ['tunnelWindiness', { tunnelWindiness: 1.5 }],
+    ['tunnelLoops', { tunnelLoops: 1.5 }],
+    ['tunnelLoops', { tunnelLoops: -0.1 }],
   ])('throws a RangeError for an invalid %s', (name, options) => {
     // given
     const generate = () => cave(options, 1);

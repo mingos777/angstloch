@@ -193,7 +193,7 @@ The automaton usually leaves several caverns that are not joined to each other. 
 
 `connect` takes one of three values:
 
-- `'tunnel'` (the default) digs tunnels until the whole map is one cavern. The largest cavern is joined to the cavern nearest to it first, then the joined group to the nearest one after that, and so on. That keeps tunnels short, and joins caverns in a tree-like way, with no deliberate loops. A tunnel runs from the closest pair of tiles of the two caverns, and may cross a third cavern on its way, which joins that one as well. It only ever turns rock into floor, so no floor tile is lost.
+- `'tunnel'` (the default) digs tunnels until the whole map is one cavern. The largest cavern is joined to the cavern nearest to it first, then the joined group to the nearest one after that, and so on. That keeps tunnels short, and joins caverns in a tree-like way, with no deliberate loops (see `tunnelLoops` below). A tunnel runs from the closest pair of tiles of the two caverns, and may cross a third cavern on its way, which joins that one as well. It only ever turns rock into floor, so no floor tile is lost.
 - `'largest'` fills in every cavern but the largest.
 - `'none'` leaves the caverns as the automaton made them.
 
@@ -203,6 +203,12 @@ The automaton usually leaves several caverns that are not joined to each other. 
 - `'direct'` digs a line with at most one bend, horizontal first or vertical first at random. `tunnelWindiness` has no effect.
 
 `tunnelWidth` makes the tunnels wider, which suits caves that are meant to be roomy. With `borderWalls`, tunnels never touch the outermost ring of tiles.
+
+#### Loops
+
+A tree of tunnels means one way between any two caverns, so a cave can feel like a corridor with side rooms. `tunnelLoops`, from 0 to 1, adds extra tunnels once the caverns are joined. It only applies to `connect: 'tunnel'`, and it defaults to 0, which adds none.
+
+Each cavern is paired with its three nearest neighbors, measured across the rock between them. A pair is only worth a tunnel when it is a real shortcut: walking over the floor between the closest tiles of the two caverns must take much longer than the gap itself (more than three times the gap plus four steps). So caverns that a short tunnel joins already are skipped, and loops appear where the map would force a long detour. Every pair that passes gets one roll, and with the chance `tunnelLoops` it gets a tunnel, dug like the others, with the same `tunnelStyle`, `tunnelWidth` and `tunnelWindiness`. At 1, every such shortcut is dug. Caverns a single wall apart can get a short tunnel, which reads as a gap in the wall. Tunnels may cross other caverns, as the first ones can. The shortcuts are worked out before any loop is dug, so two loops next to each other may both appear.
 
 ### `CaveOptions`
 
@@ -222,8 +228,9 @@ The automaton usually leaves several caverns that are not joined to each other. 
 | `tunnelStyle`     | `'winding'`                            | The shape of tunnels: `'winding'` meanders, `'direct'` has at most one bend.                                                                           |
 | `tunnelWidth`     | 1                                      | The width of tunnels in tiles. A whole number, 1 or more.                                                                                              |
 | `tunnelWindiness` | 0.5                                    | How much `'winding'` tunnels wander, from 0 to 1.                                                                                                      |
+| `tunnelLoops`     | 0                                      | The chance, from 0 to 1, of an extra tunnel where it would be a shortcut between caverns. Applies to `connect: 'tunnel'` only.                         |
 
-The limits are counted out of 8 neighbors for `'moore'` and out of 4 for `'von-neumann'`, which is why the defaults differ. A limit above the number of neighbors can never be reached, so a `birthLimit` of 9 stops floor from ever turning into a wall. A non-positive size, a `fillChance` or `tunnelWindiness` outside 0 to 1, a `tunnelWidth` that is not a whole number of at least 1, or a limit, `minRegionSize` or `iterations` that is not a whole number of at least 0 throws a `RangeError`.
+The limits are counted out of 8 neighbors for `'moore'` and out of 4 for `'von-neumann'`, which is why the defaults differ. A limit above the number of neighbors can never be reached, so a `birthLimit` of 9 stops floor from ever turning into a wall. A non-positive size, a `fillChance`, `tunnelWindiness` or `tunnelLoops` outside 0 to 1, a `tunnelWidth` that is not a whole number of at least 1, or a limit, `minRegionSize` or `iterations` that is not a whole number of at least 0 throws a `RangeError`.
 
 ### Exits
 

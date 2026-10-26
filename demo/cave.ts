@@ -39,6 +39,7 @@ function render(): void {
       tunnelStyle: data.get('tunnelStyle') as CaveTunnelStyle,
       tunnelWidth: value('tunnelWidth'),
       tunnelWindiness: value('tunnelWindiness'),
+      tunnelLoops: value('tunnelLoops'),
       minExits: value('minExits'),
       maxExits: value('maxExits'),
     });

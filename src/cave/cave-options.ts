@@ -39,6 +39,8 @@ export interface CaveOptions extends BaseOptions {
   tunnelWidth?: number;
   /** How much `winding` tunnels meander, from 0 (they head straight for their goal, with small jitters) to 1 (they wander a lot). Defaults to 0.5. */
   tunnelWindiness?: number;
+  /** The chance, from 0 to 1, of an extra tunnel at every place where one would make a loop, a shortcut between neighboring caverns that are joined only by a long way round. Applies to `connect: 'tunnel'` only. Defaults to 0, which makes no loops. */
+  tunnelLoops?: number;
   /** Minimum number of exits to add on the map border. Defaults to 0. */
   minExits?: number;
   /** Maximum number of exits to add. Defaults to `minExits`. */

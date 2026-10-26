@@ -40,6 +40,7 @@ export function generateCave(options: CaveOptions): CaveResult {
     tunnelStyle = 'winding',
     tunnelWidth = 1,
     tunnelWindiness = 0.5,
+    tunnelLoops = 0,
     minExits = 0,
   } = options;
   const {
@@ -55,6 +56,7 @@ export function generateCave(options: CaveOptions): CaveResult {
   assertWholeNumber('minRegionSize', minRegionSize, 0);
   assertWholeNumber('tunnelWidth', tunnelWidth, 1);
   assertFraction('tunnelWindiness', tunnelWindiness);
+  assertFraction('tunnelLoops', tunnelLoops);
   assertWholeNumber('minExits', minExits, 0);
   const maxExits = Math.max(minExits, options.maxExits ?? minExits);
   assertWholeNumber('maxExits', maxExits, 0);
@@ -82,12 +84,17 @@ export function generateCave(options: CaveOptions): CaveResult {
     }
   });
   if (connect === 'tunnel') {
-    connectCaves(grid, random, {
-      style: tunnelStyle,
-      width: tunnelWidth,
-      windiness: tunnelWindiness,
-      borderWalls,
-    });
+    connectCaves(
+      grid,
+      random,
+      {
+        style: tunnelStyle,
+        width: tunnelWidth,
+        windiness: tunnelWindiness,
+        borderWalls,
+      },
+      tunnelLoops,
+    );
   }
 
   const exits: Point[] = [];

@@ -1,3 +1,4 @@
+import type { CaveLink } from './cave-link';
 import { DIRECTIONS } from '../core/directions';
 import type { Grid } from '../core/grid';
 import type { Point } from '../core/point';
@@ -12,7 +13,7 @@ import { Tile } from '../core/tile';
 export function findCaveLink(
   grid: Grid,
   group: readonly Point[],
-): { from: Point; to: Point } | undefined {
+): CaveLink | undefined {
   const { width, height } = grid;
   const origin = new Int32Array(width * height).fill(-1);
   const inGroup = new Uint8Array(width * height);
