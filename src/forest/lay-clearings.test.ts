@@ -7,7 +7,7 @@ function lay(specs: ClearingSpec[], spacing = 0, seed = 1, size = 80) {
   return layClearings(specs, size, size, mulberry32(seed), { spacing });
 }
 
-const RANDOM = { radiusX: 5 };
+const RANDOM = { radiusX: { min: 5, max: 5 } };
 
 describe('layClearings', () => {
   it('places a clearing without a center at a whole position', () => {
@@ -24,7 +24,9 @@ describe('layClearings', () => {
 
   it('keeps the whole oval of a random clearing inside the map', () => {
     // given
-    const specs = Array.from({ length: 10 }, () => ({ radiusX: 9 }));
+    const specs = Array.from({ length: 10 }, () => ({
+      radiusX: { min: 9, max: 9 },
+    }));
 
     // when
     const { clearings } = lay(specs, 0, 2, 40);
@@ -38,7 +40,9 @@ describe('layClearings', () => {
 
   it('keeps random clearings apart by their radii', () => {
     // given
-    const specs = Array.from({ length: 6 }, () => ({ radiusX: 8 }));
+    const specs = Array.from({ length: 6 }, () => ({
+      radiusX: { min: 8, max: 8 },
+    }));
 
     // when
     const { clearings } = lay(specs, 0, 3);
@@ -54,7 +58,9 @@ describe('layClearings', () => {
 
   it('keeps random clearings further apart with spacing', () => {
     // given
-    const specs = Array.from({ length: 4 }, () => ({ radiusX: 5 }));
+    const specs = Array.from({ length: 4 }, () => ({
+      radiusX: { min: 5, max: 5 },
+    }));
 
     // when
     const { clearings } = lay(specs, 10, 4);
@@ -71,8 +77,8 @@ describe('layClearings', () => {
   it('keeps random clearings away from one with a center of its own', () => {
     // given
     const specs = [
-      { x: 40, y: 40, radiusX: 15 },
-      ...Array.from({ length: 5 }, () => ({ radiusX: 6 })),
+      { x: 40, y: 40, radiusX: { min: 15, max: 15 } },
+      ...Array.from({ length: 5 }, () => ({ radiusX: { min: 6, max: 6 } })),
     ];
 
     // when
@@ -86,7 +92,7 @@ describe('layClearings', () => {
 
   it('does not move a clearing that has a center', () => {
     // given
-    const specs = [RANDOM, { x: 3, y: 4, radiusX: 2 }];
+    const specs = [RANDOM, { x: 3, y: 4, radiusX: { min: 2, max: 2 } }];
 
     // when
     const { clearings } = lay(specs);
@@ -98,9 +104,9 @@ describe('layClearings', () => {
   it('reports the clearings in the order they were asked for', () => {
     // given
     const specs = [
-      { radiusX: 3 },
-      { x: 40, y: 40, radiusX: 4 },
-      { radiusX: 5 },
+      { radiusX: { min: 3, max: 3 } },
+      { x: 40, y: 40, radiusX: { min: 4, max: 4 } },
+      { radiusX: { min: 5, max: 5 } },
     ];
 
     // when
@@ -110,9 +116,49 @@ describe('layClearings', () => {
     expect(clearings.map((c) => c.radiusX)).toEqual([3, 4, 5]);
   });
 
+  it('picks the radii from their ranges', () => {
+    // given
+    const specs = Array.from({ length: 12 }, (_, i) => ({
+      x: 10 + (i % 4) * 20,
+      y: 10 + Math.floor(i / 4) * 20,
+      radiusX: { min: 2, max: 6 },
+      radiusY: { min: 3, max: 9 },
+    }));
+
+    // when
+    const { clearings } = lay(specs);
+
+    // then
+    expect(clearings).toHaveLength(12);
+    for (const { radiusX, radiusY } of clearings) {
+      expect(radiusX).toBeGreaterThanOrEqual(2);
+      expect(radiusX).toBeLessThanOrEqual(6);
+      expect(radiusY).toBeGreaterThanOrEqual(3);
+      expect(radiusY).toBeLessThanOrEqual(9);
+    }
+    expect(new Set(clearings.map((c) => c.radiusX)).size).toBeGreaterThan(1);
+  });
+
+  it('makes a circle from the one radius that was picked when radiusY is left out', () => {
+    // given
+    const specs = Array.from({ length: 6 }, (_, i) => ({
+      x: 10 + i * 12,
+      y: 40,
+      radiusX: { min: 2, max: 6 },
+    }));
+
+    // when
+    const { clearings } = lay(specs);
+
+    // then
+    for (const { radiusX, radiusY } of clearings) {
+      expect(radiusY).toBe(radiusX);
+    }
+  });
+
   it('leaves out a clearing that finds no room', () => {
     // given
-    const specs = [{ x: 20, y: 20, radiusX: 40 }, RANDOM];
+    const specs = [{ x: 20, y: 20, radiusX: { min: 40, max: 40 } }, RANDOM];
 
     // when
     const { clearings } = lay(specs, 0, 1, 40);
@@ -123,7 +169,7 @@ describe('layClearings', () => {
 
   it('leaves out a clearing that is larger than the map', () => {
     // given
-    const specs = [{ radiusX: 30 }];
+    const specs = [{ radiusX: { min: 30, max: 30 } }];
 
     // when
     const { clearings } = lay(specs, 0, 1, 40);
@@ -191,7 +237,7 @@ describe('layClearings with roads', () => {
   it('places a random clearing within the road distance of the road', () => {
     // given
     const specs = Array.from({ length: 5 }, () => ({
-      radiusX: 3,
+      radiusX: { min: 3, max: 3 },
       roadDistance: { min: 12, max: 15 },
     }));
 
@@ -208,7 +254,9 @@ describe('layClearings with roads', () => {
 
   it('defaults to a road distance of 8 to 25', () => {
     // given
-    const specs = Array.from({ length: 8 }, () => ({ radiusX: 3 }));
+    const specs = Array.from({ length: 8 }, () => ({
+      radiusX: { min: 3, max: 3 },
+    }));
 
     // when
     const { clearings } = lay(specs, 2);
@@ -222,7 +270,9 @@ describe('layClearings with roads', () => {
 
   it('leaves out a clearing when no tile is in the road distance', () => {
     // given
-    const specs = [{ radiusX: 3, roadDistance: { min: 70, max: 80 } }];
+    const specs = [
+      { radiusX: { min: 3, max: 3 }, roadDistance: { min: 70, max: 80 } },
+    ];
 
     // when
     const { clearings } = lay(specs);
@@ -234,7 +284,12 @@ describe('layClearings with roads', () => {
   it('does not apply the road distance to a clearing with a center', () => {
     // given
     const specs = [
-      { x: 51, y: 40, radiusX: 3, roadDistance: { min: 20, max: 30 } },
+      {
+        x: 51,
+        y: 40,
+        radiusX: { min: 3, max: 3 },
+        roadDistance: { min: 20, max: 30 },
+      },
     ];
 
     // when
@@ -248,7 +303,7 @@ describe('layClearings with roads', () => {
 describe('layClearings paths', () => {
   it('asks for no path by default', () => {
     // given
-    const specs = [{ x: 10, y: 10, radiusX: 3 }];
+    const specs = [{ x: 10, y: 10, radiusX: { min: 3, max: 3 } }];
 
     // when
     const { paths } = lay(specs);
@@ -259,7 +314,7 @@ describe('layClearings paths', () => {
 
   it('asks for a path with the defaults when the path is true', () => {
     // given
-    const specs = [{ x: 10, y: 12, radiusX: 3, path: true }];
+    const specs = [{ x: 10, y: 12, radiusX: { min: 3, max: 3 }, path: true }];
 
     // when
     const { paths } = lay(specs);
@@ -271,7 +326,7 @@ describe('layClearings paths', () => {
   it('asks for a path with the options that were given', () => {
     // given
     const path = { width: 2, windiness: 0.8 };
-    const specs = [{ x: 10, y: 12, radiusX: 3, path }];
+    const specs = [{ x: 10, y: 12, radiusX: { min: 3, max: 3 }, path }];
 
     // when
     const { paths } = lay(specs);
@@ -282,7 +337,7 @@ describe('layClearings paths', () => {
 
   it('asks for no path when the path is false', () => {
     // given
-    const specs = [{ x: 10, y: 12, radiusX: 3, path: false }];
+    const specs = [{ x: 10, y: 12, radiusX: { min: 3, max: 3 }, path: false }];
 
     // when
     const { paths } = lay(specs);
@@ -293,7 +348,7 @@ describe('layClearings paths', () => {
 
   it('asks for a path to a clearing at random only once it is placed', () => {
     // given
-    const specs = [{ radiusX: 3, path: true }];
+    const specs = [{ radiusX: { min: 3, max: 3 }, path: true }];
 
     // when
     const { paths, clearings } = lay(specs);

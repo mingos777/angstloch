@@ -84,9 +84,24 @@ export function generateForest(options: ForestOptions): ForestResult {
     layRoadNetwork(map, random, options.roads);
   }
 
+  // the dead ends of the branches that end inside the map, for the clearings
+  // at a branch end
+  const branchEnds = (map?.roads ?? []).flatMap(({ kind, points }) => {
+    const end = points[points.length - 1];
+    return kind === 'branch' &&
+      end &&
+      end.x > 0 &&
+      end.y > 0 &&
+      end.x < width - 1 &&
+      end.y < height - 1
+      ? [end]
+      : [];
+  });
+
   // random clearings keep their distance from the roads that are there so far
   const laid = layClearings(specs, width, height, random, {
     spacing: clearingSpacing,
+    branchEnds,
     roads:
       map && map.roads.length > 0
         ? { covered: map.covered, metric: distance }

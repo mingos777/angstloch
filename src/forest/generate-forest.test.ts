@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Grid } from '../core/grid';
 import { Tile } from '../core/tile';
 import { mulberry32 } from '../test-helpers/mulberry32';
+import type { ClearingSpec } from './clearing-spec';
 import type { ForestOptions } from './forest-options';
 import { generateForest } from './generate-forest';
 
@@ -1064,18 +1065,24 @@ describe('generateForest', () => {
 
 describe('generateForest clearings', () => {
   const SOLID = { minDensity: 1, maxDensity: 1 };
-  const CIRCLE = { x: 40, y: 30, radiusX: 6, irregularity: 0 };
+  const CIRCLE = { x: 40, y: 30, radiusX: { min: 6, max: 6 }, irregularity: 0 };
 
   it('reports the clearings with their defaults filled in', () => {
     // given
-    const clearings = [{ x: 10, y: 12, radiusX: 4 }];
+    const clearings = [{ x: 10, y: 12, radiusX: { min: 4, max: 4 } }];
 
     // when
     const result = forest({ clearings });
 
     // then
     expect(result.clearings).toEqual([
-      { x: 10, y: 12, radiusX: 4, radiusY: 4, angle: 0 },
+      {
+        x: 10,
+        y: 12,
+        radiusX: 4,
+        radiusY: 4,
+        angle: 0,
+      },
     ]);
   });
 
@@ -1157,7 +1164,7 @@ describe('generateForest clearings', () => {
 
   it('makes a different outline for every clearing', () => {
     // given
-    const same = { radiusX: 8, irregularity: 1 };
+    const same = { radiusX: { min: 8, max: 8 }, irregularity: 1 };
     const clearings = [
       { x: 20, y: 30, ...same },
       { x: 60, y: 30, ...same },
@@ -1181,7 +1188,10 @@ describe('generateForest clearings', () => {
 
   it('places a clearing without a center at random', () => {
     // given
-    const options = { ...SOLID, clearings: [{ radiusX: 5, irregularity: 0 }] };
+    const options = {
+      ...SOLID,
+      clearings: [{ radiusX: { min: 5, max: 5 }, irregularity: 0 }],
+    };
 
     // when
     const { grid, clearings } = forest(options);
@@ -1193,7 +1203,9 @@ describe('generateForest clearings', () => {
 
   it('passes the clearing spacing to the placement', () => {
     // given
-    const clearings = Array.from({ length: 3 }, () => ({ radiusX: 5 }));
+    const clearings = Array.from({ length: 3 }, () => ({
+      radiusX: { min: 5, max: 5 },
+    }));
 
     // when
     const result = forest({ clearings, clearingSpacing: 12 });
@@ -1220,7 +1232,7 @@ describe('generateForest clearings', () => {
     // given
     const roads = { angle: 0, windiness: 0 };
     const clearings = Array.from({ length: 3 }, () => ({
-      radiusX: 3,
+      radiusX: { min: 3, max: 3 },
       roadDistance: { min: 10, max: 14 },
     }));
 
@@ -1245,8 +1257,8 @@ describe('generateForest clearings', () => {
   it('merges clearings that overlap into one bare patch', () => {
     // given
     const clearings = [
-      { x: 30, y: 30, radiusX: 6, irregularity: 0 },
-      { x: 38, y: 30, radiusX: 6, irregularity: 0 },
+      { x: 30, y: 30, radiusX: { min: 6, max: 6 }, irregularity: 0 },
+      { x: 38, y: 30, radiusX: { min: 6, max: 6 }, irregularity: 0 },
     ];
 
     // when
@@ -1259,12 +1271,175 @@ describe('generateForest clearings', () => {
     expect(grid.get(46, 30)).toBe(Tile.Tree);
   });
 
+  describe('clearings at branch ends', () => {
+    const DEAD_ENDS = {
+      specs: [
+        { kind: 'road' as const, origin: { x: 10, y: 30 }, angle: 0 },
+        { parent: 0, at: 0.3, kind: 'branch' as const, to: { x: 30, y: 10 } },
+        { parent: 0, at: 0.6, kind: 'branch' as const, to: { x: 60, y: 10 } },
+        { parent: 0, at: 0.8, kind: 'branch' as const, to: { x: 70, y: 50 } },
+      ],
+    };
+    const AT_END = { at: 'branch-end' as const, radiusX: { min: 3, max: 3 } };
+
+    it('centers a clearing on the end of a branch', () => {
+      // given
+      const clearings = [AT_END];
+
+      // when
+      const { clearings: made, roads } = forest({
+        roads: DEAD_ENDS,
+        clearings,
+      });
+
+      // then
+      const branch = roads[1];
+      expect(made).toHaveLength(1);
+      expect(made[0]).toMatchObject(branch?.points.at(-1) ?? {});
+    });
+
+    it('takes the branch ends in the order the branches were laid', () => {
+      // given
+      const clearings = [AT_END, AT_END, AT_END];
+
+      // when
+      const { clearings: made, roads } = forest({
+        roads: DEAD_ENDS,
+        clearings,
+      });
+
+      // then
+      const ends = roads.slice(1).map((road) => road.points.at(-1));
+      expect(made.map(({ x, y }) => ({ x, y }))).toEqual(ends);
+    });
+
+    it('leaves out the clearings that find no branch end', () => {
+      // given
+      const clearings = [AT_END, AT_END, AT_END, AT_END, AT_END];
+
+      // when
+      const { clearings: made } = forest({ roads: DEAD_ENDS, clearings });
+
+      // then
+      expect(made).toHaveLength(3);
+    });
+
+    it('leaves out a clearing when there are no roads', () => {
+      // given
+      const clearings = [AT_END];
+
+      // when
+      const { clearings: made } = forest({ clearings });
+
+      // then
+      expect(made).toEqual([]);
+    });
+
+    it('skips a branch that runs to the border of the map', () => {
+      // given
+      const roads = {
+        specs: [
+          { kind: 'road' as const, origin: { x: 10, y: 30 }, angle: 0 },
+          { parent: 0, at: 0.5, kind: 'branch' as const, angle: 90 },
+        ],
+      };
+
+      // when
+      const { clearings: made } = forest({ roads, clearings: [AT_END] });
+
+      // then
+      expect(made).toEqual([]);
+    });
+
+    it('lists them after the other clearings', () => {
+      // given
+      const clearings = [AT_END, { x: 5, y: 55, radiusX: { min: 2, max: 2 } }];
+
+      // when
+      const { clearings: made } = forest({ roads: DEAD_ENDS, clearings });
+
+      // then
+      expect(made[0]).toMatchObject({ x: 5, y: 55 });
+      expect(made).toHaveLength(2);
+    });
+
+    it('keeps clearings that overlap and merges them', () => {
+      // given
+      const roads = {
+        specs: [
+          { kind: 'road' as const, origin: { x: 10, y: 30 }, angle: 0 },
+          { parent: 0, at: 0.4, kind: 'branch' as const, to: { x: 40, y: 10 } },
+          { parent: 0, at: 0.6, kind: 'branch' as const, to: { x: 41, y: 10 } },
+        ],
+      };
+      const clearings = [AT_END, AT_END];
+
+      // when
+      const { clearings: made, grid } = forest({ roads, clearings, ...SOLID });
+
+      // then
+      expect(made).toHaveLength(2);
+      expect(grid.get(40, 10)).toBe(Tile.Road);
+      expect(grid.get(40, 8)).toBe(Tile.Grass);
+    });
+
+    it('thins the trees beyond the clearing with the falloff', () => {
+      // given
+      const options = {
+        roads: DEAD_ENDS,
+        clearings: [{ ...AT_END, irregularity: 0 }],
+        falloff: 3,
+        ...SOLID,
+      };
+
+      // when
+      const { density, roads } = forest(options);
+
+      // then
+      const end = roads[1]?.points.at(-1) ?? { x: 0, y: 0 };
+      expect(density[end.y * 80 + end.x + 4]).toBeCloseTo(0.25);
+    });
+
+    it('gives the same forest for the same seed', () => {
+      // given
+      const options = {
+        roads: DEAD_ENDS,
+        clearings: [AT_END, { ...AT_END, radiusX: { min: 2, max: 6 } }],
+      };
+
+      // when
+      const a = forest(options, 9);
+      const b = forest(options, 9);
+
+      // then
+      expect(a.grid.toString()).toBe(b.grid.toString());
+      expect(a.clearings).toEqual(b.clearings);
+    });
+
+    it('rejects an unknown place and a place with a center', () => {
+      // given
+      const unknown = [{ at: 'nowhere', radiusX: { min: 3, max: 3 } }];
+      const centered = [{ ...AT_END, x: 5, y: 5 }];
+
+      // when
+      const generateUnknown = () =>
+        forest({ clearings: unknown as unknown as ClearingSpec[] });
+      const generateCentered = () => forest({ clearings: centered });
+
+      // then
+      expect(generateUnknown).toThrow(RangeError);
+      expect(generateCentered).toThrow(RangeError);
+    });
+  });
+
   describe('paths', () => {
     const STRAIGHT = { angle: 0, windiness: 0 };
 
     it('leads a path from a road to the center of a clearing', () => {
       // given
-      const clearings = [{ x: 40, y: 10, radiusX: 3, path: true }];
+      const clearings = [
+        { x: 40, y: 10, radiusX: { min: 3, max: 3 }, path: true },
+      ];
 
       // when
       const { roads, grid } = forest({ roads: STRAIGHT, clearings });
@@ -1280,7 +1455,9 @@ describe('generateForest clearings', () => {
 
     it('joins the path to the road at a junction', () => {
       // given
-      const clearings = [{ x: 40, y: 10, radiusX: 3, path: true }];
+      const clearings = [
+        { x: 40, y: 10, radiusX: { min: 3, max: 3 }, path: true },
+      ];
 
       // when
       const { junctions } = forest({ roads: STRAIGHT, clearings });
@@ -1291,7 +1468,7 @@ describe('generateForest clearings', () => {
 
     it('makes no path unless asked', () => {
       // given
-      const clearings = [{ x: 40, y: 10, radiusX: 3 }];
+      const clearings = [{ x: 40, y: 10, radiusX: { min: 3, max: 3 } }];
 
       // when
       const { roads } = forest({ roads: STRAIGHT, clearings });
@@ -1302,7 +1479,9 @@ describe('generateForest clearings', () => {
 
     it('leads a path from the border when there are no roads', () => {
       // given
-      const clearings = [{ x: 70, y: 30, radiusX: 3, path: true }];
+      const clearings = [
+        { x: 70, y: 30, radiusX: { min: 3, max: 3 }, path: true },
+      ];
 
       // when
       const { roads, exits, grid } = forest({ clearings });
@@ -1317,7 +1496,7 @@ describe('generateForest clearings', () => {
     it('draws the path with the width that was asked for', () => {
       // given
       const path = { width: 3, windiness: 0 };
-      const clearings = [{ x: 70, y: 30, radiusX: 3, path }];
+      const clearings = [{ x: 70, y: 30, radiusX: { min: 3, max: 3 }, path }];
 
       // when
       const { grid } = forest({ clearings });
@@ -1329,7 +1508,7 @@ describe('generateForest clearings', () => {
 
     it('leads a path to a clearing placed at random', () => {
       // given
-      const clearings = [{ radiusX: 4, path: true }];
+      const clearings = [{ radiusX: { min: 4, max: 4 }, path: true }];
 
       // when
       const { roads, clearings: made } = forest({ roads: STRAIGHT, clearings });
@@ -1345,10 +1524,10 @@ describe('generateForest clearings', () => {
     it('leads a path to every clearing that asks for one', () => {
       // given
       const clearings = [
-        { x: 15, y: 10, radiusX: 3, path: true },
-        { radiusX: 3, path: true },
-        { x: 60, y: 50, radiusX: 3 },
-        { x: 65, y: 12, radiusX: 3, path: { width: 2 } },
+        { x: 15, y: 10, radiusX: { min: 3, max: 3 }, path: true },
+        { radiusX: { min: 3, max: 3 }, path: true },
+        { x: 60, y: 50, radiusX: { min: 3, max: 3 } },
+        { x: 65, y: 12, radiusX: { min: 3, max: 3 }, path: { width: 2 } },
       ];
 
       // when
@@ -1365,7 +1544,9 @@ describe('generateForest clearings', () => {
 
     it('applies the clearance to the path', () => {
       // given
-      const clearings = [{ x: 70, y: 30, radiusX: 3, path: true }];
+      const clearings = [
+        { x: 70, y: 30, radiusX: { min: 3, max: 3 }, path: true },
+      ];
       const options = { ...SOLID, clearance: 1, clearings };
 
       // when
@@ -1378,7 +1559,7 @@ describe('generateForest clearings', () => {
 
     it('does not change a forest with roads and clearings but no paths', () => {
       // given
-      const clearings = [{ x: 40, y: 10, radiusX: 3 }];
+      const clearings = [{ x: 40, y: 10, radiusX: { min: 3, max: 3 } }];
 
       // when
       const a = forest({ roads: STRAIGHT, clearings }, 6);
@@ -1392,7 +1573,9 @@ describe('generateForest clearings', () => {
 
   it('is deterministic for the same seed', () => {
     // given
-    const options = { clearings: [{ x: 30, y: 30, radiusX: 9 }] };
+    const options = {
+      clearings: [{ x: 30, y: 30, radiusX: { min: 9, max: 9 } }],
+    };
 
     // when
     const a = forest(options, 7);
@@ -1403,21 +1586,45 @@ describe('generateForest clearings', () => {
   });
 
   it.each([
-    ['x', { x: -1, y: 5, radiusX: 3 }],
-    ['x', { x: 1.5, y: 5, radiusX: 3 }],
-    ['together', { x: 5, radiusX: 3 }],
-    ['together', { y: 5, radiusX: 3 }],
-    ['inside', { x: 80, y: 5, radiusX: 3 }],
-    ['inside', { x: 5, y: 60, radiusX: 3 }],
-    ['radiusX', { x: 5, y: 5, radiusX: 0 }],
-    ['radiusX', { x: 5, y: 5, radiusX: Number.NaN }],
-    ['radiusY', { x: 5, y: 5, radiusX: 3, radiusY: -1 }],
-    ['angle', { x: 5, y: 5, radiusX: 3, angle: Infinity }],
-    ['irregularity', { x: 5, y: 5, radiusX: 3, irregularity: 1.5 }],
-    ['roadDistance', { radiusX: 3, roadDistance: { min: -1, max: 5 } }],
-    ['roadDistance', { radiusX: 3, roadDistance: { min: 9, max: 5 } }],
-    ['path.width', { x: 5, y: 5, radiusX: 3, path: { width: 0 } }],
-    ['path.windiness', { x: 5, y: 5, radiusX: 3, path: { windiness: 2 } }],
+    ['x', { x: -1, y: 5, radiusX: { min: 3, max: 3 } }],
+    ['x', { x: 1.5, y: 5, radiusX: { min: 3, max: 3 } }],
+    ['together', { x: 5, radiusX: { min: 3, max: 3 } }],
+    ['together', { y: 5, radiusX: { min: 3, max: 3 } }],
+    ['inside', { x: 80, y: 5, radiusX: { min: 3, max: 3 } }],
+    ['inside', { x: 5, y: 60, radiusX: { min: 3, max: 3 } }],
+    ['radiusX', { x: 5, y: 5, radiusX: { min: 0, max: 0 } }],
+    ['radiusX', { x: 5, y: 5, radiusX: { min: 5, max: 3 } }],
+    ['radiusX', { x: 5, y: 5, radiusX: { min: 1, max: Number.NaN } }],
+    [
+      'radiusY',
+      {
+        x: 5,
+        y: 5,
+        radiusX: { min: 3, max: 3 },
+        radiusY: { min: -1, max: -1 },
+      },
+    ],
+    ['angle', { x: 5, y: 5, radiusX: { min: 3, max: 3 }, angle: Infinity }],
+    [
+      'irregularity',
+      { x: 5, y: 5, radiusX: { min: 3, max: 3 }, irregularity: 1.5 },
+    ],
+    [
+      'roadDistance',
+      { radiusX: { min: 3, max: 3 }, roadDistance: { min: -1, max: 5 } },
+    ],
+    [
+      'roadDistance',
+      { radiusX: { min: 3, max: 3 }, roadDistance: { min: 9, max: 5 } },
+    ],
+    [
+      'path.width',
+      { x: 5, y: 5, radiusX: { min: 3, max: 3 }, path: { width: 0 } },
+    ],
+    [
+      'path.windiness',
+      { x: 5, y: 5, radiusX: { min: 3, max: 3 }, path: { windiness: 2 } },
+    ],
   ])('rejects an invalid %s', (name, clearing) => {
     // given
     const options = { clearings: [clearing] };

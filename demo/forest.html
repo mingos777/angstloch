@@ -202,28 +202,41 @@
     <template id="clearing-row">
       <fieldset class="clearing">
         <label
+          >At
+          <select name="clearingAt">
+            <option value="">position</option>
+            <option value="branch-end">branch end</option>
+          </select>
+        </label>
+        <label
           >x <input name="clearingX" type="number" value="40" min="0"
         /></label>
         <label
           >y <input name="clearingY" type="number" value="25" min="0"
         /></label>
         <label
-          >Radius x
-          <input
-            name="clearingRadiusX"
-            type="number"
-            value="4"
-            min="0.5"
-            step="0.5"
+          >Radius x min
+          <input name="clearingRadiusXMin" type="number" value="4" min="1"
         /></label>
         <label
-          >Radius y
+          >Radius x max
+          <input name="clearingRadiusXMax" type="number" value="4" min="1"
+        /></label>
+        <label
+          >Radius y min
           <input
-            name="clearingRadiusY"
+            name="clearingRadiusYMin"
             type="number"
-            value="4"
-            min="0.5"
-            step="0.5"
+            min="1"
+            placeholder="= x"
+        /></label>
+        <label
+          >Radius y max
+          <input
+            name="clearingRadiusYMax"
+            type="number"
+            min="1"
+            placeholder="= x"
         /></label>
         <label
           >Angle <input name="clearingAngle" type="number" value="0"

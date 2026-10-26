@@ -3,15 +3,6 @@ import { assertRange } from '../core/assert-range';
 import { assertWholeNumber } from '../core/assert-whole-number';
 import type { ClearingSpec } from './clearing-spec';
 
-/** Throws a `RangeError` unless the number is finite and above 0. */
-function assertPositive(name: string, value: number): void {
-  if (!(Number.isFinite(value) && value > 0)) {
-    throw new RangeError(
-      `${name} must be a positive number, got ${String(value)}`,
-    );
-  }
-}
-
 /** Throws a `RangeError` unless the clearing is valid and its center is on the map. */
 export function assertClearing(
   name: string,
@@ -19,6 +10,16 @@ export function assertClearing(
   width: number,
   height: number,
 ): void {
+  if (spec.at !== undefined && (spec.at as string) !== 'branch-end') {
+    throw new RangeError(
+      `${name}.at must be 'branch-end', got ${spec.at as string}`,
+    );
+  }
+  if (spec.at !== undefined && (spec.x !== undefined || spec.y !== undefined)) {
+    throw new RangeError(
+      `${name}.at cannot be combined with ${name}.x and ${name}.y`,
+    );
+  }
   if ((spec.x === undefined) !== (spec.y === undefined)) {
     throw new RangeError(
       `${name}.x and ${name}.y must be given together or both left out`,
@@ -33,9 +34,9 @@ export function assertClearing(
       );
     }
   }
-  assertPositive(`${name}.radiusX`, spec.radiusX);
+  assertRange(`${name}.radiusX`, spec.radiusX, 1);
   if (spec.radiusY !== undefined) {
-    assertPositive(`${name}.radiusY`, spec.radiusY);
+    assertRange(`${name}.radiusY`, spec.radiusY, 1);
   }
   if (spec.angle !== undefined && !Number.isFinite(spec.angle)) {
     throw new RangeError(

@@ -1,5 +1,5 @@
 import { generateForest, Tile } from '../src';
-import type { ClearingSpec, DistanceMetric, RoadEntry } from '../src';
+import type { ClearingSpec, DistanceMetric, Range, RoadEntry } from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
 import { drawGrid } from './draw-grid';
@@ -24,12 +24,27 @@ function readClearings(root: HTMLFormElement): ClearingSpec[] {
       row.querySelector<HTMLInputElement>(`[name="${name}"]`) ??
       document.createElement('input');
     const number = (name: string): number => Number(input(name).value);
+    const radiusY = (): Range | undefined => {
+      const min = blank(input('clearingRadiusYMin').value);
+      const max = blank(input('clearingRadiusYMax').value);
+      return min === undefined && max === undefined
+        ? undefined
+        : { min: min ?? max ?? 0, max: max ?? min ?? 0 };
+    };
+    const atEnd =
+      row.querySelector<HTMLSelectElement>('[name="clearingAt"]')?.value ===
+      'branch-end';
     return {
-      // a blank position means a random one
-      x: blank(input('clearingX').value),
-      y: blank(input('clearingY').value),
-      radiusX: number('clearingRadiusX'),
-      radiusY: number('clearingRadiusY'),
+      // a blank position means a random one, and a branch end has none
+      at: atEnd ? 'branch-end' : undefined,
+      x: atEnd ? undefined : blank(input('clearingX').value),
+      y: atEnd ? undefined : blank(input('clearingY').value),
+      radiusX: {
+        min: number('clearingRadiusXMin'),
+        max: number('clearingRadiusXMax'),
+      },
+      // blank radii for y mean the same as x
+      radiusY: radiusY(),
       angle: number('clearingAngle'),
       irregularity: number('clearingIrregularity'),
       roadDistance: {

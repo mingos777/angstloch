@@ -1,5 +1,6 @@
 import type { Point } from '../core/point';
 import type { Random } from '../core/random';
+import type { Range } from '../core/range';
 import { randomInt } from '../core/random-int';
 import { createSimplexNoise } from '../noise/create-simplex-noise';
 import { roadDistance } from '../roads/road-distance';
@@ -12,6 +13,13 @@ import { stampClearing } from './stamp-clearing';
 
 /** How ragged a clearing is when it does not say. */
 const DEFAULT_IRREGULARITY = 0.5;
+
+/** Picks a radius from the range, without touching `random` when the range is a single value. */
+function rollRadius(range: Range, random: Random): number {
+  return range.min === range.max
+    ? range.min
+    : randomInt(random, range.min, range.max);
+}
 
 /** How far from a road a clearing at random lies when it does not say. */
 const DEFAULT_ROAD_DISTANCE = { min: 8, max: 25 };
@@ -114,21 +122,25 @@ export function layClearings(
   specs.forEach((spec, i) => {
     assertClearing(`clearings[${String(i)}]`, spec, width, height);
   });
-  const { spacing = 0, roads } = layout;
+  const { spacing = 0, roads, branchEnds = [] } = layout;
   const covered = new Uint8Array(width * height);
   if (specs.length === 0) {
     return { covered, clearings: [], paths: [] };
   }
-  const shapes = specs.map((spec) => ({
-    radiusX: spec.radiusX,
-    radiusY: spec.radiusY ?? spec.radiusX,
-    angle: spec.angle ?? 0,
-  }));
+  const shapes = specs.map((spec) => {
+    const radiusX = rollRadius(spec.radiusX, random);
+    return {
+      radiusX,
+      radiusY: spec.radiusY ? rollRadius(spec.radiusY, random) : radiusX,
+      angle: spec.angle ?? 0,
+    };
+  });
   const centers: (Point | undefined)[] = specs.map((spec) =>
     spec.x !== undefined && spec.y !== undefined
       ? { x: spec.x, y: spec.y }
       : undefined,
   );
+  const atBranchEnd = specs.map((spec) => spec.at === 'branch-end');
   const distances =
     roads &&
     roadDistance(
@@ -144,7 +156,7 @@ export function layClearings(
       return center ? [{ ...center, ...shape }] : [];
     });
   shapes.forEach((shape, i) => {
-    if (!centers[i]) {
+    if (!centers[i] && !atBranchEnd[i]) {
       centers[i] = findCenter(
         shape,
         specs[i]?.roadDistance ?? DEFAULT_ROAD_DISTANCE,
@@ -158,10 +170,25 @@ export function layClearings(
     }
   });
 
+  // clearings at a branch end come last, one for each end in turn, and they
+  // do not keep away from the others, so overlapping ones merge into one
+  let ends = 0;
+  atBranchEnd.forEach((isAtEnd, i) => {
+    if (isAtEnd) {
+      centers[i] = branchEnds[ends++];
+    }
+  });
+  const indexes = specs.map((_, i) => i);
+  const order = [
+    ...indexes.filter((i) => !atBranchEnd[i]),
+    ...indexes.filter((i) => atBranchEnd[i]),
+  ];
+
   const noise = createSimplexNoise(random);
   const clearings: Clearing[] = [];
   const paths: ClearingPath[] = [];
-  specs.forEach((spec, i) => {
+  order.forEach((i) => {
+    const spec = specs[i] as ClearingSpec;
     const center = centers[i];
     if (!center) {
       return;

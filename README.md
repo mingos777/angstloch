@@ -385,30 +385,37 @@ The `density` in the result is 0 on the tiles that are kept clear, since it is t
 
 #### Clearings
 
-`clearings` makes glades: patches with no trees, a good place for a camp, a hut or a hamlet. Each clearing is a `ClearingSpec`. It has a center of its own, so the caller decides where it goes, or it leaves the center out and is placed at random:
+`clearings` makes glades: patches with no trees, a good place for a camp, a hut or a hamlet. Each clearing is a `ClearingSpec`. It has a center of its own, so the caller decides where it goes, or it leaves the center out and is placed at random, or it is placed at the end of a branch (see [below](#clearings-at-branch-ends)):
 
 ```ts
 const { grid, clearings } = generateForest({
   width: 120,
   height: 80,
   clearings: [
-    { x: 60, y: 40, radiusX: 12, radiusY: 7, angle: 30 },
-    { x: 20, y: 15, radiusX: 4, irregularity: 0.8 },
-    { radiusX: 4 }, // placed at random
-    { radiusX: 4 },
+    {
+      x: 60,
+      y: 40,
+      radiusX: { min: 12, max: 12 },
+      radiusY: { min: 7, max: 7 },
+      angle: 30,
+    },
+    { x: 20, y: 15, radiusX: { min: 4, max: 4 }, irregularity: 0.8 },
+    { radiusX: { min: 3, max: 6 } }, // placed at random, radius 3 to 6
+    { radiusX: { min: 4, max: 4 } },
   ],
 });
 ```
 
-| Clearing option | Default               | Meaning                                                                                                                |
-| --------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `x`, `y`        |                       | The tile of the center, whole numbers inside the map. Required.                                                        |
-| `radiusX`       |                       | The approximate radius in tiles along the x axis, before `angle`, a positive number (it can be fractional). Required.  |
-| `radiusY`       | `radiusX`             | The approximate radius along the y axis. Different radii make an oval. A positive number.                              |
-| `angle`         | 0                     | Clockwise rotation of the oval in degrees, any number.                                                                 |
-| `irregularity`  | 0.5                   | How ragged the edge is, from 0 (a plain oval) to 1 (very ragged).                                                      |
-| `roadDistance`  | `{ min: 8, max: 25 }` | How far from the nearest road tile a clearing placed at random lies, a `Range` of whole numbers, 0 or more. See below. |
-| `path`          | none                  | `true` or `{ width?, windiness? }` leads a path to the clearing. See [Paths to clearings](#paths-to-clearings).        |
+| Clearing option | Default               | Meaning                                                                                                                                           |
+| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `x`, `y`        |                       | The tile of the center, whole numbers inside the map. Required.                                                                                   |
+| `at`            | none                  | `'branch-end'` puts the clearing at the end of a branch instead of giving it a center. See [Clearings at branch ends](#clearings-at-branch-ends). |
+| `radiusX`       |                       | The approximate radius in tiles along the x axis, before `angle`, a `Range` of whole numbers, 1 or more. One is picked at random. Required.       |
+| `radiusY`       | `radiusX`             | The approximate radius along the y axis, a `Range` like `radiusX`. Different radii make an oval.                                                  |
+| `angle`         | 0                     | Clockwise rotation of the oval in degrees, any number.                                                                                            |
+| `irregularity`  | 0.5                   | How ragged the edge is, from 0 (a plain oval) to 1 (very ragged).                                                                                 |
+| `roadDistance`  | `{ min: 8, max: 25 }` | How far from the nearest road tile a clearing placed at random lies, a `Range` of whole numbers, 0 or more. See below.                            |
+| `path`          | none                  | `true` or `{ width?, windiness? }` leads a path to the clearing. See [Paths to clearings](#paths-to-clearings).                                   |
 
 The edge is not a clean oval. Noise shifts every tile before its distance to the center is measured, so the edge bulges and pinches, and every clearing gets its own outline, even when they are given the same shape. The radii are the radii of the plain oval, and the ragged edge wanders around them, so the real size is only approximately what you asked for. A tile only belongs to the clearing if it joins the center through other tiles of the clearing, so a clearing is always one piece, with no detached specks of bare ground beyond its edge. The center is always part of the clearing, and the part that falls outside the map is cut off.
 
@@ -417,6 +424,30 @@ No tree grows in a clearing, and the `density` is 0 there. Beyond its edge the [
 A clearing without a center is placed after the ones that have a center, in the order of the list. Its center is picked at random, with these rules: the whole plain oval stays inside the map, and it keeps away from every clearing placed before it by at least the sum of their larger radii, so the plain ovals do not overlap (the ragged edges can still touch). `clearingSpacing` adds tiles to that distance: a whole number, default 0. It does not move clearings that have a center, and it does not apply to them. A clearing that finds no room after a number of tries, or that is too large for the map, is left out and no error is thrown, so the `clearings` in the result may be fewer than asked for, always in the order of the list. Random placement uses the `random` source, so the same seed gives the same places.
 
 With roads, a clearing placed at random also keeps its `roadDistance` from the roads that are laid when it is placed: its center lies at least `min` and at most `max` tiles from the nearest road tile, measured with `distance`. The default range of 8 to 25 puts it near enough to reach but off the road. When no tile on the map fits, the clearing is left out, as above. `roadDistance` does nothing without roads, and for a clearing with a center of its own. Paths to clearings are laid after all clearings are placed, so they do not count as roads for this distance.
+
+#### Clearings at branch ends
+
+A road that ends in a clearing: give a clearing `at: 'branch-end'` and no `x` or `y`, and it is centered on the dead end of a [branch](#crossings-and-branches). It works best with a `branchLength`, which makes branches stop in the forest and not run to the border.
+
+```ts
+const { grid, clearings } = generateForest({
+  width: 120,
+  height: 80,
+  roads: { branches: { min: 3, max: 3 }, branchLength: { min: 15, max: 30 } },
+  clearings: [
+    { at: 'branch-end', radiusX: { min: 3, max: 6 } },
+    { at: 'branch-end', radiusX: { min: 3, max: 6 } },
+  ],
+});
+```
+
+- Each such clearing takes the next branch end, in the order the branches were laid, so two of them fill two dead ends. A clearing that finds no branch end is left out, with no error, so there may be fewer `clearings` than asked for. That is also the case without roads.
+- Only the ends that lie inside the map count. A branch that runs to the border is an exit and gets no clearing, and neither do the [paths to clearings](#paths-to-clearings), which already end in a clearing.
+- These clearings never keep away from others: `clearingSpacing` does not apply to them, and none is dropped for overlapping another. Two that touch merge into one bare patch, which suits several paths that lead to one glade.
+- The `clearings` in the result list them after all the others, in the order of their branches.
+- The other options (radii, `angle`, `irregularity`) work as for any clearing, and so do `clearance`, `falloff` and `distance`. `roadDistance` does nothing for them. A `path` does nothing either, since the center is on a road already.
+
+An `at` that is not `'branch-end'`, or one that comes with an `x` or `y`, throws a `RangeError`.
 
 #### Paths to clearings
 
@@ -429,7 +460,7 @@ A clearing can have a path: set `path` to `true`, or to `{ width, windiness }`. 
 
 The path is a road of kind `'branch'` in `roads`, after the roads of the `roads` option and in the order of the clearings, so it shows up in `junctions` (where it meets a road) and in `exits` (where it reaches the border) like any branch. Its tiles are road tiles, so `clearance` and `falloff` apply to it, and it keeps the road tile `roadTile`. This works with or without the `roads` option, and with clearings that have a center of their own as well as random ones. A later path may start at an earlier path if that is the nearest road. A clearing whose center is on a road already gets no path. A clearing that was left out gets none either. The default is no path, since a glade can just as well be in the middle of the forest with no way in.
 
-A clearing with a center outside the map, an `x` or `y` that is not a whole number, only one of the two given, a radius that is not a positive number, an angle that is not finite, an `irregularity` outside 0 to 1, an invalid `roadDistance` range, or a path with a `width` that is not a whole number of at least 1 or a `windiness` outside 0 to 1 throws a `RangeError`.
+A clearing with a center outside the map, an `x` or `y` that is not a whole number, only one of the two given, a radius that is not a `Range` of whole numbers of at least 1, an angle that is not finite, an `irregularity` outside 0 to 1, an invalid `roadDistance` range, or a path with a `width` that is not a whole number of at least 1 or a `windiness` outside 0 to 1 throws a `RangeError`.
 
 #### Crossings and branches
 
@@ -521,7 +552,7 @@ Non-positive or non-integer dimensions, a `minDensity` or `maxDensity` outside 0
 - `roads`: the roads that were laid, the main road first. Each is a `Road` with its `kind` (`'road'` for the main road and crossings, `'branch'` for branches and for the [paths to clearings](#paths-to-clearings)), its `width` in tiles and its `points`, the tiles of its centerline from one end to the other, each next to the one before. Empty without the `roads` option and without paths.
 - `junctions`: the places where roads meet or cross, which are good places for a signpost or an inn. Empty while there is a single road. See [Crossings and branches](#crossings-and-branches).
 - `exits`: the tiles on the map border where a road leaves the map, as for a [maze](#mazes). A game can join the maps on the other sides there.
-- `clearings`: the clearings that were made, each with its center `x` and `y`, `radiusX`, `radiusY` and `angle`, the defaults filled in. Empty without the `clearings` option. See [Clearings](#clearings).
+- `clearings`: the clearings that were made, each with its center `x` and `y`, `radiusX`, `radiusY` (the radii that were picked, plain numbers) and `angle`, the defaults filled in. Empty without the `clearings` option. See [Clearings](#clearings).
 
 ```ts
 const { grid, density } = generateForest({
@@ -940,7 +971,7 @@ The maze page has the same room controls: the count, size and exits of ordinary 
 
 The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png`, `angstloch-dungeon.png` or `angstloch-cave.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
 
-The forest page has a control for every `ForestOptions` field, including a switch for the road with its angle (blank for random), width and windiness, the clearance, the falloff and the distance model (chebyshev, manhattan or euclidean), any number of clearings (an **Add clearing** button adds a row with a position, radii, angle and irregularity; a blank position means a random place, plus its road distance range and a **Path** checkbox with the path's width and windiness), the clearing spacing, the crossings and branches with all their options (branch length is only limited when **Limit branch length** is ticked), **Mark junctions** (red squares) and **Mark road exits**, a switch between grass-and-tree and floor-and-wall tiles, and a **density** display that paints the chance of a tree on every tile, stretched over the range from `minDensity` to `maxDensity`: white for thick woods and black for glades, so you can see what the noise settings do before the trees are rolled. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
+The forest page has a control for every `ForestOptions` field, including a switch for the road with its angle (blank for random), width and windiness, the clearance, the falloff and the distance model (chebyshev, manhattan or euclidean), any number of clearings (an **Add clearing** button adds a row with a position (or **At** a branch end), radii as min and max (blank y radii mean the same as x), angle and irregularity; a blank position means a random place, plus its road distance range and a **Path** checkbox with the path's width and windiness), the clearing spacing, the crossings and branches with all their options (branch length is only limited when **Limit branch length** is ticked), **Mark junctions** (red squares) and **Mark road exits**, a switch between grass-and-tree and floor-and-wall tiles, and a **density** display that paints the chance of a tree on every tile, stretched over the range from `minDensity` to `maxDensity`: white for thick woods and black for glades, so you can see what the noise settings do before the trees are rolled. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
 
 The noise page paints a `NoiseFunction` as gray squares, black for -1 and white for 1, with controls for the size, the seed, the fractal options and the transform: `scaleX`, `scaleY` and `rotation`. The fractal controls start at the defaults of `createFractalNoise`, and the scales start at 40, which is a size that shows a few features on the default map. The stats line shows the lowest, highest and mean value.
 
