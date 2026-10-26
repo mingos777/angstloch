@@ -10,7 +10,7 @@ Implemented, documented and reviewed:
 - **Dungeons**: room-first (`generateRoomDungeon`, with `partition: 'scatter' | 'bsp'`) and the digger (`generateDigDungeon`), layout and corridor symmetry, room templates (rotations, mirroring, exits, doors).
 - **Caves** (`generateCave`): cellular automaton, regions, tunnels between caverns (`connect`) with optional loops (`tunnelLoops`), exits, layout symmetry (`layoutSymmetry`, with its own chances for the noise and for tunnels).
 - **Noise** (`createSimplexNoise`, `createFractalNoise`, `transformNoise`): public building blocks, no dependencies. It stays in this package; extracting it into a separate library was considered and rejected (the forest needs a default noise, and the code is small and isolated in `src/noise/`).
-- **Forests** (`generateForest`): noise-driven tree density, roads with crossings and branches, `clearance`, `Tile.Grass`, `Tile.Tree`, `Tile.Road`.
+- **Forests** (`generateForest`): noise-driven tree density, roads with crossings and branches, `clearance`, `Tile.Grass`, `Tile.Tree`, `Tile.Road`, and clearings, with optional paths to them.
 
 The tile values are part of the public contract and never change: `Wall` 0, `Floor` 1, `Door` 2, `Grass` 3, `Tree` 4, `Road` 5.
 
@@ -49,7 +49,14 @@ All of this is optional follow-up to the finished forest.
   - `distance: 'chebyshev' | 'manhattan' | 'euclidean'`, default `'chebyshev'` (today's square clearance), measures both `clearance` and `falloff`. The option exists even when `falloff` is 0, since it shapes `clearance`. Euclidean is measured between tile centers, so the ramp is continuous.
   - Each road tile stamps the square of radius `clearance + falloff + 1` and tiles keep the smallest distance (`roadDistance`, which replaced `roadClearing`).
   - Tasks: 1) `roadDistance` with the three metrics (done); 2) `falloff` and `distance` in `generateForest`, with tests and README (done); 3) playground controls (done). The feature is complete.
-- **Dead-end paths that end in a small clearing**, a natural place for a camp or a hut. Branches already end in the forest when `branchLength` is short.
+- **Clearings** (done): glades with ragged edges, free of trees. Documented in the README (Clearings, Paths to clearings). What exists and why:
+  - `ForestOptions.clearings` is a list of `ClearingSpec` (`x`/`y` together or both left out for random placement, `radiusX`, `radiusY`, `angle`, `irregularity` 0.5, `roadDistance` `{ min: 8, max: 25 }`, `path`), `clearingSpacing` (default 0), and `ForestResult.clearings` reports `{ x, y, radiusX, radiusY, angle }`.
+  - Clearings are placed, never found in the density map, so one is guaranteed. Plain discs were rejected, the user wants irregular shapes. The shape is domain warping (two noise samples shift each tile before its distance to the center is measured) with a 4-connected flood fill from the center, so there are no detached specks. The oval comes from the caller's radii and angle; the random anisotropy stretch that was planned for automatic clearings was not built, since random clearings take their radii from the spec too. Radii are approximate: the ragged edge varies the real size by up to about 40%.
+  - The noise is a separate simplex instance seeded from `random`, with its own offset per clearing, used only when clearings exist, so forests without them are unchanged. The edge feeds the forest's `falloff` and `distance` via `roadDistance` on the clearing mask. `clearance` is about roads only.
+  - Random placement: after the clearings with a center, inside the map, apart from earlier clearings by their larger radii plus `clearingSpacing`, and within `roadDistance` of a road when there are roads. A clearing that finds no room is dropped, no relaxing, since there is no minimum count. A minimum count would be the case for relaxing the distance.
+  - Paths: `path: true | { width: 1, windiness: 0.3 }`, off by default, a `'branch'` in `roads` from the nearest road centerline tile (or the nearest border tile without roads, which makes an exit) to the clearing center. `growPinnedLine`, `addPath` and `stampRoad` in `src/roads/` fix both ends of a path, so the same code can end a road in a clearing. `layRoads` was split into `createRoadMap`, `layRoadNetwork` and `collectLaidRoads` so the forest can lay paths with or without the `roads` option.
+  - Not built: placing a clearing at the end of an existing branch automatically (the "road that ends in a clearing" case; the path code allows it), and a found-glade mode.
+- **Glades and pools**, depending on the clearing code: natural openings in the forest, such as a drained lake bed or a pond, made from the clearing shapes. Pools need a water tile (see Water and lava) and a rule that keeps them from cutting the map in two. A found-glade mode (detecting the openings that the noise already leaves) belongs here. Needs a design talk.
 - **A caller-supplied list of road specs** (angle, width, windiness per road) for callers who want exact control.
 - **Forest connectivity and regions.** Left out on purpose until the user has seen what forests come out. If wanted, the cave's region and tunnel code would move into a shared directory, with `connect` defaulting to `'none'`, since forests are usually see-through.
 - **Clearings with templates**, to put a ruin or a camp in a glade.
@@ -83,5 +90,5 @@ The first iteration of rooms inside mazes is done. Still open, from earlier sess
 
 ## Loose ends
 
-- The README marks `generateCave`, `generateForest`, `generateRoomDungeon` and `generateDigDungeon` as _Work in progress_. Drop the tags when the user says a generator is done.
+- The base generators are considered finished, and the README no longer marks any of them as work in progress. New features are added as optional fields, and existing options and results do not change.
 - Reference material for ideas: the old attempt in `../angstloch-old` and rot.js 2.2.1 in `../ur/node_modules/rot-js`. Reimplement algorithms our own way, never copy code.

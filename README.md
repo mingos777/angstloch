@@ -5,11 +5,11 @@ A suite of map generators for roguelike games, on a 2D square grid. Written in T
 Currently available:
 
 - [`generateMaze`](#mazes): perfect and braid mazes.
-- [`generateCave`](#caves): organic caves, grown with a cellular automaton. _Work in progress._
+- [`generateCave`](#caves): organic caves, grown with a cellular automaton.
 - [`createSimplexNoise`](#noise): smooth 2D noise that can be stretched and turned, for terrain-like maps. Forests are built on it.
-- [`generateForest`](#forests): forests of scattered trees with clearings and denser stands, from noise, with roads, crossroads and paths through them. _Work in progress._
-- [`generateRoomDungeon`](#dungeons): room-first dungeons: rooms are placed first and joined by corridors afterwards. _Work in progress._
-- [`generateDigDungeon`](#the-digger): dungeons that are dug: corridors and rooms grow out of a first room. _Work in progress._
+- [`generateForest`](#forests): forests of scattered trees with clearings and denser stands, from noise, with roads, crossroads and paths through them.
+- [`generateRoomDungeon`](#dungeons): room-first dungeons: rooms are placed first and joined by corridors afterwards.
+- [`generateDigDungeon`](#the-digger): dungeons that are dug: corridors and rooms grow out of a first room.
 
 ## Concepts
 
@@ -373,7 +373,7 @@ The `density` in the result is 0 on the tiles that are kept clear, since it is t
 
 #### Falloff and distance
 
-`clearance` has a hard edge. `falloff` softens it: beyond the clear strip, the trees thicken gradually until they are at full density again. It is a number of tiles, and the chance of a tree grows in equal steps over them, so with a `falloff` of 3 the first tile past the clearance has a quarter of its chance, the next half, the next three quarters, and the one after that all of it. The two options are independent: a `falloff` with a `clearance` of 0 thins the trees right next to the road, and a `clearance` with no `falloff` is the hard strip. The tiles of the road keep their own density. Without roads, `falloff` does nothing.
+`clearance` has a hard edge. `falloff` softens it: beyond the clear strip, the trees thicken gradually until they are at full density again. It is a number of tiles, and the chance of a tree grows in equal steps over them, so with a `falloff` of 3 the first tile past the clearance has a quarter of its chance, the next half, the next three quarters, and the one after that all of it. The two options are independent: a `falloff` with a `clearance` of 0 thins the trees right next to the road, and a `clearance` with no `falloff` is the hard strip. The tiles of the road keep their own density. The same ramp thins the trees beyond the edge of a [clearing](#clearings). Without roads or clearings, `falloff` does nothing.
 
 `distance` says how the distance to a road is measured, for both `clearance` and `falloff`:
 
@@ -381,7 +381,55 @@ The `density` in the result is 0 on the tiles that are kept clear, since it is t
 - `'manhattan'` counts only orthogonal steps, which makes diamonds. It suits games where diagonal movement is not possible.
 - `'euclidean'` measures the straight line between tile centers, so a diagonal step is about 1.41 tiles, which makes round verges. It suits games where a diagonal step costs more than an orthogonal one. The falloff is then continuous: tiles at different distances get slightly different chances.
 
-`distance` applies even when the `falloff` is 0, since it shapes the `clearance`. Without roads it does nothing. A `falloff` that is not a whole number of at least 0, or a `distance` that is not one of the three, throws a `RangeError`.
+`distance` applies even when the `falloff` is 0, since it shapes the `clearance`, and it measures the distance to a clearing too. Without roads or clearings it does nothing. A `falloff` that is not a whole number of at least 0, or a `distance` that is not one of the three, throws a `RangeError`.
+
+#### Clearings
+
+`clearings` makes glades: patches with no trees, a good place for a camp, a hut or a hamlet. Each clearing is a `ClearingSpec`. It has a center of its own, so the caller decides where it goes, or it leaves the center out and is placed at random:
+
+```ts
+const { grid, clearings } = generateForest({
+  width: 120,
+  height: 80,
+  clearings: [
+    { x: 60, y: 40, radiusX: 12, radiusY: 7, angle: 30 },
+    { x: 20, y: 15, radiusX: 4, irregularity: 0.8 },
+    { radiusX: 4 }, // placed at random
+    { radiusX: 4 },
+  ],
+});
+```
+
+| Clearing option | Default               | Meaning                                                                                                                |
+| --------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `x`, `y`        |                       | The tile of the center, whole numbers inside the map. Required.                                                        |
+| `radiusX`       |                       | The approximate radius in tiles along the x axis, before `angle`, a positive number (it can be fractional). Required.  |
+| `radiusY`       | `radiusX`             | The approximate radius along the y axis. Different radii make an oval. A positive number.                              |
+| `angle`         | 0                     | Clockwise rotation of the oval in degrees, any number.                                                                 |
+| `irregularity`  | 0.5                   | How ragged the edge is, from 0 (a plain oval) to 1 (very ragged).                                                      |
+| `roadDistance`  | `{ min: 8, max: 25 }` | How far from the nearest road tile a clearing placed at random lies, a `Range` of whole numbers, 0 or more. See below. |
+| `path`          | none                  | `true` or `{ width?, windiness? }` leads a path to the clearing. See [Paths to clearings](#paths-to-clearings).        |
+
+The edge is not a clean oval. Noise shifts every tile before its distance to the center is measured, so the edge bulges and pinches, and every clearing gets its own outline, even when they are given the same shape. The radii are the radii of the plain oval, and the ragged edge wanders around them, so the real size is only approximately what you asked for. A tile only belongs to the clearing if it joins the center through other tiles of the clearing, so a clearing is always one piece, with no detached specks of bare ground beyond its edge. The center is always part of the clearing, and the part that falls outside the map is cut off.
+
+No tree grows in a clearing, and the `density` is 0 there. Beyond its edge the [`falloff`](#falloff-and-distance) thins the trees out, measured with `distance`, as it does beside a road. A road that runs through a clearing stays a road. `clearance` is about roads only and does not apply to clearings. The noise of the clearings is separate from the noise that sets the density of the trees, so adding a clearing never changes where the woods are thick.
+
+A clearing without a center is placed after the ones that have a center, in the order of the list. Its center is picked at random, with these rules: the whole plain oval stays inside the map, and it keeps away from every clearing placed before it by at least the sum of their larger radii, so the plain ovals do not overlap (the ragged edges can still touch). `clearingSpacing` adds tiles to that distance: a whole number, default 0. It does not move clearings that have a center, and it does not apply to them. A clearing that finds no room after a number of tries, or that is too large for the map, is left out and no error is thrown, so the `clearings` in the result may be fewer than asked for, always in the order of the list. Random placement uses the `random` source, so the same seed gives the same places.
+
+With roads, a clearing placed at random also keeps its `roadDistance` from the roads that are laid when it is placed: its center lies at least `min` and at most `max` tiles from the nearest road tile, measured with `distance`. The default range of 8 to 25 puts it near enough to reach but off the road. When no tile on the map fits, the clearing is left out, as above. `roadDistance` does nothing without roads, and for a clearing with a center of its own. Paths to clearings are laid after all clearings are placed, so they do not count as roads for this distance.
+
+#### Paths to clearings
+
+A clearing can have a path: set `path` to `true`, or to `{ width, windiness }`. The path is a narrow track that starts at the nearest tile on the centerline of a road and ends in the center of the clearing. Without roads it starts at the nearest tile on the border of the map, so the clearing is reached from outside the map, and the tile on the border is one of the `exits`. Both ends are fixed, and the path winds gently in between, more with a higher `windiness`.
+
+| Path option | Default | Meaning                                                |
+| ----------- | ------- | ------------------------------------------------------ |
+| `width`     | 1       | Width of the path in tiles, a whole number, 1 or more. |
+| `windiness` | 0.3     | How much the path winds, from 0 (straight) to 1.       |
+
+The path is a road of kind `'branch'` in `roads`, after the roads of the `roads` option and in the order of the clearings, so it shows up in `junctions` (where it meets a road) and in `exits` (where it reaches the border) like any branch. Its tiles are road tiles, so `clearance` and `falloff` apply to it, and it keeps the road tile `roadTile`. This works with or without the `roads` option, and with clearings that have a center of their own as well as random ones. A later path may start at an earlier path if that is the nearest road. A clearing whose center is on a road already gets no path. A clearing that was left out gets none either. The default is no path, since a glade can just as well be in the middle of the forest with no way in.
+
+A clearing with a center outside the map, an `x` or `y` that is not a whole number, only one of the two given, a radius that is not a positive number, an angle that is not finite, an `irregularity` outside 0 to 1, an invalid `roadDistance` range, or a path with a `width` that is not a whole number of at least 1 or a `windiness` outside 0 to 1 throws a `RangeError`.
 
 #### Crossings and branches
 
@@ -405,27 +453,29 @@ The result lists every road, in the order they were laid: the main road, then th
 
 ### `ForestOptions`
 
-| Option        | Default       | Meaning                                                                                                                                                                  |
-| ------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `width`       |               | Map width in tiles. Required.                                                                                                                                            |
-| `height`      |               | Map height in tiles. Required.                                                                                                                                           |
-| `random`      | `Math.random` | Source of randomness.                                                                                                                                                    |
-| `minDensity`  | 0             | The chance of a tree where the noise is at its lowest, from 0 to 1.                                                                                                      |
-| `maxDensity`  | 0.25          | The chance of a tree where the noise is at its highest, from 0 to 1. With the same value as `minDensity`, trees are scattered evenly.                                    |
-| `scaleX`      | 40            | Size in tiles of a feature of the noise along the x axis, before rotation. Larger values make broader woods and glades. A positive number.                               |
-| `scaleY`      | 40            | The same along the y axis. Different scales stretch the woods.                                                                                                           |
-| `rotation`    | 0             | Clockwise rotation of the noise in degrees. A stretched wood runs diagonally with a rotation of 45. See [`transformNoise`](#noise).                                      |
-| `octaves`     | 1             | Layers of the built-in noise, each finer than the one before. With 1 there is a single layer, and `persistence` and `lacunarity` do nothing. A whole number, 1 or more.  |
-| `persistence` | 0.2           | How much each layer counts against the one before it, from 0 to 1. Only matters with more than one octave.                                                               |
-| `lacunarity`  | 1             | How much finer each layer is than the one before it. A positive number. Only matters with more than one octave.                                                          |
-| `noise`       | built-in      | A [`NoiseFunction`](#noise) to use instead of the built-in simplex noise.                                                                                                |
-| `groundTile`  | `Tile.Grass`  | The tile for ground without a tree. Any `Tile` value, for instance `Tile.Floor`.                                                                                         |
-| `treeTile`    | `Tile.Tree`   | The tile for a tree, for instance `Tile.Wall` for a forest that blocks like rock.                                                                                        |
-| `roads`       | no roads      | Lays a road through the forest, see [Roads](#roads).                                                                                                                     |
-| `clearance`   | 0             | How many tiles beside a road are kept free of trees, a whole number, 0 or more. See [Clearance](#clearance).                                                             |
-| `falloff`     | 0             | How many tiles the trees take to thicken from none to full density beyond the `clearance`, a whole number, 0 or more. See [Falloff and distance](#falloff-and-distance). |
-| `distance`    | `'chebyshev'` | How distances to a road are measured for `clearance` and `falloff`: `'chebyshev'`, `'manhattan'` or `'euclidean'`. See [Falloff and distance](#falloff-and-distance).    |
-| `roadTile`    | `Tile.Road`   | The tile for a road.                                                                                                                                                     |     |
+| Option            | Default       | Meaning                                                                                                                                                                  |
+| ----------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `width`           |               | Map width in tiles. Required.                                                                                                                                            |
+| `height`          |               | Map height in tiles. Required.                                                                                                                                           |
+| `random`          | `Math.random` | Source of randomness.                                                                                                                                                    |
+| `minDensity`      | 0             | The chance of a tree where the noise is at its lowest, from 0 to 1.                                                                                                      |
+| `maxDensity`      | 0.25          | The chance of a tree where the noise is at its highest, from 0 to 1. With the same value as `minDensity`, trees are scattered evenly.                                    |
+| `scaleX`          | 40            | Size in tiles of a feature of the noise along the x axis, before rotation. Larger values make broader woods and glades. A positive number.                               |
+| `scaleY`          | 40            | The same along the y axis. Different scales stretch the woods.                                                                                                           |
+| `rotation`        | 0             | Clockwise rotation of the noise in degrees. A stretched wood runs diagonally with a rotation of 45. See [`transformNoise`](#noise).                                      |
+| `octaves`         | 1             | Layers of the built-in noise, each finer than the one before. With 1 there is a single layer, and `persistence` and `lacunarity` do nothing. A whole number, 1 or more.  |
+| `persistence`     | 0.2           | How much each layer counts against the one before it, from 0 to 1. Only matters with more than one octave.                                                               |
+| `lacunarity`      | 1             | How much finer each layer is than the one before it. A positive number. Only matters with more than one octave.                                                          |
+| `noise`           | built-in      | A [`NoiseFunction`](#noise) to use instead of the built-in simplex noise.                                                                                                |
+| `groundTile`      | `Tile.Grass`  | The tile for ground without a tree. Any `Tile` value, for instance `Tile.Floor`.                                                                                         |
+| `treeTile`        | `Tile.Tree`   | The tile for a tree, for instance `Tile.Wall` for a forest that blocks like rock.                                                                                        |
+| `roads`           | no roads      | Lays a road through the forest, see [Roads](#roads).                                                                                                                     |
+| `clearance`       | 0             | How many tiles beside a road are kept free of trees, a whole number, 0 or more. See [Clearance](#clearance).                                                             |
+| `falloff`         | 0             | How many tiles the trees take to thicken from none to full density beyond the `clearance`, a whole number, 0 or more. See [Falloff and distance](#falloff-and-distance). |
+| `distance`        | `'chebyshev'` | How distances to a road are measured for `clearance` and `falloff`: `'chebyshev'`, `'manhattan'` or `'euclidean'`. See [Falloff and distance](#falloff-and-distance).    |
+| `clearings`       | none          | Glades with ragged edges, free of trees: a list of `ClearingSpec`. See [Clearings](#clearings).                                                                          |
+| `clearingSpacing` | 0             | How many tiles beyond their radii clearings placed at random keep from other clearings, a whole number, 0 or more. See [Clearings](#clearings).                          |
+| `roadTile`        | `Tile.Road`   | The tile for a road.                                                                                                                                                     |     |
 
 An injected `noise` takes the place of the built-in simplex noise: it receives positions in noise units, which is the tile center divided by the scales after the rotation, and returns a number from -1 to 1. Anything outside that range is limited to it. Since it replaces the built-in noise, `octaves`, `persistence` and `lacunarity` do not apply to it; wrap it in [`createFractalNoise`](#noise) if you want layers. `scaleX`, `scaleY` and `rotation` apply to it as they do to the built-in noise.
 
@@ -435,9 +485,10 @@ Non-positive or non-integer dimensions, a `minDensity` or `maxDensity` outside 0
 
 - `grid`: the map.
 - `density`: the chance of a tree on every tile, from `minDensity` to `maxDensity`, as a `Float32Array` that runs row by row, so `density[y * grid.width + x]`. A game can use it to tell thick woods from glades, for instance to put mushrooms or a hunter's hut where the trees are few.
-- `roads`: the roads that were laid, the main road first. Each is a `Road` with its `kind` (`'road'` for the main road and crossings, `'branch'` for branches), its `width` in tiles and its `points`, the tiles of its centerline from one end to the other, each next to the one before. Empty without the `roads` option.
+- `roads`: the roads that were laid, the main road first. Each is a `Road` with its `kind` (`'road'` for the main road and crossings, `'branch'` for branches and for the [paths to clearings](#paths-to-clearings)), its `width` in tiles and its `points`, the tiles of its centerline from one end to the other, each next to the one before. Empty without the `roads` option and without paths.
 - `junctions`: the places where roads meet or cross, which are good places for a signpost or an inn. Empty while there is a single road. See [Crossings and branches](#crossings-and-branches).
 - `exits`: the tiles on the map border where a road leaves the map, as for a [maze](#mazes). A game can join the maps on the other sides there.
+- `clearings`: the clearings that were made, each with its center `x` and `y`, `radiusX`, `radiusY` and `angle`, the defaults filled in. Empty without the `clearings` option. See [Clearings](#clearings).
 
 ```ts
 const { grid, density } = generateForest({
@@ -467,7 +518,7 @@ console.log(grid.toString());
 console.log(`${rooms.length} rooms covering ${fill * 100}% of the map`);
 ```
 
-> **Work in progress.** Prefabricated rooms are supported by both generators (see [Room templates](#room-templates)). Existing options and result fields will keep working as documented here.
+Prefabricated rooms are supported by both generators (see [Room templates](#room-templates)). Existing options and result fields will keep working as documented here.
 
 There are two dungeon generators. They take the same [`DungeonOptions`](#dungeonoptions), return the same [`DungeonResult`](#dungeonresult), and differ in how rooms and corridors come about:
 
@@ -856,7 +907,7 @@ The maze page has the same room controls: the count, size and exits of ordinary 
 
 The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png`, `angstloch-dungeon.png` or `angstloch-cave.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
 
-The forest page has a control for every `ForestOptions` field, including a switch for the road with its angle (blank for random), width and windiness, the clearance, the falloff and the distance model (chebyshev, manhattan or euclidean), the crossings and branches with all their options (branch length is only limited when **Limit branch length** is ticked), **Mark junctions** (red squares) and **Mark road exits**, a switch between grass-and-tree and floor-and-wall tiles, and a **density** display that paints the chance of a tree on every tile, stretched over the range from `minDensity` to `maxDensity`: white for thick woods and black for glades, so you can see what the noise settings do before the trees are rolled. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
+The forest page has a control for every `ForestOptions` field, including a switch for the road with its angle (blank for random), width and windiness, the clearance, the falloff and the distance model (chebyshev, manhattan or euclidean), any number of clearings (an **Add clearing** button adds a row with a position, radii, angle and irregularity; a blank position means a random place, plus its road distance range and a **Path** checkbox with the path's width and windiness), the clearing spacing, the crossings and branches with all their options (branch length is only limited when **Limit branch length** is ticked), **Mark junctions** (red squares) and **Mark road exits**, a switch between grass-and-tree and floor-and-wall tiles, and a **density** display that paints the chance of a tree on every tile, stretched over the range from `minDensity` to `maxDensity`: white for thick woods and black for glades, so you can see what the noise settings do before the trees are rolled. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
 
 The noise page paints a `NoiseFunction` as gray squares, black for -1 and white for 1, with controls for the size, the seed, the fractal options and the transform: `scaleX`, `scaleY` and `rotation`. The fractal controls start at the defaults of `createFractalNoise`, and the scales start at 40, which is a size that shows a few features on the default map. The stats line shows the lowest, highest and mean value.
 

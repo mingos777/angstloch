@@ -1,5 +1,5 @@
 import { generateForest, Tile } from '../src';
-import type { DistanceMetric } from '../src';
+import type { ClearingSpec, DistanceMetric } from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
 import { drawGrid } from './draw-grid';
@@ -12,6 +12,39 @@ const canvas = document.querySelector<HTMLCanvasElement>('#map');
 const error = document.querySelector<HTMLElement>('#error');
 const stats = document.querySelector<HTMLElement>('#stats');
 const context = canvas?.getContext('2d');
+
+function blank(entry: string): number | undefined {
+  return entry === '' ? undefined : Number(entry);
+}
+
+/** Reads the clearing rows of the form, which can be added and removed, so each row is read on its own. */
+function readClearings(root: HTMLFormElement): ClearingSpec[] {
+  return [...root.querySelectorAll('.clearing')].map((row) => {
+    const input = (name: string): HTMLInputElement =>
+      row.querySelector<HTMLInputElement>(`[name="${name}"]`) ??
+      document.createElement('input');
+    const number = (name: string): number => Number(input(name).value);
+    return {
+      // a blank position means a random one
+      x: blank(input('clearingX').value),
+      y: blank(input('clearingY').value),
+      radiusX: number('clearingRadiusX'),
+      radiusY: number('clearingRadiusY'),
+      angle: number('clearingAngle'),
+      irregularity: number('clearingIrregularity'),
+      roadDistance: {
+        min: number('clearingRoadDistanceMin'),
+        max: number('clearingRoadDistanceMax'),
+      },
+      path: input('clearingPath').checked
+        ? {
+            width: number('clearingPathWidth'),
+            windiness: number('clearingPathWindiness'),
+          }
+        : undefined,
+    };
+  });
+}
 
 function render(): void {
   if (!form || !display || !canvas || !error || !stats || !context) {
@@ -38,7 +71,9 @@ function render(): void {
       treeTile: plain ? Tile.Wall : Tile.Tree,
       clearance: value('clearance'),
       falloff: value('falloff'),
+      clearingSpacing: value('clearingSpacing'),
       distance: data.get('distance') as DistanceMetric,
+      clearings: readClearings(form),
       roads: data.has('road')
         ? {
             // a blank angle means a random one
@@ -130,6 +165,27 @@ function render(): void {
     error.textContent = e instanceof Error ? e.message : String(e);
   }
 }
+
+const clearings = document.querySelector<HTMLElement>('#clearings');
+const clearingRow =
+  document.querySelector<HTMLTemplateElement>('#clearing-row');
+
+document
+  .querySelector<HTMLButtonElement>('#add-clearing')
+  ?.addEventListener('click', () => {
+    const row = clearingRow?.content.cloneNode(true);
+    if (row && clearings) {
+      clearings.append(row);
+      render();
+    }
+  });
+clearings?.addEventListener('click', (event) => {
+  const target = event.target;
+  if (target instanceof HTMLElement && target.matches('.remove-clearing')) {
+    target.closest('.clearing')?.remove();
+    render();
+  }
+});
 
 form?.addEventListener('input', render);
 display?.addEventListener('input', render);

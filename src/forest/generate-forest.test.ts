@@ -986,3 +986,372 @@ describe('generateForest', () => {
     });
   });
 });
+
+describe('generateForest clearings', () => {
+  const SOLID = { minDensity: 1, maxDensity: 1 };
+  const CIRCLE = { x: 40, y: 30, radiusX: 6, irregularity: 0 };
+
+  it('reports the clearings with their defaults filled in', () => {
+    // given
+    const clearings = [{ x: 10, y: 12, radiusX: 4 }];
+
+    // when
+    const result = forest({ clearings });
+
+    // then
+    expect(result.clearings).toEqual([
+      { x: 10, y: 12, radiusX: 4, radiusY: 4, angle: 0 },
+    ]);
+  });
+
+  it('reports no clearings by default', () => {
+    // given
+    const options = {};
+
+    // when
+    const result = forest(options);
+
+    // then
+    expect(result.clearings).toEqual([]);
+  });
+
+  it('does not change a forest without clearings', () => {
+    // given
+    const seed = 5;
+
+    // when
+    const plain = forest({}, seed);
+    const empty = forest({ clearings: [] }, seed);
+
+    // then
+    expect(empty.grid.toString()).toBe(plain.grid.toString());
+  });
+
+  it('keeps the trees out of the clearing', () => {
+    // given
+    const options = { ...SOLID, clearings: [CIRCLE] };
+
+    // when
+    const { grid } = forest(options);
+
+    // then
+    expect(grid.get(40, 30)).toBe(Tile.Grass);
+    expect(grid.get(45, 30)).toBe(Tile.Grass);
+    expect(grid.get(47, 30)).toBe(Tile.Tree);
+  });
+
+  it('sets the density to 0 in the clearing', () => {
+    // given
+    const options = { ...SOLID, clearings: [CIRCLE] };
+
+    // when
+    const { density } = forest(options);
+
+    // then
+    expect(density[30 * 80 + 40]).toBe(0);
+    expect(density[30 * 80 + 47]).toBe(1);
+  });
+
+  it('thins the trees beyond the edge with a falloff', () => {
+    // given
+    const options = { ...SOLID, falloff: 3, clearings: [CIRCLE] };
+
+    // when
+    const { density } = forest(options);
+
+    // then
+    expect(density[30 * 80 + 46]).toBe(0);
+    expect(density[30 * 80 + 47]).toBeCloseTo(0.25);
+    expect(density[30 * 80 + 48]).toBeCloseTo(0.5);
+    expect(density[30 * 80 + 50]).toBe(1);
+  });
+
+  it('leaves a road through a clearing as a road', () => {
+    // given
+    const roads = { angle: 0, windiness: 0 };
+    const options = { ...SOLID, roads, clearings: [CIRCLE] };
+
+    // when
+    const { grid, roads: laid } = forest(options);
+
+    // then
+    const [road] = laid;
+    const point = road?.points[40] as { x: number; y: number };
+    expect(grid.get(point.x, point.y)).toBe(Tile.Road);
+  });
+
+  it('makes a different outline for every clearing', () => {
+    // given
+    const same = { radiusX: 8, irregularity: 1 };
+    const clearings = [
+      { x: 20, y: 30, ...same },
+      { x: 60, y: 30, ...same },
+    ];
+
+    // when
+    const { grid } = forest({ ...SOLID, clearings });
+
+    // then
+    const outline = (left: number) => {
+      let rows = '';
+      for (let y = 20; y < 41; ++y) {
+        for (let x = left - 10; x < left + 11; ++x) {
+          rows += grid.get(x, y) === Tile.Grass ? '.' : '#';
+        }
+      }
+      return rows;
+    };
+    expect(outline(20)).not.toBe(outline(60));
+  });
+
+  it('places a clearing without a center at random', () => {
+    // given
+    const options = { ...SOLID, clearings: [{ radiusX: 5, irregularity: 0 }] };
+
+    // when
+    const { grid, clearings } = forest(options);
+
+    // then
+    const [clearing] = clearings;
+    expect(grid.get(clearing?.x ?? -1, clearing?.y ?? -1)).toBe(Tile.Grass);
+  });
+
+  it('passes the clearing spacing to the placement', () => {
+    // given
+    const clearings = Array.from({ length: 3 }, () => ({ radiusX: 5 }));
+
+    // when
+    const result = forest({ clearings, clearingSpacing: 12 });
+
+    // then
+    const [a, b] = result.clearings;
+    expect(
+      Math.hypot((a?.x ?? 0) - (b?.x ?? 0), (a?.y ?? 0) - (b?.y ?? 0)),
+    ).toBeGreaterThanOrEqual(22);
+  });
+
+  it.each([-1, 1.5, Number.NaN])('rejects a clearing spacing of %s', (v) => {
+    // given
+    const options = { clearingSpacing: v };
+
+    // when
+    const generate = () => forest(options);
+
+    // then
+    expect(generate).toThrow(RangeError);
+  });
+
+  it('places random clearings within the road distance of a road', () => {
+    // given
+    const roads = { angle: 0, windiness: 0 };
+    const clearings = Array.from({ length: 3 }, () => ({
+      radiusX: 3,
+      roadDistance: { min: 10, max: 14 },
+    }));
+
+    // when
+    const { clearings: made, roads: laid } = forest({ roads, clearings });
+
+    // then
+    const centerline = laid[0]?.points ?? [];
+    expect(made).toHaveLength(3);
+    for (const { x, y } of made) {
+      const away = Math.min(
+        ...centerline.map((p) =>
+          Math.max(Math.abs(p.x - x), Math.abs(p.y - y)),
+        ),
+      );
+      // the road is 3 tiles wide, so its edge is a tile nearer than its middle
+      expect(away).toBeGreaterThanOrEqual(11);
+      expect(away).toBeLessThanOrEqual(15);
+    }
+  });
+
+  it('merges clearings that overlap into one bare patch', () => {
+    // given
+    const clearings = [
+      { x: 30, y: 30, radiusX: 6, irregularity: 0 },
+      { x: 38, y: 30, radiusX: 6, irregularity: 0 },
+    ];
+
+    // when
+    const { grid } = forest({ ...SOLID, clearings });
+
+    // then
+    for (let x = 24; x <= 44; ++x) {
+      expect(grid.get(x, 30)).toBe(Tile.Grass);
+    }
+    expect(grid.get(46, 30)).toBe(Tile.Tree);
+  });
+
+  describe('paths', () => {
+    const STRAIGHT = { angle: 0, windiness: 0 };
+
+    it('leads a path from a road to the center of a clearing', () => {
+      // given
+      const clearings = [{ x: 40, y: 10, radiusX: 3, path: true }];
+
+      // when
+      const { roads, grid } = forest({ roads: STRAIGHT, clearings });
+
+      // then
+      const path = roads[1];
+      expect(path?.kind).toBe('branch');
+      expect(path?.points[path.points.length - 1]).toEqual({ x: 40, y: 10 });
+      const start = path?.points[0];
+      expect(roads[0]?.points).toContainEqual(start);
+      expect(grid.get(start?.x ?? -1, start?.y ?? -1)).toBe(Tile.Road);
+    });
+
+    it('joins the path to the road at a junction', () => {
+      // given
+      const clearings = [{ x: 40, y: 10, radiusX: 3, path: true }];
+
+      // when
+      const { junctions } = forest({ roads: STRAIGHT, clearings });
+
+      // then
+      expect(junctions).toHaveLength(1);
+    });
+
+    it('makes no path unless asked', () => {
+      // given
+      const clearings = [{ x: 40, y: 10, radiusX: 3 }];
+
+      // when
+      const { roads } = forest({ roads: STRAIGHT, clearings });
+
+      // then
+      expect(roads).toHaveLength(1);
+    });
+
+    it('leads a path from the border when there are no roads', () => {
+      // given
+      const clearings = [{ x: 70, y: 30, radiusX: 3, path: true }];
+
+      // when
+      const { roads, exits, grid } = forest({ clearings });
+
+      // then
+      expect(roads).toHaveLength(1);
+      expect(roads[0]?.points[0]).toEqual({ x: 79, y: 30 });
+      expect(exits).toEqual([{ x: 79, y: 30 }]);
+      expect(grid.get(75, 30)).toBe(Tile.Road);
+    });
+
+    it('draws the path with the width that was asked for', () => {
+      // given
+      const path = { width: 3, windiness: 0 };
+      const clearings = [{ x: 70, y: 30, radiusX: 3, path }];
+
+      // when
+      const { grid } = forest({ clearings });
+
+      // then
+      expect(grid.get(75, 29)).toBe(Tile.Road);
+      expect(grid.get(75, 31)).toBe(Tile.Road);
+    });
+
+    it('leads a path to a clearing placed at random', () => {
+      // given
+      const clearings = [{ radiusX: 4, path: true }];
+
+      // when
+      const { roads, clearings: made } = forest({ roads: STRAIGHT, clearings });
+
+      // then
+      expect(roads).toHaveLength(2);
+      expect(roads[1]?.points[roads[1].points.length - 1]).toEqual({
+        x: made[0]?.x,
+        y: made[0]?.y,
+      });
+    });
+
+    it('leads a path to every clearing that asks for one', () => {
+      // given
+      const clearings = [
+        { x: 15, y: 10, radiusX: 3, path: true },
+        { radiusX: 3, path: true },
+        { x: 60, y: 50, radiusX: 3 },
+        { x: 65, y: 12, radiusX: 3, path: { width: 2 } },
+      ];
+
+      // when
+      const { roads, clearings: made } = forest({ roads: STRAIGHT, clearings });
+
+      // then
+      const ends = roads.slice(1).map((road) => road.points.at(-1));
+      expect(made).toHaveLength(4);
+      expect(ends).toHaveLength(3);
+      expect(ends).toContainEqual({ x: 15, y: 10 });
+      expect(ends).toContainEqual({ x: 65, y: 12 });
+      expect(ends).toContainEqual({ x: made[1]?.x, y: made[1]?.y });
+    });
+
+    it('applies the clearance to the path', () => {
+      // given
+      const clearings = [{ x: 70, y: 30, radiusX: 3, path: true }];
+      const options = { ...SOLID, clearance: 1, clearings };
+
+      // when
+      const { grid } = forest(options);
+
+      // then
+      expect(grid.get(75, 29)).toBe(Tile.Grass);
+      expect(grid.get(75, 27)).toBe(Tile.Tree);
+    });
+
+    it('does not change a forest with roads and clearings but no paths', () => {
+      // given
+      const clearings = [{ x: 40, y: 10, radiusX: 3 }];
+
+      // when
+      const a = forest({ roads: STRAIGHT, clearings }, 6);
+      const b = forest({ roads: STRAIGHT, clearings: [...clearings] }, 6);
+
+      // then
+      expect(a.grid.toString()).toBe(b.grid.toString());
+      expect(a.roads).toHaveLength(1);
+    });
+  });
+
+  it('is deterministic for the same seed', () => {
+    // given
+    const options = { clearings: [{ x: 30, y: 30, radiusX: 9 }] };
+
+    // when
+    const a = forest(options, 7);
+    const b = forest(options, 7);
+
+    // then
+    expect(a.grid.toString()).toBe(b.grid.toString());
+  });
+
+  it.each([
+    ['x', { x: -1, y: 5, radiusX: 3 }],
+    ['x', { x: 1.5, y: 5, radiusX: 3 }],
+    ['together', { x: 5, radiusX: 3 }],
+    ['together', { y: 5, radiusX: 3 }],
+    ['inside', { x: 80, y: 5, radiusX: 3 }],
+    ['inside', { x: 5, y: 60, radiusX: 3 }],
+    ['radiusX', { x: 5, y: 5, radiusX: 0 }],
+    ['radiusX', { x: 5, y: 5, radiusX: Number.NaN }],
+    ['radiusY', { x: 5, y: 5, radiusX: 3, radiusY: -1 }],
+    ['angle', { x: 5, y: 5, radiusX: 3, angle: Infinity }],
+    ['irregularity', { x: 5, y: 5, radiusX: 3, irregularity: 1.5 }],
+    ['roadDistance', { radiusX: 3, roadDistance: { min: -1, max: 5 } }],
+    ['roadDistance', { radiusX: 3, roadDistance: { min: 9, max: 5 } }],
+    ['path.width', { x: 5, y: 5, radiusX: 3, path: { width: 0 } }],
+    ['path.windiness', { x: 5, y: 5, radiusX: 3, path: { windiness: 2 } }],
+  ])('rejects an invalid %s', (name, clearing) => {
+    // given
+    const options = { clearings: [clearing] };
+
+    // when
+    const generate = () => forest(options);
+
+    // then
+    expect(generate).toThrow(RangeError);
+    expect(generate).toThrow(name);
+  });
+});

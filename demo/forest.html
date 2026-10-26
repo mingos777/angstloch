@@ -110,6 +110,12 @@
         </select>
       </label>
       <label
+        >Clearing spacing
+        <input name="clearingSpacing" type="number" value="0" min="0"
+      /></label>
+      <button id="add-clearing" type="button">Add clearing</button>
+      <div id="clearings"></div>
+      <label
         >Crossings min
         <input name="crossingsMin" type="number" value="0" min="0"
       /></label>
@@ -182,6 +188,77 @@
         </select>
       </label>
     </form>
+    <template id="clearing-row">
+      <fieldset class="clearing">
+        <label
+          >x <input name="clearingX" type="number" value="40" min="0"
+        /></label>
+        <label
+          >y <input name="clearingY" type="number" value="25" min="0"
+        /></label>
+        <label
+          >Radius x
+          <input
+            name="clearingRadiusX"
+            type="number"
+            value="4"
+            min="0.5"
+            step="0.5"
+        /></label>
+        <label
+          >Radius y
+          <input
+            name="clearingRadiusY"
+            type="number"
+            value="4"
+            min="0.5"
+            step="0.5"
+        /></label>
+        <label
+          >Angle <input name="clearingAngle" type="number" value="0"
+        /></label>
+        <label
+          >Irregularity
+          <input
+            name="clearingIrregularity"
+            type="number"
+            value="0.5"
+            min="0"
+            max="1"
+            step="0.1"
+        /></label>
+        <label
+          >Road distance min
+          <input name="clearingRoadDistanceMin" type="number" value="8" min="0"
+        /></label>
+        <label
+          >Road distance max
+          <input
+            name="clearingRoadDistanceMax"
+            type="number"
+            value="25"
+            min="0"
+        /></label>
+        <label class="inline"
+          >Path <input name="clearingPath" type="checkbox"
+        /></label>
+        <label
+          >Path width
+          <input name="clearingPathWidth" type="number" value="1" min="1"
+        /></label>
+        <label
+          >Path windiness
+          <input
+            name="clearingPathWindiness"
+            type="number"
+            value="0.3"
+            min="0"
+            max="1"
+            step="0.1"
+        /></label>
+        <button class="remove-clearing" type="button">Remove</button>
+      </fieldset>
+    </template>
     <p id="stats"></p>
     <div class="view">
       <label for="display">Display</label>

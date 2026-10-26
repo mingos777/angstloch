@@ -8,9 +8,14 @@ import { Tile } from '../core/tile';
 import { createFractalNoise } from '../noise/create-fractal-noise';
 import { createSimplexNoise } from '../noise/create-simplex-noise';
 import { transformNoise } from '../noise/transform-noise';
-import { layRoads } from '../roads/lay-roads';
+import { assertRoadOptions } from '../roads/assert-road-options';
+import { collectLaidRoads } from '../roads/collect-laid-roads';
+import { createRoadMap } from '../roads/create-road-map';
+import { layRoadNetwork } from '../roads/lay-road-network';
 import { assertDistanceMetric } from '../roads/assert-distance-metric';
 import { roadDistance } from '../roads/road-distance';
+import { layClearingPaths } from './lay-clearing-paths';
+import { layClearings } from './lay-clearings';
 import type { ForestOptions } from './forest-options';
 import type { ForestResult } from './forest-result';
 
@@ -20,7 +25,8 @@ import type { ForestResult } from './forest-result';
  * highest, and every tile then gets a tree with that chance. With the `roads`
  * option, roads are laid first and keep the trees off themselves and, with a
  * `clearance`, off the tiles beside them, and with a `falloff` the trees
- * thin out gradually beyond that.
+ * thin out gradually beyond that. The `clearings` option makes glades with
+ * ragged edges, which the `falloff` thins out as well.
  */
 export function generateForest(options: ForestOptions): ForestResult {
   const {
@@ -39,6 +45,7 @@ export function generateForest(options: ForestOptions): ForestResult {
     roadTile = Tile.Road,
     clearance = 0,
     falloff = 0,
+    clearingSpacing = 0,
     distance = 'chebyshev',
   } = options;
 
@@ -50,6 +57,7 @@ export function generateForest(options: ForestOptions): ForestResult {
   assertTile('roadTile', roadTile);
   assertWholeNumber('clearance', clearance, 0);
   assertWholeNumber('falloff', falloff, 0);
+  assertWholeNumber('clearingSpacing', clearingSpacing, 0);
   assertDistanceMetric(distance);
   const random = resolveRandom(options.random);
 
@@ -63,9 +71,31 @@ export function generateForest(options: ForestOptions): ForestResult {
     { scaleX, scaleY, rotation },
   );
 
-  const roads = options.roads
-    ? layRoads(width, height, random, options.roads)
-    : undefined;
+  const specs = options.clearings ?? [];
+  if (options.roads) {
+    assertRoadOptions(options.roads);
+  }
+  // paths to clearings need a road map too, even when there are no roads
+  const map =
+    options.roads || specs.some((spec) => spec.path)
+      ? createRoadMap(width, height, random, options.roads?.windiness)
+      : undefined;
+  if (map && options.roads) {
+    layRoadNetwork(map, random, options.roads);
+  }
+
+  // random clearings keep their distance from the roads that are there so far
+  const laid = layClearings(specs, width, height, random, {
+    spacing: clearingSpacing,
+    roads:
+      map && map.roads.length > 0
+        ? { covered: map.covered, metric: distance }
+        : undefined,
+  });
+  if (map) {
+    layClearingPaths(map, laid.paths);
+  }
+  const roads = map && collectLaidRoads(map);
 
   const distances =
     roads &&
@@ -76,6 +106,10 @@ export function generateForest(options: ForestOptions): ForestResult {
       distance,
       clearance + falloff + 1,
     );
+  const clearingDistances =
+    laid.clearings.length > 0
+      ? roadDistance(laid.covered, width, height, distance, falloff + 1)
+      : undefined;
 
   const grid = new Grid(width, height);
   const chances = new Float32Array(width * height);
@@ -85,12 +119,16 @@ export function generateForest(options: ForestOptions): ForestResult {
       const level =
         (Math.max(-1, Math.min(1, noise(x + 0.5, y + 0.5))) + 1) / 2;
       const road = roads?.covered[y * width + x] === 1;
-      // no trees near a road, then a ramp back up to the full density; the
-      // road keeps its own density
-      const away = (distances?.[y * width + x] ?? Infinity) - clearance;
+      // no trees near a road or in a clearing, then a ramp back up to the
+      // full density; the road keeps its own density
+      const roadAway = (distances?.[y * width + x] ?? Infinity) - clearance;
+      const clearingAway = clearingDistances?.[y * width + x] ?? Infinity;
       const thinning = road
         ? 1
-        : Math.max(0, Math.min(1, away / (falloff + 1)));
+        : Math.max(
+            0,
+            Math.min(1, Math.min(roadAway, clearingAway) / (falloff + 1)),
+          );
       const chance =
         (minDensity + (maxDensity - minDensity) * level) * thinning;
       chances[y * width + x] = chance;
@@ -104,5 +142,6 @@ export function generateForest(options: ForestOptions): ForestResult {
     roads: roads?.roads ?? [],
     junctions: roads?.junctions ?? [],
     exits: roads?.exits ?? [],
+    clearings: laid.clearings,
   };
 }

@@ -3,6 +3,7 @@ import type { Tile } from '../core/tile';
 import type { NoiseFunction } from '../noise/noise-function';
 import type { DistanceMetric } from '../roads/distance-metric';
 import type { RoadOptions } from '../roads/road-options';
+import type { ClearingSpec } from './clearing-spec';
 
 export interface ForestOptions extends BaseOptions {
   /** Size in tiles of a feature of the density noise along the x axis, before rotation. Larger values make broader woods and glades. Defaults to 40. */
@@ -33,8 +34,12 @@ export interface ForestOptions extends BaseOptions {
   roadTile?: Tile;
   /** How many tiles beside a road have no trees, a whole number of at least 0. Tiles count in any direction, so a clearance of 1 keeps trees off all eight neighbors of a road tile, diagonals included. Defaults to 0, where the trees grow right up to the road. */
   clearance?: number;
-  /** How many tiles the trees take to thicken from none to their full density, beyond the `clearance`, a whole number of at least 0. The chance of a tree grows in equal steps: with a falloff of 3 the first tile past the clearance has a quarter of its chance, the next half, the next three quarters, and the one after that all of it. Defaults to 0, where the trees are at full density right past the clearance. */
+  /** How many tiles the trees take to thicken from none to their full density, beyond the `clearance` of a road and beyond the edge of a clearing, a whole number of at least 0. The chance of a tree grows in equal steps: with a falloff of 3 the first tile past the clearance has a quarter of its chance, the next half, the next three quarters, and the one after that all of it. Defaults to 0, where the trees are at full density right past the clearance. */
   falloff?: number;
   /** How the distance to a road is measured, for both `clearance` and `falloff`: `'chebyshev'` counts a diagonal step as one tile and makes square verges, `'manhattan'` counts only orthogonal steps and makes diamonds, and `'euclidean'` measures the straight line between tile centers, so a diagonal step is about 1.41 tiles, and makes round verges. Defaults to `'chebyshev'`. */
   distance?: DistanceMetric;
+  /** Clearings to make: glades with ragged edges, free of trees, with the `falloff` thinning the trees beyond them. Each has a center of its own or is placed at random. Defaults to none. */
+  clearings?: ClearingSpec[];
+  /** How many tiles beyond their radii the clearings that are placed at random keep from each other, a whole number of at least 0. Clearings with a center of their own are not moved. Defaults to 0, where the plain ovals of two clearings may touch. */
+  clearingSpacing?: number;
 }

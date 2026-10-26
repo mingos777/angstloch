@@ -1,6 +1,7 @@
 import type { Grid } from '../core/grid';
 import type { Point } from '../core/point';
 import type { Road } from '../roads/road';
+import type { Clearing } from './clearing';
 
 export interface ForestResult {
   /** The generated map. */
@@ -13,4 +14,6 @@ export interface ForestResult {
   junctions: Point[];
   /** The tiles on the map border where a road leaves the map. */
   exits: Point[];
+  /** The clearings that were made, with the shape they were given. Empty without the `clearings` option. */
+  clearings: Clearing[];
 }

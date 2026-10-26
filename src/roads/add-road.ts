@@ -3,7 +3,7 @@ import { joinTiles } from './join-tiles';
 import type { Road } from './road';
 import type { RoadMap } from './road-map';
 import type { RoadSpec } from './road-spec';
-import { stampRoadBrush } from './stamp-road-brush';
+import { stampRoad } from './stamp-road';
 
 /**
  * Lays a road on the road map and returns it. Wherever its centerline runs
@@ -31,29 +31,5 @@ export function addRoad(map: RoadMap, spec: RoadSpec): Road {
   const forwards = spec.directions.includes(1) ? grow(1) : [];
   const points = joinTiles([...backwards, spec.origin, ...forwards]);
 
-  let touching = false;
-  for (const tile of points) {
-    stampRoadBrush(
-      map.covered,
-      mapWidth,
-      mapHeight,
-      tile.x,
-      tile.y,
-      spec.width,
-    );
-    const at = tile.y * mapWidth + tile.x;
-    const owner = map.owner[at] ?? -1;
-    const shared = owner !== -1 && owner !== index;
-    if (shared && !touching) {
-      map.junctions.push({ x: tile.x, y: tile.y });
-    }
-    touching = shared;
-    if (owner === -1) {
-      map.owner[at] = index;
-    }
-  }
-
-  const road: Road = { kind: spec.kind, width: spec.width, points };
-  roads.push(road);
-  return road;
+  return stampRoad(map, spec.kind, spec.width, points);
 }
