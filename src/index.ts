@@ -17,6 +17,7 @@ export type { Exit } from './rooms/exit';
 export { generateCave } from './cave/generate-cave';
 export type { Road } from './roads/road';
 export type { RoadKind } from './roads/road-kind';
+export type { DistanceMetric } from './roads/distance-metric';
 export type { RoadOptions } from './roads/road-options';
 export type { ForestOptions } from './forest/forest-options';
 export type { ForestResult } from './forest/forest-result';

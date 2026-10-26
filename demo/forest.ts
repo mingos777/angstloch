@@ -1,4 +1,5 @@
 import { generateForest, Tile } from '../src';
+import type { DistanceMetric } from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
 import { drawGrid } from './draw-grid';
@@ -36,6 +37,8 @@ function render(): void {
       groundTile: plain ? Tile.Floor : Tile.Grass,
       treeTile: plain ? Tile.Wall : Tile.Tree,
       clearance: value('clearance'),
+      falloff: value('falloff'),
+      distance: data.get('distance') as DistanceMetric,
       roads: data.has('road')
         ? {
             // a blank angle means a random one

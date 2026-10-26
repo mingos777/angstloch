@@ -788,4 +788,201 @@ describe('generateForest', () => {
       expect(generate).toThrow('clearance');
     });
   });
+
+  describe('falloff', () => {
+    const SOLID = { minDensity: 1, maxDensity: 1 };
+    const STRAIGHT = {
+      angle: 0,
+      windiness: 0,
+      width: { min: 1, max: 1 },
+    };
+
+    it('thickens the trees in equal steps beyond the clearance', () => {
+      // given
+      const options = { roads: STRAIGHT, clearance: 2, falloff: 3, ...SOLID };
+
+      // when
+      const { density, roads } = forest(options);
+
+      // then
+      const centerY = roads[0]?.points[0]?.y ?? 0;
+      const at = (row: number) => density[(centerY + row) * 80 + 40];
+      expect(at(2)).toBe(0);
+      expect(at(3)).toBeCloseTo(0.25);
+      expect(at(4)).toBeCloseTo(0.5);
+      expect(at(5)).toBeCloseTo(0.75);
+      expect(at(6)).toBe(1);
+    });
+
+    it('scales the density the noise gave', () => {
+      // given
+      const options = {
+        roads: STRAIGHT,
+        falloff: 1,
+        minDensity: 0.6,
+        maxDensity: 0.6,
+      };
+
+      // when
+      const { density, roads } = forest(options);
+
+      // then
+      const centerY = roads[0]?.points[0]?.y ?? 0;
+      expect(density[(centerY + 1) * 80 + 40]).toBeCloseTo(0.3);
+      expect(density[(centerY + 2) * 80 + 40]).toBeCloseTo(0.6);
+    });
+
+    it('works without a clearance', () => {
+      // given
+      const options = { roads: STRAIGHT, falloff: 1, ...SOLID };
+
+      // when
+      const { density, roads } = forest(options);
+
+      // then
+      const centerY = roads[0]?.points[0]?.y ?? 0;
+      expect(density[(centerY + 1) * 80 + 40]).toBeCloseTo(0.5);
+      expect(density[(centerY + 2) * 80 + 40]).toBe(1);
+    });
+
+    it('leaves the density of the road tiles alone', () => {
+      // given
+      const options = { roads: STRAIGHT, falloff: 3, ...SOLID };
+
+      // when
+      const { density, roads } = forest(options);
+
+      // then
+      const centerY = roads[0]?.points[0]?.y ?? 0;
+      expect(density[centerY * 80 + 40]).toBe(1);
+    });
+
+    it('has no effect without a road', () => {
+      // given
+      const plain = forest({}, 4);
+
+      // when
+      const withFalloff = forest({ falloff: 5 }, 4);
+
+      // then
+      expect(withFalloff.grid.toString()).toBe(plain.grid.toString());
+      expect(withFalloff.density).toEqual(plain.density);
+    });
+
+    it('has no effect with a falloff of 0', () => {
+      // given
+      const plain = forest({ roads: STRAIGHT, clearance: 2 }, 4);
+
+      // when
+      const zero = forest({ roads: STRAIGHT, clearance: 2, falloff: 0 }, 4);
+
+      // then
+      expect(zero.density).toEqual(plain.density);
+    });
+
+    it.each([-1, 1.5, Number.NaN])('rejects a falloff of %s', (falloff) => {
+      // given
+      const generate = () => forest({ falloff });
+
+      // when / then
+      expect(generate).toThrow(RangeError);
+      expect(generate).toThrow('falloff');
+    });
+  });
+
+  describe('distance', () => {
+    const SOLID = { minDensity: 1, maxDensity: 1 };
+    /** A small square map. */
+    const DOT = { width: 41, height: 41 };
+    const STRAIGHT = { angle: 0, windiness: 0, width: { min: 1, max: 1 } };
+
+    function bare(distance: ForestOptions['distance'], seed = 3) {
+      return forest(
+        { ...DOT, roads: STRAIGHT, clearance: 3, distance, ...SOLID },
+        seed,
+      );
+    }
+
+    it('measures with chebyshev by default', () => {
+      // given
+      const explicit = bare('chebyshev');
+
+      // when
+      const implicit = forest(
+        { ...DOT, roads: STRAIGHT, clearance: 3, ...SOLID },
+        3,
+      );
+
+      // then
+      expect(implicit.density).toEqual(explicit.density);
+    });
+
+    it('clears a square strip beside a diagonal road with chebyshev', () => {
+      // given
+      const options = {
+        width: 40,
+        height: 40,
+        roads: { angle: 45, windiness: 0, width: { min: 1, max: 1 } },
+        clearance: 2,
+        ...SOLID,
+      };
+
+      // when
+      const chebyshev = forest({ ...options, distance: 'chebyshev' });
+      const manhattan = forest({ ...options, distance: 'manhattan' });
+
+      // then
+      expect(count(manhattan.grid, Tile.Tree)).toBeGreaterThan(
+        count(chebyshev.grid, Tile.Tree),
+      );
+    });
+
+    it('clears fewer tiles with euclidean than with chebyshev', () => {
+      // given
+      const options = {
+        width: 40,
+        height: 40,
+        roads: { angle: 30, windiness: 0.5, width: { min: 1, max: 1 } },
+        clearance: 3,
+        ...SOLID,
+      };
+
+      // when
+      const chebyshev = forest({ ...options, distance: 'chebyshev' });
+      const euclidean = forest({ ...options, distance: 'euclidean' });
+
+      // then
+      expect(count(euclidean.grid, Tile.Tree)).toBeGreaterThan(
+        count(chebyshev.grid, Tile.Tree),
+      );
+    });
+
+    it('measures the falloff with the distance too', () => {
+      // given
+      const options = {
+        roads: { angle: 0, windiness: 0, width: { min: 1, max: 1 } },
+        falloff: 1,
+        distance: 'manhattan' as const,
+        ...SOLID,
+      };
+
+      // when
+      const { density, roads } = forest(options);
+
+      // then
+      const centerY = roads[0]?.points[0]?.y ?? 0;
+      expect(density[(centerY + 1) * 80 + 40]).toBeCloseTo(0.5);
+      expect(density[(centerY + 2) * 80 + 40]).toBe(1);
+    });
+
+    it('rejects an unknown distance', () => {
+      // given
+      const generate = () =>
+        forest({ distance: 'taxicab' as unknown as 'manhattan' });
+
+      // when / then
+      expect(generate).toThrow(RangeError);
+      expect(generate).toThrow('distance');
+    });
+  });
 });

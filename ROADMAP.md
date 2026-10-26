@@ -44,7 +44,11 @@ Roughly in the order the user wants them. Each needs a design talk before it is 
 
 All of this is optional follow-up to the finished forest.
 
-- **A soft falloff beside roads.** `clearance` is a hard strip with no trees. A separate option could thin the trees out beyond it. (The first version of `clearance` thinned the chance gradually, and the user wanted a clear zone, so keep the two apart.)
+- **A soft falloff beside roads.** `clearance` is a hard strip with no trees. A separate option thins the trees out beyond it. (The first version of `clearance` thinned the chance gradually, and the user wanted a clear zone, so keep the two apart.) Design agreed, in progress:
+  - `falloff`: a whole number of tiles, default 0. Past the clear strip, the tree chance is multiplied by `(d - clearance) / (falloff + 1)`, capped at 1, where `d` is the distance to the nearest road tile. Linear, no curve option. Independent of `clearance`: either works without the other. Does nothing without roads.
+  - `distance: 'chebyshev' | 'manhattan' | 'euclidean'`, default `'chebyshev'` (today's square clearance), measures both `clearance` and `falloff`. The option exists even when `falloff` is 0, since it shapes `clearance`. Euclidean is measured between tile centers, so the ramp is continuous.
+  - Each road tile stamps the square of radius `clearance + falloff + 1` and tiles keep the smallest distance (`roadDistance`, which replaced `roadClearing`).
+  - Tasks: 1) `roadDistance` with the three metrics (done); 2) `falloff` and `distance` in `generateForest`, with tests and README (done); 3) playground controls (done). The feature is complete.
 - **Dead-end paths that end in a small clearing**, a natural place for a camp or a hut. Branches already end in the forest when `branchLength` is short.
 - **A caller-supplied list of road specs** (angle, width, windiness per road) for callers who want exact control.
 - **Forest connectivity and regions.** Left out on purpose until the user has seen what forests come out. If wanted, the cave's region and tunnel code would move into a shared directory, with `connect` defaulting to `'none'`, since forests are usually see-through.
