@@ -52,19 +52,20 @@ Angstloch is a map generator library for roguelike games on a 2D square grid. It
 - No runtime dependencies. Core code must not use DOM or Node APIs, so it runs in a browser, Node, or a web worker.
 - Determinism: never call `Math.random` directly in generator code. Generators accept an injected `Random` (`() => number` returning a float in [0, 1), same contract as `Math.random`), resolved via `resolveRandom`, which defaults to `Math.random`. Users can plug in any PRNG (mulberry32, etc.).
 - API contract: each generator is a function `generateX(options: XOptions)` taking a single options object. `width` and `height` are required; `random?: Random` and all algorithm-specific fields are optional with documented defaults. Each algorithm has its own typed options interface extending a shared base (`width`, `height`, `random`); never use `any`. Adding optional fields is fine, but never change or remove existing ones, since the external contract should stay constant. Generators are pure: no global state, no mutation of the caller's options. Invalid dimensions (non-positive or non-integer) throw a `RangeError`.
-- Data model: maps are a `Grid` (flat `Uint8Array`, `get`/`set`/`inBounds`/`clone`/`toString`). `Tile` values are part of the contract: `Wall` 0, `Floor` 1, `Door` 2 (a potential door placement), `Grass` 3, `Tree` 4, `Road` 5. Add new values, never renumber. Positions are plain `{ x, y }` (`Point`), y grows downwards. `Grid#get` outside the grid returns `Wall`; `set` outside throws.
+- Data model: maps are a `Grid` (flat `Uint8Array`, `get`/`set`/`inBounds`/`clone`/`toString`). `Tile` values are part of the contract: `Wall` 0, `Floor` 1, `Door` 2 (a potential door placement), `Grass` 3, `Tree` 4, `Road` 5, `ShallowWater` 6, `DeepWater` 7, `Bridge` 8. Add new values, never renumber. Positions are plain `{ x, y }` (`Point`), y grows downwards. `Grid#get` outside the grid returns `Wall`; `set` outside throws.
 - Results: generators never mutate their inputs and return a result object (`{ grid, ...extras }`), never a bare grid. Extras describe the map, e.g. a dungeon reports its rooms (count, position, dimensions), a maze reports `start` and `exits`. Any composition with other maps is left to the caller.
 - Only a single `Random` float is injected. Derive integers and picks with the shared helpers (`randomInt`, `pickRandom`).
-- Scope: mazes, dungeons, caves, forests, roads and mines (the fishbone layout) exist. Towns, water and the rest of the plans are in `ROADMAP.md`.
+- Scope: mazes, dungeons, caves, forests, roads, streams and rivers, and mines (the fishbone layout) exist. Towns, water and the rest of the plans are in `ROADMAP.md`.
 - Reference material: the previous attempt lives in `../angstloch-old` (only the maze generator was finished) and rot.js 2.2.1 in `../ur/node_modules/rot-js`. Reimplement algorithms our way instead of copying code.
 
 ## Layout
 
-- `src/`: library source; `src/index.ts` is the public entry point. Tests sit next to their sources. Directories, with imports only pointing down the list (`dungeon` may also use `maze`, `forest/` uses `noise/` and `roads/`, and `mine/` uses `noise/`, `roads/` and the exit code and noise cave generator of `cave/`):
+- `src/`: library source; `src/index.ts` is the public entry point. Tests sit next to their sources. Directories, with imports only pointing down the list (`dungeon` may also use `maze`, `forest/` uses `noise/`, `roads/` and `streams/`, and `mine/` uses `noise/`, `roads/` and the exit code and noise cave generator of `cave/`):
   - `core/`: grid, tiles, points, ranges, randomness helpers, option assertions.
   - `rooms/`: code shared by mazes and dungeons: room placement, room plans, symmetry options and the shared dungeon options. `rooms/templates/` holds the room templates.
   - `noise/`: noise functions (simplex, fractal) for outdoor generators. It only uses `core/`.
   - `roads/`: roads and paths laid over outdoor maps. It uses `core/` and `noise/`.
+  - `streams/`: streams and rivers laid over outdoor maps, and the bending of roads to cross them. It uses `core/`, `noise/` and `roads/`.
   - `maze/`, `dungeon/` (room-first and digger), `cave/`, `forest/` and `mine/`: one generator each, with `generate-*.ts` as the entry point.
   - `test-helpers/`: seedable PRNG and dungeon checks for tests.
 - `demo/`: visual playground, run with `npm run dev`. Not published.

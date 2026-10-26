@@ -31,14 +31,13 @@ function readClearings(root: HTMLFormElement): ClearingSpec[] {
         ? undefined
         : { min: min ?? max ?? 0, max: max ?? min ?? 0 };
     };
-    const atEnd =
-      row.querySelector<HTMLSelectElement>('[name="clearingAt"]')?.value ===
-      'branch-end';
+    const at = row.querySelector<HTMLSelectElement>('[name="clearingAt"]')
+      ?.value as '' | 'branch-end' | 'stream' | undefined;
     return {
-      // a blank position means a random one, and a branch end has none
-      at: atEnd ? 'branch-end' : undefined,
-      x: atEnd ? undefined : blank(input('clearingX').value),
-      y: atEnd ? undefined : blank(input('clearingY').value),
+      // a blank position means a random one, and a branch end or a stream has none
+      at: at || undefined,
+      x: at ? undefined : blank(input('clearingX').value),
+      y: at ? undefined : blank(input('clearingY').value),
       radiusX: {
         min: number('clearingRadiusXMin'),
         max: number('clearingRadiusXMax'),
@@ -70,64 +69,111 @@ function render(): void {
   const plain = data.get('tiles') === 'plain';
 
   try {
-    const { grid, density, roads, junctions, exits } = generateForest({
-      width: value('width'),
-      height: value('height'),
-      random: mulberry32(value('seed')),
-      minDensity: value('minDensity'),
-      maxDensity: value('maxDensity'),
-      scaleX: value('scaleX'),
-      scaleY: value('scaleY'),
-      rotation: value('rotation'),
-      octaves: value('octaves'),
-      persistence: value('persistence'),
-      lacunarity: value('lacunarity'),
-      groundTile: plain ? Tile.Floor : Tile.Grass,
-      treeTile: plain ? Tile.Wall : Tile.Tree,
-      clearance: value('clearance'),
-      falloff: value('falloff'),
-      clearingSpacing: value('clearingSpacing'),
-      distance: data.get('distance') as DistanceMetric,
-      clearings: readClearings(form),
-      roads: data.has('road')
-        ? {
-            // a blank angle means a random one
-            angle: data.get('roadAngle') === '' ? 'random' : value('roadAngle'),
-            width: { min: value('roadWidthMin'), max: value('roadWidthMax') },
-            windiness: value('roadWindiness'),
-            crossings: {
-              min: value('crossingsMin'),
-              max: value('crossingsMax'),
-            },
-            crossingAngle: {
-              min: value('crossingAngleMin'),
-              max: value('crossingAngleMax'),
-            },
-            branches: {
-              min: value('branchesMin'),
-              max: value('branchesMax'),
-            },
-            branchWidth: {
-              min: value('branchWidthMin'),
-              max: value('branchWidthMax'),
-            },
-            branchAngle: {
-              min: value('branchAngleMin'),
-              max: value('branchAngleMax'),
-            },
-            branchLength: data.has('limitBranches')
-              ? {
-                  min: value('branchLengthMin'),
-                  max: value('branchLengthMax'),
-                }
-              : undefined,
-            // exact roads replace the generated network, as the library says
-            specs: data.has('exactRoads')
-              ? (JSON.parse(data.get('roadSpecs') as string) as RoadEntry[])
-              : undefined,
-          }
-        : undefined,
-    });
+    const { grid, density, roads, junctions, exits, streams, bridges } =
+      generateForest({
+        width: value('width'),
+        height: value('height'),
+        random: mulberry32(value('seed')),
+        minDensity: value('minDensity'),
+        maxDensity: value('maxDensity'),
+        scaleX: value('scaleX'),
+        scaleY: value('scaleY'),
+        rotation: value('rotation'),
+        octaves: value('octaves'),
+        persistence: value('persistence'),
+        lacunarity: value('lacunarity'),
+        groundTile: plain ? Tile.Floor : Tile.Grass,
+        treeTile: plain ? Tile.Wall : Tile.Tree,
+        // in the plain display the deep water is the wall that needs swimming
+        shallowTile: plain ? Tile.Floor : Tile.ShallowWater,
+        deepTile: plain ? Tile.Wall : Tile.DeepWater,
+        bridgeTile: plain ? Tile.Floor : Tile.Bridge,
+        streams: data.has('stream')
+          ? {
+              // a blank angle means a random one
+              angle:
+                data.get('streamAngle') === ''
+                  ? 'random'
+                  : value('streamAngle'),
+              width: {
+                min: value('streamWidthMin'),
+                max: value('streamWidthMax'),
+              },
+              windiness: value('streamWindiness'),
+              shoreWidth: value('shoreWidth'),
+              spring: data.has('spring'),
+              bridges: value('streamBridges'),
+              tributaries: {
+                min: value('tributariesMin'),
+                max: value('tributariesMax'),
+              },
+              tributaryWidth: {
+                min: value('tributaryWidthMin'),
+                max: value('tributaryWidthMax'),
+              },
+              tributaryAngle: {
+                min: value('tributaryAngleMin'),
+                max: value('tributaryAngleMax'),
+              },
+              tributaryLength: data.has('limitTributaries')
+                ? {
+                    min: value('tributaryLengthMin'),
+                    max: value('tributaryLengthMax'),
+                  }
+                : undefined,
+              bridgeAngle: {
+                min: value('bridgeAngleMin'),
+                max: value('bridgeAngleMax'),
+              },
+            }
+          : undefined,
+        clearance: value('clearance'),
+        falloff: value('falloff'),
+        bankClearance: value('bankClearance'),
+        bankFalloff: value('bankFalloff'),
+        clearingSpacing: value('clearingSpacing'),
+        distance: data.get('distance') as DistanceMetric,
+        clearings: readClearings(form),
+        roads: data.has('road')
+          ? {
+              // a blank angle means a random one
+              angle:
+                data.get('roadAngle') === '' ? 'random' : value('roadAngle'),
+              width: { min: value('roadWidthMin'), max: value('roadWidthMax') },
+              windiness: value('roadWindiness'),
+              crossings: {
+                min: value('crossingsMin'),
+                max: value('crossingsMax'),
+              },
+              crossingAngle: {
+                min: value('crossingAngleMin'),
+                max: value('crossingAngleMax'),
+              },
+              branches: {
+                min: value('branchesMin'),
+                max: value('branchesMax'),
+              },
+              branchWidth: {
+                min: value('branchWidthMin'),
+                max: value('branchWidthMax'),
+              },
+              branchAngle: {
+                min: value('branchAngleMin'),
+                max: value('branchAngleMax'),
+              },
+              branchLength: data.has('limitBranches')
+                ? {
+                    min: value('branchLengthMin'),
+                    max: value('branchLengthMax'),
+                  }
+                : undefined,
+              // exact roads replace the generated network, as the library says
+              specs: data.has('exactRoads')
+                ? (JSON.parse(data.get('roadSpecs') as string) as RoadEntry[])
+                : undefined,
+            }
+          : undefined,
+      });
     error.textContent = '';
     const trees = grid
       .toString()
@@ -137,7 +183,7 @@ function render(): void {
       .toString()
       .split('')
       .filter((c) => c === '=').length;
-    stats.textContent = `${String(roads.length)} roads (${String(roadTiles)} tiles, ${String(junctions.length)} junctions), ${String(trees)} trees of ${String(grid.width * grid.height)} tiles (${((100 * trees) / (grid.width * grid.height)).toFixed(1)}%)`;
+    stats.textContent = `${String(streams.length)} streams, ${String(bridges.length)} bridges, ${String(roads.length)} roads (${String(roadTiles)} tiles, ${String(junctions.length)} junctions), ${String(trees)} trees of ${String(grid.width * grid.height)} tiles (${((100 * trees) / (grid.width * grid.height)).toFixed(1)}%)`;
 
     const tileSize = value('tileSize');
     if (display.value === 'density') {

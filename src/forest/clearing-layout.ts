@@ -3,6 +3,8 @@ import type { DistanceMetric } from '../roads/distance-metric';
 
 /** What `layClearings` needs besides the clearings themselves. */
 export interface ClearingLayout {
+  /** The tiles of the centerlines of the streams, where a clearing `at: 'stream'` may be centered. */
+  streamTiles?: Point[];
   /** Extra tiles that random clearings keep beyond their radii from other clearings. Defaults to 0. */
   spacing?: number;
   /** The tiles that roads cover, one flag per tile row by row, and how distances to them are measured. Random clearings keep the `roadDistance` of their spec from these. Left out when there are no roads. */

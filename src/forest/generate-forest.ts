@@ -14,6 +14,12 @@ import { createRoadMap } from '../roads/create-road-map';
 import { layRoadNetwork } from '../roads/lay-road-network';
 import { assertDistanceMetric } from '../roads/assert-distance-metric';
 import { roadDistance } from '../roads/road-distance';
+import { assertStreamOptions } from '../streams/assert-stream-options';
+import { createSteerAcrossStreams } from '../streams/create-steer-across-streams';
+import { findBridges } from '../streams/find-bridges';
+import { findSpans } from '../streams/find-spans';
+import { layFootbridges } from '../streams/lay-footbridges';
+import { layStreams } from '../streams/lay-streams';
 import { layClearingPaths } from './lay-clearing-paths';
 import { layClearings } from './lay-clearings';
 import type { ForestOptions } from './forest-options';
@@ -43,8 +49,13 @@ export function generateForest(options: ForestOptions): ForestResult {
     groundTile = Tile.Grass,
     treeTile = Tile.Tree,
     roadTile = Tile.Road,
+    shallowTile = Tile.ShallowWater,
+    deepTile = Tile.DeepWater,
+    bridgeTile = Tile.Bridge,
     clearance = 0,
     falloff = 0,
+    bankClearance = 0,
+    bankFalloff = 0,
     clearingSpacing = 0,
     distance = 'chebyshev',
   } = options;
@@ -55,8 +66,13 @@ export function generateForest(options: ForestOptions): ForestResult {
   assertTile('groundTile', groundTile);
   assertTile('treeTile', treeTile);
   assertTile('roadTile', roadTile);
+  assertTile('shallowTile', shallowTile);
+  assertTile('deepTile', deepTile);
+  assertTile('bridgeTile', bridgeTile);
   assertWholeNumber('clearance', clearance, 0);
   assertWholeNumber('falloff', falloff, 0);
+  assertWholeNumber('bankClearance', bankClearance, 0);
+  assertWholeNumber('bankFalloff', bankFalloff, 0);
   assertWholeNumber('clearingSpacing', clearingSpacing, 0);
   assertDistanceMetric(distance);
   const random = resolveRandom(options.random);
@@ -71,17 +87,34 @@ export function generateForest(options: ForestOptions): ForestResult {
     { scaleX, scaleY, rotation },
   );
 
+  if (options.streams) {
+    assertStreamOptions(options.streams);
+  }
   const specs = options.clearings ?? [];
   if (options.roads) {
     assertRoadOptions(options.roads);
   }
+  // the streams come first, and the roads that are generated bend to cross them
+  const streams = options.streams
+    ? layStreams(width, height, random, options.streams)
+    : undefined;
   // paths to clearings need a road map too, even when there are no roads
   const map =
     options.roads || specs.some((spec) => spec.path)
       ? createRoadMap(width, height, random, options.roads?.windiness)
       : undefined;
   if (map && options.roads) {
-    layRoadNetwork(map, random, options.roads);
+    layRoadNetwork(
+      map,
+      random,
+      options.roads,
+      streams &&
+        createSteerAcrossStreams(
+          streams,
+          random,
+          options.streams?.bridgeAngle ?? { min: 75, max: 90 },
+        ),
+    );
   }
 
   // the dead ends of the branches that end inside the map, for the clearings
@@ -102,6 +135,7 @@ export function generateForest(options: ForestOptions): ForestResult {
   const laid = layClearings(specs, width, height, random, {
     spacing: clearingSpacing,
     branchEnds,
+    streamTiles: streams?.map.roads.flatMap(({ points }) => points),
     roads:
       map && map.roads.length > 0
         ? { covered: map.covered, metric: distance }
@@ -126,6 +160,47 @@ export function generateForest(options: ForestOptions): ForestResult {
       ? roadDistance(laid.covered, width, height, distance, falloff + 1)
       : undefined;
 
+  // the trees thin out beside water as well, with a verge of its own
+  const bankDistances =
+    streams && bankClearance + bankFalloff > 0
+      ? roadDistance(
+          streams.water,
+          width,
+          height,
+          distance,
+          bankClearance + bankFalloff + 1,
+        )
+      : undefined;
+
+  // how far up the ramp from no trees to full density a tile is, `away` tiles beyond the edge
+  const ramp = (away: number, steps: number) => away / (steps + 1);
+
+  // a road over water that does not span it, because it clips a bank, runs
+  // along a stream or ends in it, gives way to the water
+  const spans =
+    streams && roads && findSpans(streams.water, roads.covered, width, height);
+  const dry = (at: number) => streams?.water[at] !== 1 || spans?.[at] === 1;
+
+  // footbridges where the water cuts the land in two, and as many more as asked for
+  const footbridges =
+    streams &&
+    layFootbridges(
+      streams,
+      roads &&
+        Uint8Array.from(roads.covered, (tile, at) => (dry(at) ? tile : 0)),
+      random,
+      options.streams?.bridges ?? 0,
+    );
+
+  // the tiles where something crosses the water: roads and footbridges
+  const crossings =
+    streams &&
+    footbridges &&
+    Uint8Array.from(
+      footbridges,
+      (tile, at) => tile | (dry(at) ? (roads?.covered[at] ?? 0) : 0),
+    );
+
   const grid = new Grid(width, height);
   const chances = new Float32Array(width * height);
   for (let y = 0; y < height; ++y) {
@@ -133,22 +208,44 @@ export function generateForest(options: ForestOptions): ForestResult {
       // the noise from -1 to 1 becomes a position between the two densities
       const level =
         (Math.max(-1, Math.min(1, noise(x + 0.5, y + 0.5))) + 1) / 2;
-      const road = roads?.covered[y * width + x] === 1;
-      // no trees near a road or in a clearing, then a ramp back up to the
-      // full density; the road keeps its own density
-      const roadAway = (distances?.[y * width + x] ?? Infinity) - clearance;
-      const clearingAway = clearingDistances?.[y * width + x] ?? Infinity;
+      const road = roads?.covered[y * width + x] === 1 && dry(y * width + x);
+      // no trees near a road, in a clearing or beside water, then a ramp
+      // back up to the full density; the road keeps its own density
+      const roadRamp = ramp(
+        (distances?.[y * width + x] ?? Infinity) - clearance,
+        falloff,
+      );
+      const clearingRamp = ramp(
+        clearingDistances?.[y * width + x] ?? Infinity,
+        falloff,
+      );
+      const bankRamp = ramp(
+        (bankDistances?.[y * width + x] ?? Infinity) - bankClearance,
+        bankFalloff,
+      );
       const thinning = road
         ? 1
-        : Math.max(
-            0,
-            Math.min(1, Math.min(roadAway, clearingAway) / (falloff + 1)),
-          );
+        : Math.max(0, Math.min(1, roadRamp, clearingRamp, bankRamp));
       const chance =
         (minDensity + (maxDensity - minDensity) * level) * thinning;
       chances[y * width + x] = chance;
       const tree = random() < chance;
-      grid.set(x, y, road ? roadTile : tree ? treeTile : groundTile);
+      const water = streams?.water[y * width + x] === 1;
+      grid.set(
+        x,
+        y,
+        water
+          ? road || footbridges?.[y * width + x] === 1
+            ? bridgeTile
+            : streams.deep[y * width + x]
+              ? deepTile
+              : shallowTile
+          : road
+            ? roadTile
+            : tree
+              ? treeTile
+              : groundTile,
+      );
     }
   }
   return {
@@ -157,6 +254,10 @@ export function generateForest(options: ForestOptions): ForestResult {
     roads: roads?.roads ?? [],
     junctions: roads?.junctions ?? [],
     exits: roads?.exits ?? [],
+    streams: streams?.streams ?? [],
+    bridges: crossings
+      ? findBridges(streams.water, crossings, width, height)
+      : [],
     clearings: laid.clearings,
   };
 }

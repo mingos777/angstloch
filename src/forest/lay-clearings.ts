@@ -61,14 +61,24 @@ function findCenter(
   height: number,
   distances: Float32Array | undefined,
   random: Random,
+  streamTiles?: readonly Point[],
 ): Point | undefined {
   const margin = Math.ceil(reach({ x: 0, y: 0, ...shape }));
   if (width <= 2 * margin || height <= 2 * margin) {
     return undefined;
   }
-  // with roads, only the tiles in the distance range are candidates
+  // on a stream, only its tiles are candidates, with roads only the tiles in
+  // the distance range
   let candidates: Point[] | undefined;
-  if (distances) {
+  if (streamTiles) {
+    candidates = streamTiles.filter(
+      ({ x, y }) =>
+        x >= margin && y >= margin && x < width - margin && y < height - margin,
+    );
+    if (candidates.length === 0) {
+      return undefined;
+    }
+  } else if (distances) {
     candidates = [];
     for (let y = margin; y < height - margin; ++y) {
       for (let x = margin; x < width - margin; ++x) {
@@ -122,7 +132,7 @@ export function layClearings(
   specs.forEach((spec, i) => {
     assertClearing(`clearings[${String(i)}]`, spec, width, height);
   });
-  const { spacing = 0, roads, branchEnds = [] } = layout;
+  const { spacing = 0, roads, branchEnds = [], streamTiles = [] } = layout;
   const covered = new Uint8Array(width * height);
   if (specs.length === 0) {
     return { covered, clearings: [], paths: [] };
@@ -166,6 +176,7 @@ export function layClearings(
         height,
         distances,
         random,
+        specs[i]?.at === 'stream' ? streamTiles : undefined,
       );
     }
   });
@@ -208,7 +219,8 @@ export function layClearings(
       (x, y) => noise(x + left, y + top),
     );
     clearings.push(clearing);
-    if (spec.path) {
+    // a clearing on a stream has its center in the water, where no path leads
+    if (spec.path && spec.at !== 'stream') {
       const options = typeof spec.path === 'object' ? spec.path : {};
       paths.push({
         to: center,

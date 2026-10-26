@@ -29,6 +29,9 @@ const COLORS = {
   [Tile.Grass]: '#00aa00',
   [Tile.Tree]: '#2f5d34',
   [Tile.Road]: '#b48a5a',
+  [Tile.ShallowWater]: '#4a8fd8',
+  [Tile.DeepWater]: '#1f4a9c',
+  [Tile.Bridge]: '#8a5a2a',
 };
 
 const SIMPLE_EXIT_COLOR = '#4a7fc8';
@@ -40,6 +43,9 @@ const GLYPHS = {
   [Tile.Grass]: { glyph: '.', color: Color.Green },
   [Tile.Tree]: { glyph: 'T', color: Color.BrightGreen },
   [Tile.Road]: { glyph: '.', color: Color.Yellow },
+  [Tile.Bridge]: { glyph: '#', color: Color.Yellow },
+  [Tile.ShallowWater]: { glyph: '≈', color: Color.BrightBlue },
+  [Tile.DeepWater]: { glyph: '≈', color: Color.Blue },
 };
 
 const EXIT_GLYPH = { glyph: '.', color: Color.BrightBlue };

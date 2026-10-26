@@ -10,9 +10,13 @@ export function assertClearing(
   width: number,
   height: number,
 ): void {
-  if (spec.at !== undefined && (spec.at as string) !== 'branch-end') {
+  if (
+    spec.at !== undefined &&
+    (spec.at as string) !== 'branch-end' &&
+    (spec.at as string) !== 'stream'
+  ) {
     throw new RangeError(
-      `${name}.at must be 'branch-end', got ${spec.at as string}`,
+      `${name}.at must be 'branch-end' or 'stream', got ${spec.at as string}`,
     );
   }
   if (spec.at !== undefined && (spec.x !== undefined || spec.y !== undefined)) {

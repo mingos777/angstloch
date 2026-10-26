@@ -14,6 +14,10 @@ export interface ForestResult {
   junctions: Point[];
   /** The tiles on the map border where a road leaves the map. */
   exits: Point[];
+  /** The streams that were laid, with their centerlines and widths, the water flowing from the first point to the last. Empty without the `streams` option. */
+  streams: Road[];
+  /** The bridges, one for every place where a road crosses water, at the tile nearest to the middle of the bridge. */
+  bridges: Point[];
   /** The clearings that were made, with the shape they were given. Empty without the `clearings` option. */
   clearings: Clearing[];
 }

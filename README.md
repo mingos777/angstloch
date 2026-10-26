@@ -8,7 +8,7 @@ Currently available:
 - [`generateCave`](#caves): organic caves, grown with a cellular automaton.
 - [`generateNoiseCave`](#noise-caves): caves cut out of noise, as rounded caverns or winding corridors.
 - [`createSimplexNoise`](#noise): smooth 2D noise that can be stretched and turned, for terrain-like maps. Forests are built on it.
-- [`generateForest`](#forests): forests of scattered trees with clearings and denser stands, from noise, with roads, crossroads and paths through them.
+- [`generateForest`](#forests): forests of scattered trees with clearings and denser stands, from noise, with roads, crossroads and paths through them, and streams and rivers that the roads bridge.
 - [`generateMine`](#mines): mines, as a main shaft with side tunnels branching off it, a web of winding veins, halls with pillars left standing, or concentric rings, dug until the map is as full as you want.
 - [`generateRoomDungeon`](#dungeons): room-first dungeons: rooms are placed first and joined by corridors afterwards.
 - [`generateDigDungeon`](#the-digger): dungeons that are dug: corridors and rooms grow out of a first room.
@@ -26,21 +26,24 @@ grid.get(x, y); // the tile at the position; anything outside the grid is a Wall
 grid.set(x, y, Tile.Floor); // throws a RangeError outside the grid
 grid.inBounds(x, y);
 grid.clone();
-grid.toString(); // '#' wall, '.' floor, '+' door, '"' grass, 'T' tree, '=' road, one line per row
+grid.toString(); // '#' wall, '.' floor, '+' door, '"' grass, 'T' tree, '=' road, '~' shallow water, '≈' deep water, '%' bridge, one line per row
 ```
 
 Positions are plain `{ x, y }` objects (`Point`). `x` grows to the right and `y` grows downwards.
 
 The numeric values of `Tile` are part of the public contract and never change; new kinds may be added.
 
-| Tile         | Value | Meaning                                                  |
-| ------------ | ----- | -------------------------------------------------------- |
-| `Tile.Wall`  | 0     | Solid rock.                                              |
-| `Tile.Floor` | 1     | Passable floor.                                          |
-| `Tile.Door`  | 2     | A potential door placement. What to put there is yours.  |
-| `Tile.Grass` | 3     | Open ground of an outdoor map.                           |
-| `Tile.Tree`  | 4     | A tree. Whether it blocks movement or sight is yours.    |
-| `Tile.Road`  | 5     | A road or a path. They differ only in how wide they are. |
+| Tile                | Value | Meaning                                                                                                                           |
+| ------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `Tile.Wall`         | 0     | Solid rock.                                                                                                                       |
+| `Tile.Floor`        | 1     | Passable floor.                                                                                                                   |
+| `Tile.Door`         | 2     | A potential door placement. What to put there is yours.                                                                           |
+| `Tile.Grass`        | 3     | Open ground of an outdoor map.                                                                                                    |
+| `Tile.Tree`         | 4     | A tree. Whether it blocks movement or sight is yours.                                                                             |
+| `Tile.Road`         | 5     | A road or a path. They differ only in how wide they are.                                                                          |
+| `Tile.ShallowWater` | 6     | The banks of a stream: water that can be waded, at the cost of getting wet.                                                       |
+| `Tile.DeepWater`    | 7     | The middle of a wide stream, where the current or the depth needs a swimmer. A game may treat both kinds of water as plain water. |
+| `Tile.Bridge`       | 8     | A road where it crosses water.                                                                                                    |
 
 ### Options
 
@@ -454,7 +457,7 @@ The `density` in the result is 0 on the tiles that are kept clear, since it is t
 
 #### Clearings
 
-`clearings` makes glades: patches with no trees, a good place for a camp, a hut or a hamlet. Each clearing is a `ClearingSpec`. It has a center of its own, so the caller decides where it goes, or it leaves the center out and is placed at random, or it is placed at the end of a branch (see [below](#clearings-at-branch-ends)):
+`clearings` makes glades: patches with no trees, a good place for a camp, a hut or a hamlet. Each clearing is a `ClearingSpec`. It has a center of its own, so the caller decides where it goes, or it leaves the center out and is placed at random, or it is placed at the end of a branch (see [below](#clearings-at-branch-ends)) or on a stream (see [Clearings on a stream](#clearings-on-a-stream)):
 
 ```ts
 const { grid, clearings } = generateForest({
@@ -475,16 +478,16 @@ const { grid, clearings } = generateForest({
 });
 ```
 
-| Clearing option | Default               | Meaning                                                                                                                                           |
-| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `x`, `y`        |                       | The tile of the center, whole numbers inside the map. Required.                                                                                   |
-| `at`            | none                  | `'branch-end'` puts the clearing at the end of a branch instead of giving it a center. See [Clearings at branch ends](#clearings-at-branch-ends). |
-| `radiusX`       |                       | The approximate radius in tiles along the x axis, before `angle`, a `Range` of whole numbers, 1 or more. One is picked at random. Required.       |
-| `radiusY`       | `radiusX`             | The approximate radius along the y axis, a `Range` like `radiusX`. Different radii make an oval.                                                  |
-| `angle`         | 0                     | Clockwise rotation of the oval in degrees, any number.                                                                                            |
-| `irregularity`  | 0.5                   | How ragged the edge is, from 0 (a plain oval) to 1 (very ragged).                                                                                 |
-| `roadDistance`  | `{ min: 8, max: 25 }` | How far from the nearest road tile a clearing placed at random lies, a `Range` of whole numbers, 0 or more. See below.                            |
-| `path`          | none                  | `true` or `{ width?, windiness? }` leads a path to the clearing. See [Paths to clearings](#paths-to-clearings).                                   |
+| Clearing option | Default               | Meaning                                                                                                                                                                                                                            |
+| --------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `x`, `y`        |                       | The tile of the center, whole numbers inside the map. Required.                                                                                                                                                                    |
+| `at`            | none                  | `'branch-end'` puts the clearing at the end of a branch, and `'stream'` on a stream, instead of giving it a center. See [Clearings at branch ends](#clearings-at-branch-ends) and [Clearings on a stream](#clearings-on-a-stream). |
+| `radiusX`       |                       | The approximate radius in tiles along the x axis, before `angle`, a `Range` of whole numbers, 1 or more. One is picked at random. Required.                                                                                        |
+| `radiusY`       | `radiusX`             | The approximate radius along the y axis, a `Range` like `radiusX`. Different radii make an oval.                                                                                                                                   |
+| `angle`         | 0                     | Clockwise rotation of the oval in degrees, any number.                                                                                                                                                                             |
+| `irregularity`  | 0.5                   | How ragged the edge is, from 0 (a plain oval) to 1 (very ragged).                                                                                                                                                                  |
+| `roadDistance`  | `{ min: 8, max: 25 }` | How far from the nearest road tile a clearing placed at random lies, a `Range` of whole numbers, 0 or more. See below.                                                                                                             |
+| `path`          | none                  | `true` or `{ width?, windiness? }` leads a path to the clearing. See [Paths to clearings](#paths-to-clearings).                                                                                                                    |
 
 The edge is not a clean oval. Noise shifts every tile before its distance to the center is measured, so the edge bulges and pinches, and every clearing gets its own outline, even when they are given the same shape. The radii are the radii of the plain oval, and the ragged edge wanders around them, so the real size is only approximately what you asked for. A tile only belongs to the clearing if it joins the center through other tiles of the clearing, so a clearing is always one piece, with no detached specks of bare ground beyond its edge. The center is always part of the clearing, and the part that falls outside the map is cut off.
 
@@ -516,7 +519,24 @@ const { grid, clearings } = generateForest({
 - The `clearings` in the result list them after all the others, in the order of their branches.
 - The other options (radii, `angle`, `irregularity`) work as for any clearing, and so do `clearance`, `falloff` and `distance`. `roadDistance` does nothing for them. A `path` does nothing either, since the center is on a road already.
 
-An `at` that is not `'branch-end'`, or one that comes with an `x` or `y`, throws a `RangeError`.
+An `at` that is not `'branch-end'` or `'stream'`, or one that comes with an `x` or `y`, throws a `RangeError`.
+
+#### Clearings on a stream
+
+Streams often run through the middle of a meadow, and a clearing with `at: 'stream'` does the same: it is centered on a random tile of the centerline of a [stream](#streams-and-rivers), a tributary included.
+
+```ts
+const { grid, clearings } = generateForest({
+  width: 120,
+  height: 80,
+  streams: { width: { min: 2, max: 3 } },
+  clearings: [{ at: 'stream', radiusX: { min: 5, max: 8 } }],
+});
+```
+
+- No tree grows in the clearing, as in any other, but the water in it stays water, so the stream flows through the glade, and the roads and bridges in it stay as they are.
+- It is placed like a clearing at a random place: it keeps `clearingSpacing` tiles beyond the radii from the clearings placed before it, the whole plain oval stays inside the map, and the clearings are placed in the order of the list, after the ones with a center. A clearing that finds no room, or when there is no stream, is left out with no error.
+- `roadDistance` does nothing for it, and neither does a `path`, since its center is in the water.
 
 #### Paths to clearings
 
@@ -584,31 +604,99 @@ const { grid, roads } = generateForest({
 
 Placement is best effort and never an error: an `origin` or `to` outside the map is moved onto it, a road runs only as far as the map goes, and a winding road strays a little from its straight line. A `parent` that is not the index of an earlier entry, a `width` or `length` that is not a whole number of at least 1, a `windiness` or `at` outside 0 to 1, an angle or point that is not finite, an unknown `kind`, or a `to` with neither an `origin` nor a `parent` throws a `RangeError`.
 
+### Streams and rivers
+
+`streams` lays a stream through the forest, and a river is the same thing, only wider. A stream is a road made of water, so it winds like one and has a width in tiles. It is laid before the roads, as a natural feature has priority, and the roads then cross it:
+
+```ts
+const { grid, streams, bridges } = generateForest({
+  width: 120,
+  height: 70,
+  streams: { width: { min: 3, max: 3 } },
+  roads: { crossings: { min: 1, max: 2 } },
+});
+```
+
+The stream runs from one border of the map to the opposite one through a point near the middle (or, with `spring`, rises at that point, see [below](#springs)), and the water flows the way of its `angle`, so the first point of its centerline in `streams` is upstream and the last is the mouth. Its banks are `Tile.ShallowWater`, which can be waded at the cost of getting wet. A stream wide enough has `Tile.DeepWater` in the middle, which a game may gate behind a swimming ability, or it may treat both as plain water. No tree grows in the water, and where a stream flows off the map there is no bank at the edge.
+
+| Stream option | Default                | Meaning                                                                                                                                                                                                                                                                                                                                      |
+| ------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `angle`       | `'random'`             | Direction of the flow in degrees, clockwise from east, so 0 flows left to right and 90 top to bottom. `'random'` picks one.                                                                                                                                                                                                                  |
+| `width`       | `{ min: 1, max: 2 }`   | Width in tiles, a `Range` of whole numbers, 1 or more. A whole number in it is picked at random.                                                                                                                                                                                                                                             |
+| `windiness`   | 0.5                    | How much the stream winds, from 0 (straight) to 1 (it may stray up to 12 tiles to either side of the straight line).                                                                                                                                                                                                                         |
+| `shoreWidth`  | 1                      | How many tiles of shallow water the stream has on each side, a whole number, 0 or more. The rest, in the middle, is deep. A stream no wider than twice this has no deep water: with the default, widths 1 and 2 are all shallow and width 3 has a single band of deep water along its middle, and each extra tile of width widens that band. |
+| `spring`      | `false`                | Whether the stream rises at a spring inside the map and flows from it to the edge, see [Springs](#springs).                                                                                                                                                                                                                                  |
+| `bridges`     | 0                      | How many bridges the map has at least, counting those of the roads, a whole number, 0 or more. See [Footbridges](#footbridges).                                                                                                                                                                                                              |
+| `bridgeAngle` | `{ min: 75, max: 90 }` | The angle in whole degrees, from 1 to 179, at which a generated road meets the stream, as a `Range`. It is picked at random, to the left or the right.                                                                                                                                                                                       |
+
+#### Springs
+
+With `spring: true` the stream does not run from edge to edge. It rises at a point near the middle of the map, the first point of its centerline in `streams`, and flows from there to the edge of the map the way of its `angle`, with no water upstream of the spring. The land can then be walked round it, so it needs no footbridge. Tributaries can join it as they join any stream.
+
+#### Tributaries
+
+`tributaries` adds thinner streams that flow into the stream from the side. Each leaves a point of a stream, away from its ends and from the other confluences, and runs upstream, at an angle from `tributaryAngle` to the flow of the stream it joins, to either side, so the two meet at an acute angle as real streams do. A tributary may join another tributary. It runs to the edge of the map, or, with a `tributaryLength`, stops in the forest, which makes a spring.
+
+| Stream option     | Default                | Meaning                                                                                                                   |
+| ----------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `tributaries`     | none                   | How many tributaries, a `Range` of whole numbers, 0 or more. Fewer are made when the map is too small to place them.      |
+| `tributaryWidth`  | `{ min: 1, max: 1 }`   | Width in tiles, a `Range` of whole numbers, 1 or more.                                                                    |
+| `tributaryAngle`  | `{ min: 30, max: 60 }` | The angle in whole degrees, from 1 to 179, between a tributary and the flow of the stream it joins, as a `Range`.         |
+| `tributaryLength` | to the edge            | The length in tiles, a `Range` of whole numbers, 1 or more. A tributary too short to reach the edge starts in the forest. |
+
+In `streams` a tributary is a `Road` of `kind` `'branch'`, after the main stream, in the order they were laid, and its `points` run with the water: from its source to the tile where it joins the stream. Its water has the same banks and deep water as the stream's, and where it joins, the water of the two is one. Roads are bent to cross a tributary as they are to cross the stream.
+
+#### Banks
+
+By default trees grow right up to the water, as they often do. `bankClearance` and `bankFalloff` thin them out beside it, exactly as `clearance` and `falloff` do beside a road, but for the water of every stream and with their own values: `bankClearance` tiles are bare and the trees then thicken over `bankFalloff` tiles. The `distance` model measures both. Both default to 0 and must be whole numbers of at least 0, or a `RangeError` is thrown.
+
+#### Bridges
+
+Where a road meets water, the road wins: its tiles over the water become `Tile.Bridge`, as wide as the road, and the water under it is not shown. A generated road (the main road, the crossings and the branches of `roads`) never runs along a stream, and crosses one at most once in a place. Where it comes near water (within 6 tiles), the stretch is laid again over land only, as a smooth curve that keeps 1 to 3 tiles from the water (or, where no curve fits, a path round the water pulled taut). If the road has to get to the other side of the water, the new stretch has a single straight crossing at an angle from `bridgeAngle`, no longer than the stream is wide plus two tiles, and joined to the rest of the road over land; otherwise the road goes round the stream. Stretches within 20 tiles of each other count as one, so a road that wanders back and forth over a stream still gets a single bridge. Where tributaries join a stream, the crossing may be put anywhere within 15 tiles of the road, so it can go straight to the land it needs without a second bridge over a tributary. A crossing within 8 tiles of another stream (where a tributary joins) is chosen only when there is no other, so that bridges are not built at confluences. A road that starts or ends in the water, or beside it, on the edge of the map has that end moved along the edge to the nearest tile clear of the water, preferably one on the same land as the rest of the road (within 30 tiles; an end that is clear of the water but on other land is moved too, so that the road need not cross at once), so a road and a stream that leave the map at the same place do not overlap. The roads of `roads.specs` and the [paths to clearings](#paths-to-clearings) are not bent, since they are placed exactly, and they are bridged wherever they happen to span the stream. Whatever the road, a road over water that does not span it, because it clips a bank, runs along the bank of the stream or ends in it, gives way to the water: a group of bridge tiles is laid only when it joins two different pieces of land, those that the water cuts the map into. A bridge is as wide as the road that crosses: where the road is wider than the crossing line, the lanes at its sides are bridge too, not water.
+
+#### Footbridges
+
+The land is never cut apart by water. A stream that runs from edge to edge, and tributaries that reach the border, split the map into pieces, and the roads may not cross them all. So where the land (every tile that is not water, with roads and their bridges counting as land) falls into pieces, the nearest two are joined by a footbridge by the shortest crossing there is, and this is repeated until there is one piece. A footbridge is a straight line of `Tile.Bridge` along a row or a column, one tile wide, across the water, and never on the edge of the map. When the only crossing there is would lie on the edge, the land is left in pieces. Trees are taken to be passable, as the generator does elsewhere. A stream with a `spring` does not cut the land and needs none.
+
+`bridges` asks for more: it is the least number of bridges the map has, roads included. If the roads and the footbridges that join the land make fewer, more footbridges are added, each across a stream at a random place, at least 8 tiles from another bridge. A footbridge is never longer than the stream is wide plus two tiles, so it never runs along a stream where two meet. When there is no room, the map has fewer than `bridges`. Footbridges are not bent to `bridgeAngle`; that is for roads.
+
+`bridges` in the result has one point for every bridge, footbridges included: a group of bridge tiles that touch along an edge, at the tile nearest to its middle. The roads and `junctions` are not changed by a bridge, and a stream never makes a junction.
+
+`shallowTile`, `deepTile` and `bridgeTile` replace the tiles of the water and the bridge, for instance `Tile.Floor` for shallow water and `Tile.Wall` for deep water in a game that makes no distinction.
+
+A `bridges` that is not a whole number of at least 0, a `width`, `tributaryWidth` or `tributaryLength` that is not a `Range` of whole numbers of at least 1, `tributaries` that is not a `Range` of whole numbers of at least 0, a `tributaryAngle` that is not a `Range` of whole degrees from 1 to 179, a `windiness` outside 0 to 1, a `shoreWidth` that is not a whole number of at least 0, an `angle` that is not finite or `'random'`, a `bridgeAngle` that is not a `Range` of whole degrees from 1 to 179, or a `shallowTile`, `deepTile` or `bridgeTile` that is not a `Tile` value throws a `RangeError`.
+
 ### `ForestOptions`
 
-| Option            | Default       | Meaning                                                                                                                                                                  |
-| ----------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `width`           |               | Map width in tiles. Required.                                                                                                                                            |
-| `height`          |               | Map height in tiles. Required.                                                                                                                                           |
-| `random`          | `Math.random` | Source of randomness.                                                                                                                                                    |
-| `minDensity`      | 0             | The chance of a tree where the noise is at its lowest, from 0 to 1.                                                                                                      |
-| `maxDensity`      | 0.25          | The chance of a tree where the noise is at its highest, from 0 to 1. With the same value as `minDensity`, trees are scattered evenly.                                    |
-| `scaleX`          | 40            | Size in tiles of a feature of the noise along the x axis, before rotation. Larger values make broader woods and glades. A positive number.                               |
-| `scaleY`          | 40            | The same along the y axis. Different scales stretch the woods.                                                                                                           |
-| `rotation`        | 0             | Clockwise rotation of the noise in degrees. A stretched wood runs diagonally with a rotation of 45. See [`transformNoise`](#noise).                                      |
-| `octaves`         | 1             | Layers of the built-in noise, each finer than the one before. With 1 there is a single layer, and `persistence` and `lacunarity` do nothing. A whole number, 1 or more.  |
-| `persistence`     | 0.2           | How much each layer counts against the one before it, from 0 to 1. Only matters with more than one octave.                                                               |
-| `lacunarity`      | 1             | How much finer each layer is than the one before it. A positive number. Only matters with more than one octave.                                                          |
-| `noise`           | built-in      | A [`NoiseFunction`](#noise) to use instead of the built-in simplex noise.                                                                                                |
-| `groundTile`      | `Tile.Grass`  | The tile for ground without a tree. Any `Tile` value, for instance `Tile.Floor`.                                                                                         |
-| `treeTile`        | `Tile.Tree`   | The tile for a tree, for instance `Tile.Wall` for a forest that blocks like rock.                                                                                        |
-| `roads`           | no roads      | Lays a road through the forest, see [Roads](#roads).                                                                                                                     |
-| `clearance`       | 0             | How many tiles beside a road are kept free of trees, a whole number, 0 or more. See [Clearance](#clearance).                                                             |
-| `falloff`         | 0             | How many tiles the trees take to thicken from none to full density beyond the `clearance`, a whole number, 0 or more. See [Falloff and distance](#falloff-and-distance). |
-| `distance`        | `'chebyshev'` | How distances to a road are measured for `clearance` and `falloff`: `'chebyshev'`, `'manhattan'` or `'euclidean'`. See [Falloff and distance](#falloff-and-distance).    |
-| `clearings`       | none          | Glades with ragged edges, free of trees: a list of `ClearingSpec`. See [Clearings](#clearings).                                                                          |
-| `clearingSpacing` | 0             | How many tiles beyond their radii clearings placed at random keep from other clearings, a whole number, 0 or more. See [Clearings](#clearings).                          |
-| `roadTile`        | `Tile.Road`   | The tile for a road.                                                                                                                                                     |     |
+| Option            | Default             | Meaning                                                                                                                                                                  |
+| ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `width`           |                     | Map width in tiles. Required.                                                                                                                                            |
+| `height`          |                     | Map height in tiles. Required.                                                                                                                                           |
+| `random`          | `Math.random`       | Source of randomness.                                                                                                                                                    |
+| `minDensity`      | 0                   | The chance of a tree where the noise is at its lowest, from 0 to 1.                                                                                                      |
+| `maxDensity`      | 0.25                | The chance of a tree where the noise is at its highest, from 0 to 1. With the same value as `minDensity`, trees are scattered evenly.                                    |
+| `scaleX`          | 40                  | Size in tiles of a feature of the noise along the x axis, before rotation. Larger values make broader woods and glades. A positive number.                               |
+| `scaleY`          | 40                  | The same along the y axis. Different scales stretch the woods.                                                                                                           |
+| `rotation`        | 0                   | Clockwise rotation of the noise in degrees. A stretched wood runs diagonally with a rotation of 45. See [`transformNoise`](#noise).                                      |
+| `octaves`         | 1                   | Layers of the built-in noise, each finer than the one before. With 1 there is a single layer, and `persistence` and `lacunarity` do nothing. A whole number, 1 or more.  |
+| `persistence`     | 0.2                 | How much each layer counts against the one before it, from 0 to 1. Only matters with more than one octave.                                                               |
+| `lacunarity`      | 1                   | How much finer each layer is than the one before it. A positive number. Only matters with more than one octave.                                                          |
+| `noise`           | built-in            | A [`NoiseFunction`](#noise) to use instead of the built-in simplex noise.                                                                                                |
+| `groundTile`      | `Tile.Grass`        | The tile for ground without a tree. Any `Tile` value, for instance `Tile.Floor`.                                                                                         |
+| `treeTile`        | `Tile.Tree`         | The tile for a tree, for instance `Tile.Wall` for a forest that blocks like rock.                                                                                        |
+| `roads`           | no roads            | Lays a road through the forest, see [Roads](#roads).                                                                                                                     |
+| `clearance`       | 0                   | How many tiles beside a road are kept free of trees, a whole number, 0 or more. See [Clearance](#clearance).                                                             |
+| `falloff`         | 0                   | How many tiles the trees take to thicken from none to full density beyond the `clearance`, a whole number, 0 or more. See [Falloff and distance](#falloff-and-distance). |
+| `distance`        | `'chebyshev'`       | How distances to a road are measured for `clearance` and `falloff`: `'chebyshev'`, `'manhattan'` or `'euclidean'`. See [Falloff and distance](#falloff-and-distance).    |
+| `clearings`       | none                | Glades with ragged edges, free of trees: a list of `ClearingSpec`. See [Clearings](#clearings).                                                                          |
+| `clearingSpacing` | 0                   | How many tiles beyond their radii clearings placed at random keep from other clearings, a whole number, 0 or more. See [Clearings](#clearings).                          |
+| `bankClearance`   | 0                   | How many tiles beside the water of a stream are kept free of trees, a whole number, 0 or more. See [Banks](#banks).                                                      |
+| `bankFalloff`     | 0                   | How many tiles the trees take to thicken beyond the `bankClearance`, a whole number, 0 or more. See [Banks](#banks).                                                     |
+| `streams`         | no streams          | Lays a stream, or a river, through the forest, see [Streams and rivers](#streams-and-rivers).                                                                            |
+| `shallowTile`     | `Tile.ShallowWater` | The tile for the shallow water of a stream.                                                                                                                              |
+| `deepTile`        | `Tile.DeepWater`    | The tile for the deep water of a stream.                                                                                                                                 |
+| `bridgeTile`      | `Tile.Bridge`       | The tile for a bridge, where a road crosses water.                                                                                                                       |
+| `roadTile`        | `Tile.Road`         | The tile for a road.                                                                                                                                                     |     |
 
 An injected `noise` takes the place of the built-in simplex noise: it receives positions in noise units, which is the tile center divided by the scales after the rotation, and returns a number from -1 to 1. Anything outside that range is limited to it. Since it replaces the built-in noise, `octaves`, `persistence` and `lacunarity` do not apply to it; wrap it in [`createFractalNoise`](#noise) if you want layers. `scaleX`, `scaleY` and `rotation` apply to it as they do to the built-in noise.
 
@@ -621,6 +709,8 @@ Non-positive or non-integer dimensions, a `minDensity` or `maxDensity` outside 0
 - `roads`: the roads that were laid, the main road first. Each is a `Road` with its `kind` (`'road'` for the main road and crossings, `'branch'` for branches and for the [paths to clearings](#paths-to-clearings)), its `width` in tiles and its `points`, the tiles of its centerline from one end to the other, each next to the one before. Empty without the `roads` option and without paths.
 - `junctions`: the places where roads meet or cross, which are good places for a signpost or an inn. Empty while there is a single road. See [Crossings and branches](#crossings-and-branches).
 - `exits`: the tiles on the map border where a road leaves the map, as for a [maze](#mazes). A game can join the maps on the other sides there.
+- `streams`: the streams that were laid, as `Road`s: `width` in tiles and `points`, the tiles of the centerline from upstream to the mouth. Empty without the `streams` option. See [Streams and rivers](#streams-and-rivers).
+- `bridges`: the bridges, one point for each place where a road or a footbridge crosses water. Empty without streams.
 - `clearings`: the clearings that were made, each with its center `x` and `y`, `radiusX`, `radiusY` (the radii that were picked, plain numbers) and `angle`, the defaults filled in. Empty without the `clearings` option. See [Clearings](#clearings).
 
 ```ts
@@ -1260,13 +1350,13 @@ A template that cannot be placed will always throw a `TemplatePlacementError` in
 
 A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons, the caves, the mines, the forests and the noise each have their own page, and the dungeon page switches between the room-first generator and the digger, and has a **Connection** select (nearest, bsp or bsp-random) next to the partition for the room-first one. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
 
-All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background, in the colors of an ANSI terminal: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500), grass `.` (#00aa00), tree `T` (#55ff55), road `.` (#aa5500) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
+All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background, in the colors of an ANSI terminal: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500), grass `.` (#00aa00), tree `T` (#55ff55), road `.` (#aa5500), bridge `#` (#aa5500), shallow water `≈` (#5555ff), deep water `≈` (#0000aa) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
 
 The maze page has the same room controls: the count, size and exits of ordinary [rooms](#rooms-in-mazes) (a maximum count of 0 means no rooms), the door chance, and the same Templates panel under the map, which is shared with the dungeon page. Tick **Use templates** to place them in the maze, mind that they must fit the lattice. Templated rooms are outlined, and room openings without a door are highlighted by **Show room gaps**.
 
 The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png`, `angstloch-dungeon.png`, `angstloch-cave.png` or `angstloch-mine.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
 
-The forest page has a control for every `ForestOptions` field, including a switch for the road with its angle (blank for random), width and windiness, the clearance, the falloff and the distance model (chebyshev, manhattan or euclidean), any number of clearings (an **Add clearing** button adds a row with a position (or **At** a branch end), radii as min and max (blank y radii mean the same as x), angle and irregularity; a blank position means a random place, plus its road distance range and a **Path** checkbox with the path's width and windiness), the clearing spacing, the crossings and branches with all their options (branch length is only limited when **Limit branch length** is ticked), **Mark junctions** (red squares) and **Mark road exits**, a switch between grass-and-tree and floor-and-wall tiles, and a **density** display that paints the chance of a tree on every tile, stretched over the range from `minDensity` to `maxDensity`: white for thick woods and black for glades, so you can see what the noise settings do before the trees are rolled. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
+The forest page has a control for every `ForestOptions` field, including a switch for the road with its angle (blank for random), width and windiness, the clearance, the falloff and the distance model (chebyshev, manhattan or euclidean), any number of clearings (an **Add clearing** button adds a row with a position (or **At** a branch end), radii as min and max (blank y radii mean the same as x), angle and irregularity; a blank position means a random place, plus its road distance range and a **Path** checkbox with the path's width and windiness), the clearing spacing, the crossings and branches with all their options (branch length is only limited when **Limit branch length** is ticked), **Mark junctions** (red squares) and **Mark road exits**, a **Stream** switch with its angle (blank for random), a **Spring** switch, the least number of bridges, width, windiness, shore width, tributaries (count, width, angle and, when **Limit tributary length** is ticked, length), the bank clearance and falloff, and the bridge angle, a switch between grass-and-tree and floor-and-wall tiles (where deep water becomes a wall), and a **density** display that paints the chance of a tree on every tile, stretched over the range from `minDensity` to `maxDensity`: white for thick woods and black for glades, so you can see what the noise settings do before the trees are rolled. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
 
 The mine page has a control for every `MineOptions` field (hall entrances is a select of `facing` and `edge`), with the ranges as a min and a max, a blank angle for a random one, and a blank density, hall size or ring count for the default. The stats line shows the share of floor, the number of tunnels and the exits, and **Mark tunnels** paints the middle line of the main shaft red and of the other tunnels (adits, veins, rings and spokes) blue, **Mark halls** outlines the halls of the pillars layout, and **Mark caverns** outlines the caverns, the room count (a maximum of 0 means no rooms), size, exits and door chance work as on the maze page, and its Templates panel, shared with the maze and dungeon pages, takes templates with **Use templates**, which are outlined and labeled by **Outline templates**.
 

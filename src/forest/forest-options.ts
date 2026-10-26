@@ -3,6 +3,7 @@ import type { Tile } from '../core/tile';
 import type { NoiseFunction } from '../noise/noise-function';
 import type { DistanceMetric } from '../roads/distance-metric';
 import type { RoadOptions } from '../roads/road-options';
+import type { StreamOptions } from '../streams/stream-options';
 import type { ClearingSpec } from './clearing-spec';
 
 export interface ForestOptions extends BaseOptions {
@@ -32,8 +33,20 @@ export interface ForestOptions extends BaseOptions {
   roads?: RoadOptions;
   /** The tile for a road. Defaults to `Tile.Road`. */
   roadTile?: Tile;
+  /** Lays a stream through the forest, before the roads: shallow water on its banks, deep water in the middle when it is wide enough, and no trees in the water. A road that crosses it is laid over it as a bridge. Defaults to no streams. */
+  streams?: StreamOptions;
+  /** The tile for the shallow water of a stream. Defaults to `Tile.ShallowWater`. */
+  shallowTile?: Tile;
+  /** The tile for the deep water of a stream. Defaults to `Tile.DeepWater`. */
+  deepTile?: Tile;
+  /** The tile for a bridge, where a road crosses water. Defaults to `Tile.Bridge`. */
+  bridgeTile?: Tile;
   /** How many tiles beside a road have no trees, a whole number of at least 0. Tiles count in any direction, so a clearance of 1 keeps trees off all eight neighbors of a road tile, diagonals included. Defaults to 0, where the trees grow right up to the road. */
   clearance?: number;
+  /** How many tiles beside the water of a stream have no trees, a whole number of at least 0, counted like `clearance`. Defaults to 0, where trees grow right at the water's edge. */
+  bankClearance?: number;
+  /** How many tiles the trees take to thicken from none to their full density beyond the `bankClearance`, a whole number of at least 0, as for `falloff`. Defaults to 0. */
+  bankFalloff?: number;
   /** How many tiles the trees take to thicken from none to their full density, beyond the `clearance` of a road and beyond the edge of a clearing, a whole number of at least 0. The chance of a tree grows in equal steps: with a falloff of 3 the first tile past the clearance has a quarter of its chance, the next half, the next three quarters, and the one after that all of it. Defaults to 0, where the trees are at full density right past the clearance. */
   falloff?: number;
   /** How the distance to a road is measured, for both `clearance` and `falloff`: `'chebyshev'` counts a diagonal step as one tile and makes square verges, `'manhattan'` counts only orthogonal steps and makes diamonds, and `'euclidean'` measures the straight line between tile centers, so a diagonal step is about 1.41 tiles, and makes round verges. Defaults to `'chebyshev'`. */

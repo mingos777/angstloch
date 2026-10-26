@@ -12,9 +12,10 @@ Implemented, documented and reviewed:
 - **Noise** (`createSimplexNoise`, `createFractalNoise`, `transformNoise`): public building blocks, no dependencies. It stays in this package; extracting it into a separate library was considered and rejected (the forest needs a default noise, and the code is small and isolated in `src/noise/`).
 - **Noise caves** (`generateNoiseCave`): a cave from thresholded noise, with `shape: 'blobs' | 'veins'`, `fill` as a quantile and `cornerBias`; the connection half it shares with `generateCave` lives in `src/cave/finish-cave.ts`.
 - **Forests** (`generateForest`): noise-driven tree density, roads with crossings and branches, exact roads from a `specs` list, `clearance`, `falloff` and `distance`, `Tile.Grass`, `Tile.Tree`, `Tile.Road`, and clearings (radii are `Range`s), with optional paths to them and clearings at the dead ends of branches (`at: 'branch-end'`).
+- **Streams and rivers** (`streams` of `generateForest`): a stream is a road made of water, laid before the roads, with shallow banks and a deep core, tributaries, springs, bridges where roads cross (generated roads are bent to cross at 75 to 90 degrees), footbridges that keep the land in one piece, `bankClearance` and `bankFalloff`, and `at: 'stream'` clearings. See Streams and rivers under the design decisions.
 - **Mines** (`generateMine`): four layouts (`fishbone`, `veins`, `pillars`, `rings`), noise caverns, rooms and room templates with doors, and exits. See Mines under the design decisions.
 
-The tile values are part of the public contract and never change: `Wall` 0, `Floor` 1, `Door` 2, `Grass` 3, `Tree` 4, `Road` 5.
+The tile values are part of the public contract and never change: `Wall` 0, `Floor` 1, `Door` 2, `Grass` 3, `Tree` 4, `Road` 5, `ShallowWater` 6, `DeepWater` 7, `Bridge` 8.
 
 The source layout and its import rule (imports only point down: `core`, then `rooms` and `noise`, then `roads`, then the generators, which may also use `cave/` and `maze/` as listed) are in `CLAUDE.md`.
 
@@ -34,9 +35,34 @@ The source layout and its import rule (imports only point down: `core`, then `ro
   - **Caverns**: `caverns`, `cavernSize` and `cavernFill`, from `generateNoiseCave` keeping the largest region. Each goes at the best of 20 random places in the rock (the nearest to the mine) and never overlaps floor. It touches the mine or is joined by a short tunnel, and is left out when it finds no room.
   - **Rooms and templates**: `rooms` (as for mazes, but any size), `templates` (the shared `RoomTemplate`), `exitsPerRoom` (1 to 3) and `doorChance` (1), copied from the maze. In rock only, 2 tiles clear of the mine and of each other. An ordinary room that finds no spot or cannot be joined is left out, and a template that cannot be placed or joined throws a `TemplatePlacementError`. Every opening gets a winding tunnel to the nearest floor round any room in the way. No two openings of a room are next to each other, diagonals included. Ordinary rooms use their own spot search, since the shared template placement scan was too slow with the whole mine as one obstacle (15 seconds for ten rooms on 200 by 120); templates still use the shared code.
   - **The border**: a ring of wall always closes the map in, except for the exits. There is no `borderWalls` option.
+- **Streams and rivers** (`src/streams/`, built on `src/roads/`; tasks 1/4 to 4/4, awaiting review). A river is a stream with a larger width range, one `streams` option.
+  - **Tiles**: `ShallowWater` 6 ("passable at the cost of getting wet"), `DeepWater` 7 (needs swimming), `Bridge` 8. A game may read both waters as plain water. Playground glyphs: bridge `#` Yellow, shallow `≈` BrightBlue, deep `≈` Blue.
+  - **Banks shallow, middle deep**: `shoreWidth` (default 1) tiles of shallow water on each side, and a deep core of `width - 2 * shoreWidth` along the centerline (a brush, not a distance from the bank, which gave deep tiles at the bends of a narrow stream). So widths 1 and 2 are all shallow and width 3 has a one-tile band.
+  - **Laid before the roads** (a natural feature has priority), on a road map of its own. The water flows the way of `angle`, so `points` run upstream to mouth; tributaries (the branches of the stream, leaving against the flow at 30 to 60 degrees) are listed reversed, from source to confluence. `spring: true` grows the stream one way only.
+  - **Roads cross it at 75 to 90 degrees** (`bridgeAngle`): `addRoad` takes a `reshape` hook, and `createSteerAcrossStreams` re-lays the stretch of a generated road around each place where its centerline meets a stream's as a straight line at the angle. Two 4-connected tile paths can only cross by sharing a tile, so meeting centerlines is the right test. Exact roads (`roads.specs`) and the paths to clearings are not bent. Known limit: a crossing within about 12 tiles of the end of a road leaves a rough bend there.
+  - **Road wins**: road tiles over water are `Bridge`. `bridges` in the result has a point per group of bridge tiles.
+  - **One bridge, or none** (`create-steer-across-streams.ts`, `find-spans.ts`): a generated road crosses a stream once, at most: stretches near a stream within 20 tiles of each other merge into one crossing, laid as a land path to a single straight crossing (found by walking out of the water from road tiles, one band of water, no longer than the widest stream plus two) and a land path on (smooth Hermite curves, `curve-tiles.ts`, with a taut BFS path, `find-land-path.ts` and `smooth-path.ts`, as the fallback; both keep 3, 2 or 1 tiles off the water). A road end in or beside water on the map's edge slides along the edge to clear ground. A road that touches a stream and leaves on the same side goes round it by a land path. As a backstop, a group of road tiles over water that does not join two different pieces of land gives way to the water, and one that does keeps its whole width. A road that has to cross two bands of water (a stream and its tributary) crosses in hops, by the piece graph (`neighbors` in `create-steer-across-streams.ts`), picking at each hop the crossing that gets nearer the land the road is going to.
+  - **The land is never cut in two** (`lay-footbridges.ts`): the pieces of walkable land (roads and their bridges count as land, trees are passable) are joined nearest first by the shortest straight crossing, a one-tile footbridge along a row or a column. A spring stream needs none. `bridges` is a minimum count on top of that, spaced 8 tiles apart, never longer than the stream's width plus two, so a footbridge never runs along a stream, and never on the edge of the map.
+  - **Banks and trees**: `bankClearance` and `bankFalloff` (default 0, trees often grow at the water's edge) have their own ramp, apart from `clearance` and `falloff`, sharing `distance`.
+  - **Clearings on a stream**: `at: 'stream'` is centered on a random tile of any stream centerline, placed like a random clearing (spacing, inside the map), no path, water stays water.
+  - **Left for later**: ponds, lakes and swamps centered on stream tiles (a stream that ends in a lake), fords, rivers in other generators.
 - **BSP corridors** are derived from room positions (a median split along the most spread axis), not from the real partition tree, so they work with every placement, templates and symmetry.
 
 ## Next up
+
+### Streams and roads: visual review and fixes
+
+The way generated roads cross and avoid streams (`create-steer-across-streams.ts`, `find-spans.ts`, `lay-footbridges.ts`) was tuned seed by seed in the last session, by ASCII dumps and rendered images, and the user still finds artifacts. It needs a systematic pass: verify it visually over many seeds (the playground, with the road and stream switched on, and with 0 to 2 tributaries; a script that renders a grid of seeds to PNG would help), write down every artifact class, analyse each cause, then fix them together instead of one seed at a time. Known weak spots to start from:
+
+- Roads next to a confluence, or between a stream and its tributaries, where land is cut into thin strips; the road may need two bridges, or odd detours.
+- Chunky bridges where a road crosses a diagonal stretch or a junction (a width-3 road stamped along a diagonal), and diagonal crossings that look edgy.
+- Roads that run beside a stream at a fixed distance, with straight stretches, and the S-bends before a crossing at 75 to 90 degrees.
+- Road ends that slide along the edge of the map, so the exit moves, and ends that sit near a stream's mouth.
+- Footbridges next to each other or next to a road bridge, where thin strips of land are joined (the never-cut-the-land rule wins over spacing).
+- `roads.specs` roads and paths to clearings, which are not steered at all and only get the drowning backstop.
+- The steering works with stream width 3 and road width 3; other widths, windiness and `bridgeAngle` have had little visual checking.
+
+Seeds the user flagged, with the playground at 80 by 50, a stream of width 3 (windiness 0.5) and a road of width 3 (windiness 0.3), both at a random angle: 2, 4, 5, 6, 12, 18, 20, 27, 28 without tributaries, and 5, 6, 85, 88, 90 with `tributaries` 2 to 2.
 
 ### Pillar halls: a network that grows, with a detour limit
 
@@ -65,7 +91,7 @@ Roughly in the order the user wants them. Each needs a design talk before it is 
 
 All of this is optional follow-up to the finished forest.
 
-- **Glades and pools**, depending on the clearing code: natural openings in the forest, such as a drained lake bed or a pond, made from the clearing shapes. Pools need a water tile (see Water and lava) and a rule that keeps them from cutting the map in two. A found-glade mode (detecting the openings that the noise already leaves) belongs here. Needs a design talk.
+- **Glades and pools**, now that the streams exist (see Ponds, lakes and swamps; a pool in a clearing or at a stream tile was the design in mind, and found glades were to be dropped), depending on the clearing code: natural openings in the forest, such as a drained lake bed or a pond, made from the clearing shapes. Pools need a water tile (see Water and lava) and a rule that keeps them from cutting the map in two. A found-glade mode (detecting the openings that the noise already leaves) belongs here. Needs a design talk.
 - **Forest connectivity and regions.** Left out on purpose until the user has seen what forests come out. If wanted, the cave's region and tunnel code would move into a shared directory, with `connect` defaulting to `'none'`, since forests are usually see-through.
 - **Clearings with templates**, to put a ruin or a camp in a glade.
 - **Roads in other generators**: the `src/roads/` module (`layRoads`) is meant to be reused by the village and the town. `RoadNetwork` is currently internal; export it when a generator needs it.
@@ -90,9 +116,9 @@ Nothing is planned, and everything here is optional:
 
 Undecided. They feel like a very structured variant of the digger (rigid, often on a lattice, with niches along the walls and a few crypts from room templates), and may or may not get a generator of their own. The mine is done, so this can be designed now. The carving core and the room and cavern code of `src/mine/` may carry over.
 
-### Lakes and rivers
+### Ponds, lakes and swamps
 
-A river is a winding centerline like a road, so it can share the code in `src/roads/` (`growCenterline`). It needs a water tile and a way to cross it (bridges, fords) where it meets a road.
+Streams and rivers are done. What is left is standing water, which the stream code now allows: a pond or lake centered on a stream tile (the design already has `at: 'stream'`), possibly with the stream flowing through it or ending in it, and swamps. The earlier idea of pools in clearings (a smaller ragged oval clipped to keep a bank of ground) still fits. A pool must not cut the map in two, which `layFootbridges` already guards for streams. Fords are open. Needs a design talk.
 
 ### Mazes and rooms
 

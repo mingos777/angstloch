@@ -13,7 +13,7 @@ describe('assertTile', () => {
     expect(assert).not.toThrow();
   });
 
-  it.each([-1, 6, 1.5, Number.NaN])('rejects %s', (value) => {
+  it.each([-1, 9, 1.5, Number.NaN])('rejects %s', (value) => {
     // given
     const assert = () => {
       assertTile('tile', value);

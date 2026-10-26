@@ -8,6 +8,9 @@ const SYMBOLS: Record<Tile, string> = {
   [Tile.Grass]: '"',
   [Tile.Tree]: 'T',
   [Tile.Road]: '=',
+  [Tile.ShallowWater]: '~',
+  [Tile.DeepWater]: '≈',
+  [Tile.Bridge]: '%',
 };
 
 /** A rectangular grid of tiles, stored row by row in a flat typed array. */

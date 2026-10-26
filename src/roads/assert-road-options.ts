@@ -1,18 +1,8 @@
 import { assertFraction } from '../core/assert-fraction';
 import { assertRange } from '../core/assert-range';
-import type { Range } from '../core/range';
+import { assertDegrees } from './assert-degrees';
 import { assertRoadEntries } from './assert-road-entries';
 import type { RoadOptions } from './road-options';
-
-/** Throws a `RangeError` unless the range is whole degrees from 1 to 179. */
-function assertDegrees(name: string, range: Range): void {
-  assertRange(name, range, 1);
-  if (range.max > 179) {
-    throw new RangeError(
-      `${name}.max must be at most 179 degrees, got ${String(range.max)}`,
-    );
-  }
-}
 
 /** Throws a `RangeError` unless the road options are valid. */
 export function assertRoadOptions(options: RoadOptions): void {

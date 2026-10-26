@@ -21,6 +21,7 @@ export type { Exit } from './rooms/exit';
 export { generateCave } from './cave/generate-cave';
 export { generateNoiseCave } from './cave/generate-noise-cave';
 export type { Road } from './roads/road';
+export type { StreamOptions } from './streams/stream-options';
 export type { RoadKind } from './roads/road-kind';
 export type { DistanceMetric } from './roads/distance-metric';
 export type { RoadOptions } from './roads/road-options';

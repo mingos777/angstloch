@@ -1,3 +1,4 @@
+import type { Point } from '../core/point';
 import type { Random } from '../core/random';
 import { randomInt } from '../core/random-int';
 import { addRoad } from './add-road';
@@ -13,12 +14,15 @@ const radians = (degrees: number) => (degrees * Math.PI) / 180;
  * border to the opposite one through a point near the middle of the map.
  * Crossings and then branches are attached to the roads that are there. The
  * options must be valid, and `windiness` is the one of the map. When the
- * options have `specs`, those roads are laid instead.
+ * options have `specs`, those roads are laid instead. `reshape` changes the
+ * centerline of every generated road before it is laid, and does not apply to
+ * the roads of `specs`.
  */
 export function layRoadNetwork(
   map: RoadMap,
   random: Random,
   options: RoadOptions,
+  reshape?: (points: Point[]) => Point[],
 ): void {
   if (options.specs) {
     layRoadEntries(map, random, options.specs);
@@ -46,6 +50,7 @@ export function layRoadNetwork(
     },
     angle: radians(degrees),
     directions: [-1, 1],
+    reshape,
   });
 
   const side = () => (random() < 0.5 ? 1 : -1);
@@ -64,6 +69,7 @@ export function layRoadNetwork(
         side() *
           radians(randomInt(random, crossingAngle.min, crossingAngle.max)),
       directions: [-1, 1],
+      reshape,
     });
   }
 
@@ -85,6 +91,7 @@ export function layRoadNetwork(
       maxLength: branchLength
         ? randomInt(random, branchLength.min, branchLength.max)
         : undefined,
+      reshape,
     });
   }
 }
