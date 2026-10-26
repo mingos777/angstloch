@@ -8,6 +8,7 @@ import { joinTiles } from '../roads/join-tiles';
 import { carvePassageTiles } from './carve-passage-tiles';
 import { digVein, keepInside, LANE_SPACING, MARGIN } from './dig-vein';
 import type { MinePassage } from './mine-passage';
+import type { MineRingShape } from './mine-ring-shape';
 
 /** The smallest radius of a ring, in tiles. A ring any smaller is left out. */
 const MIN_RADIUS = 3;
@@ -24,6 +25,7 @@ const WOBBLE_FREQUENCY = 1.5;
 export interface RingsSettings {
   density: number;
   rings?: Range;
+  ringShape: MineRingShape;
   ringWidth: Range;
   ringWobble: number;
   spokes: Range;
@@ -105,13 +107,18 @@ export function layRings(
   noise: NoiseFunction,
   settings: RingsSettings,
 ): MinePassage[] {
-  const { ringWidth, ringWobble, spokes, veinWidth, veinWindiness } = settings;
+  const { ringShape, ringWidth, ringWobble, spokes, veinWidth, veinWindiness } =
+    settings;
   const halfWidth = (grid.width - 2 * MARGIN) / 2;
   const halfHeight = (grid.height - 2 * MARGIN) / 2;
+  const fitX = halfWidth - ringWidth.max / 2 - MARGIN;
+  const fitY = halfHeight - ringWidth.max / 2 - MARGIN;
+  // a circle is as large as the shorter side allows, round the same center
+  const round = Math.min(fitX, fitY);
   const frame: Frame = {
     center: { x: MARGIN + halfWidth, y: MARGIN + halfHeight },
-    radiusX: halfWidth - ringWidth.max / 2 - MARGIN,
-    radiusY: halfHeight - ringWidth.max / 2 - MARGIN,
+    radiusX: ringShape === 'circle' ? round : fitX,
+    radiusY: ringShape === 'circle' ? round : fitY,
   };
   const passages: MinePassage[] = [];
   if (frame.radiusX < MIN_RADIUS || frame.radiusY < MIN_RADIUS) {

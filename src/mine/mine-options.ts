@@ -3,6 +3,7 @@ import type { Range } from '../core/range';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 import type { MineRoomOptions } from './mine-room-options';
 import type { MineLayout } from './mine-layout';
+import type { MineRingShape } from './mine-ring-shape';
 
 export interface MineOptions extends BaseOptions {
   /** The overall shape of the mine. The options of the other layouts are ignored. Defaults to `fishbone`. */
@@ -43,6 +44,8 @@ export interface MineOptions extends BaseOptions {
   pillarJitter?: number;
   /** Rings only. How many concentric rings to dig, as a `Range`. One is picked, and fewer are dug when the map is too small to space them. Defaults to a count that makes the rings and their spokes fill about the `density` of the map. */
   rings?: Range;
+  /** Rings only. `oval` fits the rings to the map, so they are as wide and as tall as it is. `circle` makes them round, as large as the shorter side of the map allows, centered, which leaves the ends of a wide or tall map as rock. The `density` keeps its meaning, so a circle on a very wide map may stop short of it. Defaults to `oval`. */
+  ringShape?: MineRingShape;
   /** Rings only. Width of a ring in whole tiles, as a `Range`. One is picked for every ring. Defaults to `{ min: 2, max: 3 }`. */
   ringWidth?: Range;
   /** Rings only. How far the rings stray from perfect ovals, from 0 (perfect) to 1 (as far as they can without nearing the next ring). Defaults to 0.5. */

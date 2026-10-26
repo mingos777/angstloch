@@ -20,6 +20,13 @@ export function assertMineOptions(options: MineOptions): void {
       `layout must be 'fishbone', 'veins', 'pillars' or 'rings', got ${layout}`,
     );
   }
+  // widened, since the shapes may be added to
+  const ringShape: string = options.ringShape ?? 'oval';
+  if (ringShape !== 'oval' && ringShape !== 'circle') {
+    throw new RangeError(
+      `ringShape must be 'oval' or 'circle', got ${ringShape}`,
+    );
+  }
   if (angle !== 'random' && !Number.isFinite(angle)) {
     throw new RangeError(
       `angle must be a finite number or 'random', got ${String(angle)}`,

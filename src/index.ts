@@ -44,6 +44,7 @@ export type { MineLayout } from './mine/mine-layout';
 export type { MineOptions } from './mine/mine-options';
 export type { MinePassage } from './mine/mine-passage';
 export type { MineResult } from './mine/mine-result';
+export type { MineRingShape } from './mine/mine-ring-shape';
 export type { MineRoomOptions } from './mine/mine-room-options';
 export type { Point } from './core/point';
 export type { Position } from './core/position';

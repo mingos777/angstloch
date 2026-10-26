@@ -714,6 +714,17 @@ Some mines are dug in rings, such as a bore driven round a shaft level after lev
 
 **Rings.** The rings are ovals around the middle of the map, as tall and wide as the map is, so a ring is round on a square map and long on a wide one. They are evenly spaced, from the innermost out to the outermost, which lies near the border. A ring's width is picked from `ringWidth` (2 to 3 by default), one for each ring. The rock inside the innermost ring is left as it is. `rings` is how many to dig, a `Range`. Without it, the count is the one whose rings come closest to filling the `density` of the map, at most 10 and as many as have room for their width and a gap of 2 tiles; with it, the `density` is not used. A map that is too small for the count gets as many as fit, and one with no room for a ring of 3 tiles' radius gets none, and so no floor.
 
+**Shape.** `ringShape` is `'oval'` (the default) or `'circle'`. With `'circle'` the rings are round: as large as the shorter side of the map allows, and centered, so on a wide or tall map the ends are left as rock (caverns and rooms can still go there). On a square map the two shapes are the same. `density` keeps its meaning, the share of the whole map that is floor, so a circle on a very wide map may be unable to reach it, and then stops short with the count of rings that comes closest.
+
+```ts
+const { grid } = generateMine({
+  width: 100,
+  height: 50,
+  layout: 'rings',
+  ringShape: 'circle',
+});
+```
+
 **Wobble.** A ring is not a perfect oval: smooth noise pushes it in and out as it goes round, and it is still a closed loop. `ringWobble`, from 0 to 1, sets how far. At 1 a ring strays up to a quarter of the distance between rings, so that rings do not meet, and at 0 it is a perfect oval. The corners are not sharp, since the noise is smooth.
 
 **Spokes.** Between every ring and the next, at least one spoke runs outwards at a random angle, so the mine is one piece. `spokes` is how many join each pair, a `Range` (1 to 3 by default) picked once for each pair, and a pair always gets one, so a minimum of 0 is the same as 1. The spokes of a pair are spread round the rings at about even distances, with a little shuffling, and they wind as far as `veinWindiness` says. Their width is picked from `veinWidth`. With one ring there are no spokes.
@@ -802,6 +813,7 @@ The rooms are in `rooms`, templated ones first, with `template`, `rotation` and 
 | `veinSpacing`    | 16                                         | Veins only. About how far apart the junctions lie, in tiles. A whole number, 3 or more.                                                                |
 | `halls`          | `{ min: 2, max: 4 }`                       | Pillars only. How many halls to dig, a `Range` of whole numbers, 1 or more. A hall that finds no room is left out.                                     |
 | `rings`          | from `density`                             | Rings only. How many concentric rings to dig, a `Range` of whole numbers, 1 or more. Fewer are dug when the map has no room.                           |
+| `ringShape`      | `'oval'`                                   | Rings only. `'oval'` fits the rings to the map, `'circle'` makes them round and centered, as large as the shorter side allows.                         |
 | `ringWidth`      | `{ min: 2, max: 3 }`                       | Rings only. Width of a ring in whole tiles, 1 or more, a `Range`.                                                                                      |
 | `ringWobble`     | 0.5                                        | Rings only. How far the rings stray from perfect ovals, from 0 to 1.                                                                                   |
 | `spokes`         | `{ min: 1, max: 3 }`                       | Rings only. How many spokes join each ring to the next, a `Range` of whole numbers, 0 or more. Every pair gets one at least.                           |
@@ -822,7 +834,7 @@ The rooms are in `rooms`, templated ones first, with `template`, `rotation` and 
 | `minExits`       | 0                                          | Minimum number of exits to add on the map border. A whole number, 0 or more.                                                                           |
 | `maxExits`       | `minExits`                                 | Maximum number of exits to add.                                                                                                                        |
 
-A `RangeError` is thrown for a non-positive or non-integer size, a `layout` that does not exist, an `angle` that is not a finite number or `'random'`, a `density`, windiness or `loops` outside 0 to 1, a `veinSpacing` that is not a whole number of at least 3, a `hallRagged`, `pillarRagged`, `pillarJitter`, `ringWobble`, `cavernFill`, `doorChance` or `rooms.sizeUniformity` outside 0 to 1, an `exitsPerRoom` or `rooms` range with an end that is not a whole number of at least 1 (0 for `rooms.count`), a range with an end that is not a whole number of at least 1 or with `min` above `max`, a `branchAngle` above 179, and a `minExits` or `maxExits` that is not a whole number of at least 0.
+A `RangeError` is thrown for a non-positive or non-integer size, a `layout` or `ringShape` that does not exist, an `angle` that is not a finite number or `'random'`, a `density`, windiness or `loops` outside 0 to 1, a `veinSpacing` that is not a whole number of at least 3, a `hallRagged`, `pillarRagged`, `pillarJitter`, `ringWobble`, `cavernFill`, `doorChance` or `rooms.sizeUniformity` outside 0 to 1, an `exitsPerRoom` or `rooms` range with an end that is not a whole number of at least 1 (0 for `rooms.count`), a range with an end that is not a whole number of at least 1 or with `min` above `max`, a `branchAngle` above 179, and a `minExits` or `maxExits` that is not a whole number of at least 0.
 
 ### `MineResult`
 

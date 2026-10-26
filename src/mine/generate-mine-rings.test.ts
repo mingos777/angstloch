@@ -193,6 +193,97 @@ describe('generateMine with the rings layout', () => {
     expect(Math.max(...misses)).toBeLessThan(0.15);
   });
 
+  it('makes the same mine for the oval shape as for the default', () => {
+    // given
+    const options = { ...base, random: mulberry32(8) };
+
+    // when
+    const byDefault = generateMine(options);
+    const oval = generateMine({
+      ...options,
+      ringShape: 'oval',
+      random: mulberry32(8),
+    });
+
+    // then
+    expect(oval.grid.toString()).toBe(byDefault.grid.toString());
+  });
+
+  it('keeps a ring on a circle with the circle shape', () => {
+    // given
+    const options: MineOptions = {
+      ...base,
+      rings: { min: 1, max: 1 },
+      ringShape: 'circle',
+      ringWidth: { min: 2, max: 2 },
+      ringWobble: 0,
+      random: mulberry32(1),
+    };
+
+    // when
+    const { passages } = generateMine(options);
+
+    // then
+    const [ring] = kinds(passages, 'ring');
+    const misses = (ring?.tiles ?? []).map((tile) =>
+      Math.abs(
+        ((tile.x + 0.5 - 40) ** 2 + (tile.y + 0.5 - 25) ** 2) / 22 ** 2 - 1,
+      ),
+    );
+    expect(ring?.tiles.length).toBeGreaterThan(0);
+    expect(Math.max(...misses)).toBeLessThan(0.15);
+  });
+
+  it('leaves the ends of a wide map as rock with the circle shape', () => {
+    // given
+    const options: MineOptions = {
+      ...base,
+      ringShape: 'circle',
+      random: mulberry32(2),
+    };
+
+    // when
+    const { grid } = generateMine(options);
+
+    // then
+    let floorAtTheEnds = 0;
+    for (let y = 0; y < grid.height; ++y) {
+      for (let x = 0; x < 15; ++x) {
+        floorAtTheEnds += grid.get(x, y) === Tile.Floor ? 1 : 0;
+        floorAtTheEnds +=
+          grid.get(grid.width - 1 - x, y) === Tile.Floor ? 1 : 0;
+      }
+    }
+    expect(floorAtTheEnds).toBe(0);
+  });
+
+  it('makes the same mine for both shapes on a square map', () => {
+    // given
+    const square: MineOptions = { ...base, width: 60, height: 60 };
+
+    // when
+    const oval = generateMine({ ...square, random: mulberry32(3) });
+    const circle = generateMine({
+      ...square,
+      ringShape: 'circle',
+      random: mulberry32(3),
+    });
+
+    // then
+    expect(circle.grid.toString()).toBe(oval.grid.toString());
+  });
+
+  it('throws a RangeError for a ring shape that does not exist', () => {
+    // given
+    const options = { ...base, ringShape: 'square' } as unknown as MineOptions;
+
+    // when
+    const generate = () => generateMine(options);
+
+    // then
+    expect(generate).toThrow(RangeError);
+  });
+
   it('bends the rings off the oval at a ring wobble of 1', () => {
     // given
     const options = {

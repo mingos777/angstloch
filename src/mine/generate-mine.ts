@@ -50,6 +50,7 @@ export function generateMine(options: MineOptions): MineResult {
     veinSpacing = 16,
     layout = 'fishbone',
     rings,
+    ringShape = 'oval',
     ringWidth = { min: 2, max: 3 },
     ringWobble = 0.5,
     spokes = { min: 1, max: 3 },
@@ -96,6 +97,7 @@ export function generateMine(options: MineOptions): MineResult {
         passages: layRings(grid, random, noise, {
           density: density ?? 0.3,
           rings,
+          ringShape,
           ringWidth,
           ringWobble,
           spokes,
