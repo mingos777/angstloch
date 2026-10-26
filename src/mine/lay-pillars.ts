@@ -1,6 +1,5 @@
 import type { Area } from '../core/area';
 import type { Grid } from '../core/grid';
-import { pickRandom } from '../core/pick-random';
 import type { Point } from '../core/point';
 import type { Random } from '../core/random';
 import { randomInt } from '../core/random-int';
@@ -8,11 +7,11 @@ import type { Range } from '../core/range';
 import { Tile } from '../core/tile';
 import type { NoiseFunction } from '../noise/noise-function';
 import { createRaggedMask } from './create-ragged-mask';
-import { digVein, LANE_SPACING, MARGIN } from './dig-vein';
+import { MARGIN } from './dig-vein';
+import { growHallNetwork } from './grow-hall-network';
+import type { MineHallEntrances } from './mine-hall-entrances';
 import type { MinePassage } from './mine-passage';
 import { placePillars } from './place-pillars';
-import { planVeinLinks } from './plan-vein-links';
-import type { VeinLink } from './vein-link';
 
 /** The walls that stay between two halls, so that they do not merge. */
 const HALL_GAP = 4;
@@ -29,6 +28,8 @@ export interface PillarsSettings {
   halls: Range;
   /** How many veins to dig between the halls in all. The ones that join every hall come first and are dug whatever this says. */
   hallVeins: Range;
+  /** Where a vein starts and ends in a hall. */
+  hallEntrances: MineHallEntrances;
   /** The size of a hall's sides. Without it, a size that makes the halls fill about the density. */
   hallSize?: Range;
   hallRagged: number;
@@ -160,10 +161,9 @@ function digHalls(
 /**
  * Digs a room-and-pillar mine into the grid and returns its halls and the
  * veins that join them. A few large halls of floor are placed apart from one
- * another and joined by winding veins that run between random tiles of them,
- * the shortest set that joins them all first, and then more veins between
- * neighboring halls, until there are as many as `hallVeins` says. Last,
- * pillars are left standing in the halls.
+ * another and joined into a network of veins that are routed through the rock
+ * around the halls (see `growHallNetwork`). Last, pillars are left standing in
+ * the halls.
  */
 export function layPillars(
   grid: Grid,
@@ -177,59 +177,31 @@ export function layPillars(
   const pillarLoss = cell * cell * PILLAR_SUCCESS;
   const { halls, floors } = digHalls(grid, random, settings, pillarLoss);
 
-  // the tree is planned between the middles of the halls, but the veins
-  // themselves run between random tiles of them
-  const middles: Point[] = halls.map((hall) => ({
-    x: hall.x + Math.floor(hall.width / 2),
-    y: hall.y + Math.floor(hall.height / 2),
-  }));
-  const { tree, extras } = planVeinLinks(middles, random);
-  const wanted = randomInt(
+  const { passages, joined } = growHallNetwork(
+    grid,
     random,
-    settings.hallVeins.min,
-    settings.hallVeins.max,
+    noise,
+    halls,
+    floors,
+    settings,
   );
-  // the pairs that have no vein yet come first, and then every pair again, in turn
-  const pairs = [...extras, ...tree];
-  const more: VeinLink[] = [];
-  for (let n = 0; n < wanted - tree.length && pairs.length > 0; ++n) {
-    const pair =
-      n < extras.length ? extras[n] : pairs[(n - extras.length) % pairs.length];
-    if (pair) {
-      more.push(pair);
-    }
-  }
-
-  const passages: MinePassage[] = [];
-  const keep = new Set<number>();
-  const dig = (link: VeinLink): void => {
-    const fromTiles = floors[link.from];
-    const toTiles = floors[link.to];
-    if (!fromTiles?.length || !toTiles?.length) {
-      return;
-    }
-    const from = pickRandom(random, fromTiles);
-    const to = pickRandom(random, toTiles);
-    const vein = digVein(
-      grid,
-      random,
-      noise,
-      [from, to],
-      { from: 0, to: 1, length: link.length },
-      { width: settings.veinWidth, windiness: settings.veinWindiness },
-      0.5 + passages.length * LANE_SPACING,
-    );
-    if (vein) {
-      passages.push(vein.passage);
-      for (const { x, y } of vein.passage.tiles) {
-        keep.add(y * grid.width + x);
+  // a hall that no vein could reach, which should not happen, is filled in
+  for (const [index, tiles] of floors.entries()) {
+    if (!joined.has(index)) {
+      for (const { x, y } of tiles) {
+        grid.set(x, y, Tile.Wall);
       }
     }
-  };
-  tree.forEach(dig);
-  more.forEach(dig);
+  }
+  const keptHalls = halls.filter((_, index) => joined.has(index));
 
-  for (const hall of halls) {
+  const keep = new Set<number>();
+  for (const { tiles } of passages) {
+    for (const { x, y } of tiles) {
+      keep.add(y * grid.width + x);
+    }
+  }
+  for (const hall of keptHalls) {
     placePillars(grid, random, hall, keep, {
       size: pillarSize,
       spacing: pillarSpacing,
@@ -237,5 +209,5 @@ export function layPillars(
       jitter: settings.pillarJitter,
     });
   }
-  return { passages, halls };
+  return { passages, halls: keptHalls };
 }

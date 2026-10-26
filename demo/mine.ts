@@ -1,5 +1,10 @@
 import { generateMine } from '../src';
-import type { Area, MineLayout, MineRingShape } from '../src';
+import type {
+  Area,
+  MineHallEntrances,
+  MineLayout,
+  MineRingShape,
+} from '../src';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
 import { drawGrid } from './draw-grid';
@@ -106,6 +111,7 @@ function render(): void {
         ringWidth: { min: value('ringWidthMin'), max: value('ringWidthMax') },
         ringWobble: value('ringWobble'),
         spokes: { min: value('spokesMin'), max: value('spokesMax') },
+        hallEntrances: data.get('hallEntrances') as MineHallEntrances,
         hallRagged: value('hallRagged'),
         pillarSize: {
           min: value('pillarSizeMin'),

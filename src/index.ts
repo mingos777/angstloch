@@ -40,6 +40,7 @@ export type { LayoutSymmetry } from './core/layout-symmetry';
 export type { MazeOptions, MazeSymmetry } from './maze/maze-options';
 export type { MazeResult } from './maze/maze-result';
 export type { MazeRoomOptions } from './maze/maze-room-options';
+export type { MineHallEntrances } from './mine/mine-hall-entrances';
 export type { MineLayout } from './mine/mine-layout';
 export type { MineOptions } from './mine/mine-options';
 export type { MinePassage } from './mine/mine-passage';

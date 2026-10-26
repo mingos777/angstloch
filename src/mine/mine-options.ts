@@ -2,6 +2,7 @@ import type { BaseOptions } from '../core/base-options';
 import type { Range } from '../core/range';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 import type { MineRoomOptions } from './mine-room-options';
+import type { MineHallEntrances } from './mine-hall-entrances';
 import type { MineLayout } from './mine-layout';
 import type { MineRingShape } from './mine-ring-shape';
 
@@ -28,8 +29,10 @@ export interface MineOptions extends BaseOptions {
   loops?: number;
   /** Pillars only. How many halls to dig, as a `Range`. One is picked. A hall that finds no room, at least 4 tiles of wall away from the others, is left out, so a crowded map gets fewer. Defaults to `{ min: 2, max: 4 }`. */
   halls?: Range;
-  /** Pillars only. How many veins to dig between the halls in all, as a `Range`. One is picked. The shortest set of veins that joins every hall is always dug, so a mine with many halls has at least that many, and the rest are extra veins between neighboring halls, which may join the same two halls more than once. Each vein runs between a random tile of one hall and a random tile of the other. Defaults to `{ min: 2, max: 4 }`. */
+  /** Pillars only. How many veins to dig between the halls in all, as a `Range`. One is picked. The veins that join the halls into one network come first, at least one for every hall but the first, whatever this says: the two nearest halls are joined, and then the hall nearest the network, by a vein to the nearest hall or vein in it, which may end on another vein. The rest are extra veins from random halls to the nearest part of the network that does not leave that hall. A vein is routed through the rock around the halls, and one that would be much longer than the distance between its ends, or finds no route after several tries, is left out if it is an extra, and tried with relaxed rules if it joins a hall. Defaults to `{ min: 2, max: 4 }`. */
   hallVeins?: Range;
+  /** Pillars only. Where a vein starts on its hall: a random floor tile on the boundary of the hall, next to rock. `facing` picks it along the side that faces the nearest part of the network of veins, the halls and veins that are joined already. `edge` picks it on any side. A vein ends on the nearest tile of the network, and entrances are kept apart as far as the boundary allows. Defaults to `facing`. */
+  hallEntrances?: MineHallEntrances;
   /** Pillars only. The width and the height of a hall in whole tiles, as a `Range`. Each side of each hall gets its own size, and a side is cut down to what the map has room for. Defaults to a size that makes the halls fill about the `density` of the map. */
   hallSize?: Range;
   /** Pillars only. How ragged the edges of the halls are, from 0 (clean rectangles) to 1. Defaults to 0.5. */
@@ -54,7 +57,7 @@ export interface MineOptions extends BaseOptions {
   spokes?: Range;
   /** Veins, pillars and rings. Width of a vein in whole tiles, as a `Range`. One is picked for every vein. Defaults to `{ min: 1, max: 2 }`. */
   veinWidth?: Range;
-  /** Veins, pillars and rings. How much the veins wind, from 0 (straight) to 1. Defaults to 0.5. */
+  /** Veins, pillars and rings. How much the veins wind, from 0 (straight) to 1. In the pillars layout the veins follow a route around the halls, and this is how far they stray sideways from it. Defaults to 0.5. */
   veinWindiness?: number;
   /** Veins only. About how far apart the junctions of the web lie, in tiles, a whole number of at least 3. A larger value makes a coarser web with longer veins. Defaults to 16. */
   veinSpacing?: number;

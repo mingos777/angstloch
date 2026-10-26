@@ -554,8 +554,11 @@ describe('generateMine with the pillars layout', () => {
   it('digs as many veins as hall veins says between two halls', () => {
     // given
     const options = {
-      ...base,
+      width: 160,
+      height: 100,
+      layout: 'pillars' as const,
       halls: { min: 2, max: 2 },
+      hallSize: { min: 20, max: 24 },
       hallVeins: { min: 4, max: 4 },
       random: mulberry32(1),
     };
@@ -589,8 +592,11 @@ describe('generateMine with the pillars layout', () => {
     // given
     const make = (hallVeins: number) =>
       generateMine({
-        ...base,
+        width: 160,
+        height: 100,
+        layout: 'pillars',
         halls: { min: 3, max: 3 },
+        hallSize: { min: 16, max: 20 },
         hallVeins: { min: hallVeins, max: hallVeins },
         random: mulberry32(3),
       }).passages.length;
@@ -601,7 +607,7 @@ describe('generateMine with the pillars layout', () => {
 
     // then
     expect(few).toBe(2);
-    expect(many).toBe(7);
+    expect(many).toBeGreaterThanOrEqual(5);
   });
 
   it('starts and ends every vein in a hall', () => {
@@ -775,5 +781,395 @@ describe('generateMine with the pillars layout', () => {
 
     // then
     expect(generate).toThrow(RangeError);
+  });
+});
+
+describe('generateMine pillar hall entrances', () => {
+  const entranceBase = {
+    ...base,
+    width: 120,
+    height: 80,
+    halls: { min: 3, max: 3 },
+    hallSize: { min: 16, max: 20 },
+    hallVeins: { min: 6, max: 6 },
+  };
+
+  /** How many ends of veins lie on the side of their hall that faces the other end of the vein. */
+  function countFacingEnds(result: ReturnType<typeof generateMine>) {
+    const middle = (hall: Area) => ({
+      x: hall.x + hall.width / 2,
+      y: hall.y + hall.height / 2,
+    });
+    const hallAt = (tile: { x: number; y: number }) =>
+      result.halls.find(
+        (hall) =>
+          tile.x >= hall.x &&
+          tile.x < hall.x + hall.width &&
+          tile.y >= hall.y &&
+          tile.y < hall.y + hall.height,
+      );
+    let facing = 0;
+    let ends = 0;
+    for (const { tiles } of result.passages) {
+      const first = tiles[0];
+      const last = tiles[tiles.length - 1];
+      const start = first && hallAt(first);
+      const end = last && hallAt(last);
+      if (!first || !last || !start || !end || start === end) {
+        continue;
+      }
+      for (const [tile, own, other] of [
+        [first, start, end],
+        [last, end, start],
+      ] as const) {
+        const from = middle(own);
+        const to = middle(other);
+        const reach =
+          (tile.x - from.x) * (to.x - from.x) +
+          (tile.y - from.y) * (to.y - from.y);
+        ends += 1;
+        facing += reach > 0 ? 1 : 0;
+      }
+    }
+    return { facing, ends };
+  }
+
+  it('digs the same mine for facing as for no setting', () => {
+    // given
+    const options = { ...entranceBase, random: mulberry32(7) };
+
+    // when
+    const plain = generateMine(options);
+    const facing = generateMine({
+      ...entranceBase,
+      hallEntrances: 'facing',
+      random: mulberry32(7),
+    });
+
+    // then
+    expect(facing.grid.toString()).toBe(plain.grid.toString());
+  });
+
+  it('digs a different mine for edge than for facing', () => {
+    // given
+    const options = { ...entranceBase, random: mulberry32(7) };
+
+    // when
+    const facing = generateMine(options);
+    const edge = generateMine({
+      ...options,
+      hallEntrances: 'edge',
+      random: mulberry32(7),
+    });
+
+    // then
+    expect(edge.grid.toString()).not.toBe(facing.grid.toString());
+  });
+
+  it('keeps the mine in one piece with edge entrances', () => {
+    // given
+    const options = {
+      ...entranceBase,
+      hallEntrances: 'edge' as const,
+      random: mulberry32(9),
+    };
+
+    // when
+    const { grid } = generateMine(options);
+
+    // then
+    expect(findCaveRegions(grid)).toHaveLength(1);
+  });
+
+  it('starts the veins on the side of their halls that faces the other hall', () => {
+    // given
+    const results = [1, 2, 3, 4, 5].map((seed) =>
+      generateMine({
+        ...entranceBase,
+        hallEntrances: 'facing',
+        random: mulberry32(seed),
+      }),
+    );
+
+    // when
+    const counts = results.map(countFacingEnds);
+
+    // then
+    // a vein that finds no route on that side is tried on the others
+    const ends = counts.reduce((sum, count) => sum + count.ends, 0);
+    const facing = counts.reduce((sum, count) => sum + count.facing, 0);
+    expect(ends).toBeGreaterThan(0);
+    expect(facing / ends).toBeGreaterThanOrEqual(0.8);
+  });
+
+  it('keeps the mine in one piece with facing entrances', () => {
+    // given
+    const options = {
+      ...entranceBase,
+      hallEntrances: 'facing' as const,
+      random: mulberry32(8),
+    };
+
+    // when
+    const { grid } = generateMine(options);
+
+    // then
+    expect(findCaveRegions(grid)).toHaveLength(1);
+  });
+
+  it('throws a RangeError for hall entrances that do not exist', () => {
+    // given
+    const options = {
+      ...entranceBase,
+      hallEntrances: 'any',
+    } as unknown as MineOptions;
+
+    // when
+    const generate = () => generateMine(options);
+
+    // then
+    expect(generate).toThrow(RangeError);
+  });
+});
+
+describe('generateMine pillar veins', () => {
+  const veinBase = {
+    width: 140,
+    height: 90,
+    layout: 'pillars' as const,
+    halls: { min: 3, max: 3 },
+    hallSize: { min: 24, max: 30 },
+    hallRagged: 0,
+    hallVeins: { min: 5, max: 5 },
+  };
+
+  const insideAHall = (halls: Area[], tile: { x: number; y: number }) =>
+    halls.some(
+      (hall) =>
+        tile.x >= hall.x &&
+        tile.x < hall.x + hall.width &&
+        tile.y >= hall.y &&
+        tile.y < hall.y + hall.height,
+    );
+
+  it('runs the veins around the halls and never across one', () => {
+    // given
+    const seeds = [1, 2, 3, 4, 5, 6];
+
+    // when
+    const results = seeds.map((seed) =>
+      generateMine({ ...veinBase, random: mulberry32(seed) }),
+    );
+
+    // then
+    for (const { halls, passages } of results) {
+      for (const { tiles } of passages) {
+        expect(
+          tiles.slice(1, -1).some((tile) => insideAHall(halls, tile)),
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('leaves every pillar of a hall standing where no vein touches it', () => {
+    // given
+    const options = { ...veinBase, random: mulberry32(2) };
+
+    // when
+    const { grid, halls } = generateMine(options);
+
+    // then
+    const islands = findIslands(grid).filter((island) =>
+      island.every((tile) => insideAHall(halls, tile)),
+    );
+    expect(islands.length).toBeGreaterThan(10);
+  });
+
+  it('keeps the veins a wall apart from one another', () => {
+    // given
+    const options = { ...veinBase, random: mulberry32(4) };
+
+    // when
+    const { passages } = generateMine(options);
+
+    // then
+    const middles = passages.map(({ tiles }) => tiles.slice(5, -5));
+    for (const [i, one] of middles.entries()) {
+      for (const other of middles.slice(i + 1)) {
+        const closest = Math.min(
+          ...one.flatMap((a) =>
+            other.map((b) =>
+              Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)),
+            ),
+          ),
+        );
+        expect(closest).toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
+  it('keeps the mine in one piece on crowded maps', () => {
+    // given
+    const seeds = Array.from({ length: 25 }, (_, n) => n + 1);
+
+    // when
+    const results = seeds.map((seed) =>
+      generateMine({
+        width: 70,
+        height: 50,
+        layout: 'pillars',
+        halls: { min: 4, max: 4 },
+        hallSize: { min: 12, max: 18 },
+        hallVeins: { min: 6, max: 6 },
+        veinWidth: { min: 1, max: 3 },
+        random: mulberry32(seed),
+      }),
+    );
+
+    // then
+    for (const { grid, halls } of results) {
+      expect(halls.length).toBeGreaterThanOrEqual(1);
+      expect(findCaveRegions(grid)).toHaveLength(1);
+    }
+  });
+
+  it('keeps every vein on floor and the mine in one piece on a crowded map', () => {
+    // given
+    const options = {
+      width: 70,
+      height: 50,
+      layout: 'pillars' as const,
+      halls: { min: 5, max: 6 },
+      hallSize: { min: 10, max: 16 },
+      hallVeins: { min: 4, max: 4 },
+      veinWidth: { min: 2, max: 3 },
+      random: mulberry32(14),
+    };
+
+    // when
+    const { grid, passages } = generateMine(options);
+
+    // then
+    expect(findCaveRegions(grid)).toHaveLength(1);
+    for (const { tiles } of passages) {
+      expect(tiles.every(({ x, y }) => grid.get(x, y) === Tile.Floor)).toBe(
+        true,
+      );
+    }
+  });
+
+  it('keeps floor in every hall it lists', () => {
+    // given
+    const seeds = Array.from({ length: 25 }, (_, n) => n + 1);
+
+    // when
+    const results = seeds.map((seed) =>
+      generateMine({
+        width: 70,
+        height: 50,
+        layout: 'pillars',
+        halls: { min: 4, max: 4 },
+        hallSize: { min: 12, max: 18 },
+        hallVeins: { min: 6, max: 6 },
+        veinWidth: { min: 1, max: 3 },
+        random: mulberry32(seed),
+      }),
+    );
+
+    // then
+    for (const { grid, halls } of results) {
+      const total = grid.toString().split('.').length - 1;
+      const inHalls = halls.reduce(
+        (sum, hall) =>
+          sum +
+          Array.from(
+            { length: hall.height },
+            (_, y) =>
+              Array.from({ length: hall.width }, (__, x) =>
+                grid.get(hall.x + x, hall.y + y),
+              ).filter((tile) => tile === Tile.Floor).length,
+          ).reduce((a, b) => a + b, 0),
+        0,
+      );
+      expect(inHalls).toBeLessThanOrEqual(total);
+      expect(inHalls).toBeGreaterThan(0);
+    }
+  });
+
+  it('joins every hall that finds room, however many veins hall veins asks for', () => {
+    // given
+    const seeds = Array.from({ length: 12 }, (_, n) => n + 1);
+
+    // when
+    const results = seeds.map((seed) =>
+      generateMine({
+        width: 160,
+        height: 100,
+        layout: 'pillars',
+        halls: { min: 4, max: 4 },
+        hallSize: { min: 14, max: 22 },
+        hallVeins: { min: 1, max: 1 },
+        random: mulberry32(seed),
+      }),
+    );
+
+    // then
+    for (const { halls, passages, grid } of results) {
+      expect(halls).toHaveLength(4);
+      expect(passages).toHaveLength(3);
+      expect(findCaveRegions(grid)).toHaveLength(1);
+    }
+  });
+
+  it('ends some veins on other veins and not on a hall', () => {
+    // given
+    const seeds = Array.from({ length: 20 }, (_, n) => n + 1);
+
+    // when
+    const results = seeds.map((seed) =>
+      generateMine({
+        ...veinBase,
+        halls: { min: 5, max: 5 },
+        hallSize: { min: 14, max: 20 },
+        random: mulberry32(seed),
+      }),
+    );
+
+    // then
+    const endsOnVein = results.flatMap(({ halls, passages }) =>
+      passages.filter((passage) => {
+        const last = passage.tiles[passage.tiles.length - 1];
+        return last !== undefined && !insideAHall(halls, last);
+      }),
+    );
+    expect(endsOnVein.length).toBeGreaterThan(0);
+  });
+
+  it('keeps every vein from going much further round than the way between its ends', () => {
+    // given
+    const seeds = Array.from({ length: 12 }, (_, n) => n + 1);
+
+    // when
+    const results = seeds.map((seed) =>
+      generateMine({
+        width: 140,
+        height: 80,
+        layout: 'pillars',
+        halls: { min: 4, max: 4 },
+        hallVeins: { min: 6, max: 6 },
+        random: mulberry32(seed),
+      }),
+    );
+
+    // then
+    for (const { passages } of results) {
+      for (const { tiles } of passages) {
+        const first = tiles[0] as { x: number; y: number };
+        const last = tiles[tiles.length - 1] as { x: number; y: number };
+        const distance =
+          Math.abs(first.x - last.x) + Math.abs(first.y - last.y);
+        expect(tiles.length).toBeLessThanOrEqual(1.8 * distance + 14);
+      }
+    }
   });
 });

@@ -27,6 +27,13 @@ export function assertMineOptions(options: MineOptions): void {
       `ringShape must be 'oval' or 'circle', got ${ringShape}`,
     );
   }
+  // widened, since the entrances may be added to
+  const hallEntrances: string = options.hallEntrances ?? 'facing';
+  if (hallEntrances !== 'facing' && hallEntrances !== 'edge') {
+    throw new RangeError(
+      `hallEntrances must be 'facing' or 'edge', got ${hallEntrances}`,
+    );
+  }
   if (angle !== 'random' && !Number.isFinite(angle)) {
     throw new RangeError(
       `angle must be a finite number or 'random', got ${String(angle)}`,
