@@ -77,11 +77,52 @@ The source layout and its import rule (imports only point down: `core`, then `ro
 
 ## Next up
 
-Nothing is in progress. The next feature comes from the backlog, after a design talk. Clearings with templates was built in three tasks and awaits the user's review (see its design decisions).
+Nothing is being built. The design talk for **composable generation (steps)** is signed off except for one open question (see Composable generation under the backlog), and the forest is its pilot. The user has not said to start building yet; when they do, split it into small numbered tasks, tidy that section of the roadmap into clean sections in the same turn, and start with the first step's design (which `generateForest` options go to which step). The new generators the user wants (prison and sewers first) are listed under More generators, and should be built on the steps once they exist. Clearings with templates was built in three tasks and awaits the user's review (see its design decisions).
 
 ## Backlog
 
 Roughly in the order the user wants them. Each needs a design talk before it is built.
+
+### Composable generation (steps)
+
+Under design, nothing built. Instead of one generator with a bajillion options, a map is composed from a base generator and a list of steps, like middleware:
+
+```ts
+pipeline(baseForest(specs1), [
+  addClearings(specs2),
+  addStreams(specs3),
+  addRoads(specs4),
+  placeTemplates(specs5),
+]);
+```
+
+Decisions so far:
+
+- **The old contract is broken on purpose.** Angstloch has never been released, so there is no external contract yet. Existing options may change or go when that serves the design. `CLAUDE.md` was updated to say so.
+- **The forest is the pilot**, and the **base forest is just noise with trees**. Clearings, streams, roads and templates are all steps.
+- **Any throw makes the pipeline retry** (up to 3 attempts), not only a `TemplatePlacementError`. The cause of every failed attempt is recorded and exposed in the result next to the attempt count, so the caller can see what went wrong. After the last attempt the last error is thrown. The `permanent` flag of `TemplatePlacementError` is to be reconsidered (a permanent error may skip the retries, as now).
+- **A step is a function from a result to a new result** (`{ grid, ...extras }` in, the same plus new extras out), with the shared `Random` in a context. Steps never mutate their input. The types say which extras a step needs, so a wrong order is a compile error.
+- **Composition is a `pipeline(base, steps)` helper** (option B). Calling steps by hand works too, since they are plain functions. A `steps` option on the generators was left for later, as sugar.
+- **The composition API is public**, steps and `pipeline` both.
+- **Presets stay**: `generateForest`, `generateMine` and the rest remain as ready-made compositions, and any number of presets can exist. They are built on the public steps.
+- **Retry belongs to the pipeline**: it runs up to 3 attempts by default, always, re-running from the base when a step fails (a template that finds no place, for instance). The result reports the number of attempts, so a caller who sees more than 1 often knows the input is a poor fit. This replaces the `MAP_ATTEMPTS` wrappers (`build-*.ts`).
+- **Naming**: `generateX` makes a map from nothing, and steps use verbs (`addStreams`, `addRoads`, `placeTemplates`, `placeClearings`).
+- **Ruins** become a step that decays walls and scatters rubble, usable on any map. Rooms in caves and mixed mine layouts would be steps as well.
+
+Known difficulties to design around:
+
+- Steps coupled through hidden state: roads plan their crossings from the stream terrain and centerlines, footbridges and `at: 'stream'` clearings use them too. A step that only sees the grid cannot rebuild that, so the stream step must pass it on in its extras.
+- Steps over a finished grid treat everything as an obstacle, which was too slow for the mine rooms (see Rooms and templates in Mines), so spot searches need care.
+- Order changes the map: all steps draw from one `Random` in order, so a seed gives the same map only for the same pipeline.
+- Layout symmetry acts while a layout is being made, so it is probably the hardest to split into a step.
+
+- **A step is fed the previous step's output** (the current map state, with its extras) and everything the caller provided (`random` and the like). The attempt number belongs to `pipeline`, not to the steps. More data in the context is designed around a specific use case when one comes up.
+- **The failure record is a list in the result, one entry per failed attempt**, with the attempt number, the step (number or name) that threw, and the error. It is also there when a later attempt succeeds.
+- **A `permanent` error skips the retries** (a template bigger than the map can never be placed), and is thrown at once.
+
+Open questions:
+
+- Which options of today's `generateForest` become the options of which step, and what does the preset look like? To be settled when the first step is designed.
 
 ### Caves
 
@@ -111,6 +152,26 @@ Nothing is planned, and everything here is optional:
 - **Cave-ins**: parts of a mine cut off by a collapse, which the always-connected rule rules out now.
 - **Mixed layouts**, for example pillar halls joined by a fishbone, as an array of layouts.
 - **Rooms in caves** (see Caves) could reuse the room code of the mine.
+
+### More generators
+
+Wanted, not designed yet. Each needs a design talk. Prison and sewers are needed by the user's own game, so they come first.
+
+- **Prison** (needed for the user's game): cell blocks along corridors in a rigid layout, a guard room, perhaps a yard. Related to catacombs (a structured variant of the digger, see below), so design the two together.
+- **Sewers** (needed for the user's game): straight canals with walkways beside them, junction chambers and outfalls at the border. Likely built on the stream code (`ShallowWater`, `DeepWater`, centerlines, brushes, bridges) with digger-style rooms.
+- **Graveyard**: grave plots on a lattice, paths from `src/roads/`, a fence or wall, crypts and chapels from room templates, trees from the forest noise.
+- **Ruins**: a decayed dungeon, town or building. Whether it is a generator of its own or an option on the existing ones is open (see the open questions below).
+- **Farmland or countryside**: a patchwork of fields split by hedges and lanes, with farmhouses from templates. The natural surround of the village.
+- **Mountains, ravines and canyons**: noise ridges and cliffs with passes and trails. Needs a cliff or rock tile.
+
+Decisions:
+
+- **New terrain tiles are decided when a generator needs them**, not in one batch up front. Add new values, never renumber.
+- **Analysis helpers** (distance maps, farthest tile, dead ends, connectivity checks), should they ever be written, stay private, inside `src/`, and are not exported from `src/index.ts`.
+
+Open questions:
+
+- **Ruins**: a "post-processor" would be a function or option that takes a finished map and changes it, such as breaking gaps in the walls with noise and scattering rubble or trees, instead of generating one from scratch. It would break the rule that results are composed by the caller, so the user is unsure about it. The alternative is a `ruined` option (with a decay amount) on the generators that make buildings.
 
 ### Catacombs
 
