@@ -22,4 +22,10 @@ export interface RoomTemplate {
   areas?: Area[];
   /** How exactly positions are honored, from 0 (ignored) to 1 (exact if possible). Defaults to 1. */
   positionAccuracy?: number;
+  /** Forests only, ignored elsewhere: whether the template needs a clearing. It goes on a free clearing of the forest, centered, or on one of its own when there is none. Defaults to `false`, where it goes anywhere. */
+  clearing?: boolean;
+  /** Forests only, ignored elsewhere: the chance that each copy is placed at all, from 0 to 1. Defaults to 1, where every copy is placed. */
+  chance?: number;
+  /** Forests only, ignored elsewhere: how many tiles beyond the box of a template with a clearing of its own the trees take to thicken from none to their full density, a whole number of at least 0. The chance of a tree grows in equal steps, as for the `falloff` of a forest, so there is no bare rectangle. A template on a clearing of the forest has no margin. Defaults to 0. */
+  margin?: number;
 }

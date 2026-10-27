@@ -32,17 +32,41 @@ function findStart(map: RoadMap, to: Point): Point {
 }
 
 /**
+ * Walks from the start of a path towards the center of its clearing and
+ * returns the last tile before the first one that `stopAt` marks, or the
+ * center when none is.
+ */
+function stopShort(
+  from: Point,
+  center: Point,
+  stopAt: (x: number, y: number) => boolean,
+): Point {
+  const steps = Math.ceil(2 * Math.hypot(center.x - from.x, center.y - from.y));
+  let last = from;
+  for (let step = 1; step <= steps; ++step) {
+    const x = Math.floor(from.x + ((center.x - from.x) * step) / steps);
+    const y = Math.floor(from.y + ((center.y - from.y) * step) / steps);
+    if (stopAt(x, y)) {
+      return last;
+    }
+    last = { x, y };
+  }
+  return center;
+}
+
+/**
  * Lays the paths that lead to clearings, each from the nearest road, or from
  * the nearest border of the map when there are no roads, to the center of its
- * clearing. A clearing that a road runs through the center of needs no path
+ * clearing, or to the edge of its template, which a path stops short of. A clearing that a road runs through the center of needs no path
  * and gets none.
  */
 export function layClearingPaths(
   map: RoadMap,
   paths: readonly ClearingPath[],
 ): void {
-  for (const { to, width, windiness } of paths) {
-    const from = findStart(map, to);
+  for (const { to: center, width, windiness, stopAt } of paths) {
+    const from = findStart(map, center);
+    const to = stopAt ? stopShort(from, center, stopAt) : center;
     if (from.x === to.x && from.y === to.y) {
       continue;
     }

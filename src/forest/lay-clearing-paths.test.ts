@@ -4,7 +4,7 @@ import { createRoadMap } from '../roads/create-road-map';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { layClearingPaths } from './lay-clearing-paths';
 
-const PATH = { width: 1, windiness: 0 };
+const PATH = { width: 1, windiness: 0, clearing: 0 };
 
 function emptyMap(size = 61) {
   return createRoadMap(size, size, mulberry32(1), 0);
@@ -31,6 +31,47 @@ describe('layClearingPaths', () => {
     expect(path?.points[path.points.length - 1]).toEqual({ x: 40, y: 20 });
   });
 
+  it('stops a path at the tile before the first one it may not enter', () => {
+    // given
+    const map = emptyMap();
+    addRoad(map, {
+      kind: 'road',
+      width: 1,
+      origin: { x: 10.5, y: 30.5 },
+      angle: Math.PI / 2,
+      directions: [-1, 1],
+    });
+    const stopAt = (x: number) => x >= 34;
+
+    // when
+    layClearingPaths(map, [{ ...PATH, to: { x: 40, y: 20 }, stopAt }]);
+
+    // then
+    const path = map.roads[1];
+    expect(path?.points[path.points.length - 1]).toEqual({ x: 33, y: 20 });
+  });
+
+  it('lays a path to the center when it is never stopped', () => {
+    // given
+    const map = emptyMap();
+    addRoad(map, {
+      kind: 'road',
+      width: 1,
+      origin: { x: 10.5, y: 30.5 },
+      angle: Math.PI / 2,
+      directions: [-1, 1],
+    });
+
+    // when
+    layClearingPaths(map, [
+      { ...PATH, to: { x: 40, y: 20 }, stopAt: () => false },
+    ]);
+
+    // then
+    const path = map.roads[1];
+    expect(path?.points[path.points.length - 1]).toEqual({ x: 40, y: 20 });
+  });
+
   it('makes the path a branch of the width that was asked for', () => {
     // given
     const map = emptyMap();
@@ -43,7 +84,9 @@ describe('layClearingPaths', () => {
     });
 
     // when
-    layClearingPaths(map, [{ to: { x: 40, y: 20 }, width: 2, windiness: 0 }]);
+    layClearingPaths(map, [
+      { to: { x: 40, y: 20 }, width: 2, windiness: 0, clearing: 0 },
+    ]);
 
     // then
     expect(map.roads[1]).toMatchObject({ kind: 'branch', width: 2 });

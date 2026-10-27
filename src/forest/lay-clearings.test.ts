@@ -320,7 +320,9 @@ describe('layClearings paths', () => {
     const { paths } = lay(specs);
 
     // then
-    expect(paths).toEqual([{ to: { x: 10, y: 12 }, width: 1, windiness: 0.3 }]);
+    expect(paths).toEqual([
+      { to: { x: 10, y: 12 }, width: 1, windiness: 0.3, clearing: 0 },
+    ]);
   });
 
   it('asks for a path with the options that were given', () => {
@@ -332,7 +334,9 @@ describe('layClearings paths', () => {
     const { paths } = lay(specs);
 
     // then
-    expect(paths).toEqual([{ to: { x: 10, y: 12 }, width: 2, windiness: 0.8 }]);
+    expect(paths).toEqual([
+      { to: { x: 10, y: 12 }, width: 2, windiness: 0.8, clearing: 0 },
+    ]);
   });
 
   it('asks for no path when the path is false', () => {

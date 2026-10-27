@@ -40,7 +40,7 @@ export interface DungeonOptions extends BaseOptions, SymmetryOptions {
   horizontalBias?: number;
   /** Weight of vertical corridor sections against `horizontalBias`. Defaults to 0. */
   verticalBias?: number;
-  /** Prefabricated rooms, which are placed first. The ordinary rooms fill the rest. A template that cannot be placed throws a `TemplatePlacementError`. */
+  /** Prefabricated rooms, which are placed first. The ordinary rooms fill the rest. A template that cannot be placed gets a new dungeon, up to three in all, and then throws a `TemplatePlacementError`. */
   templates?: RoomTemplate[];
   /** Whether templated rooms get mirror images like any other room, which follows `layoutSymmetry`, always and whatever `layoutSymmetryChance` says. Defaults to `false`, which places each copy once. */
   templateSymmetry?: boolean;

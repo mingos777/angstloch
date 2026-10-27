@@ -24,7 +24,8 @@ interface Candidate {
  * `positionAccuracy` of 0, the spot is random. Otherwise the target is the
  * position, moved by up to `(1 - positionAccuracy)` times half the shorter map
  * side, and the nearest valid spot to it is used. Throws a
- * `TemplatePlacementError` when no variant has a valid spot anywhere. Spots
+ * `TemplatePlacementError` when no variant has a valid spot anywhere (a
+ * permanent one when the template cannot fit the map at all). Spots
  * that `accepts` turns down count as colliding. With a `region`, the whole
  * room must lie inside it.
  */
@@ -38,8 +39,8 @@ export function placeTemplate(
   accepts: (placement: TemplatePlacement) => boolean = () => true,
   region?: Area,
 ): TemplatePlacement {
-  const fail = (cause: string): never => {
-    throw new TemplatePlacementError(index, template.name, cause);
+  const fail = (cause: string, permanent = false): never => {
+    throw new TemplatePlacementError(index, template.name, cause, permanent);
   };
   const allowed = template.rotate ?? [0];
   const rotations =
@@ -55,6 +56,7 @@ export function placeTemplate(
   if (variants.length === 0) {
     return fail(
       area.lattice ? 'no variant fits the lattice' : 'no variant is allowed',
+      true,
     );
   }
 
@@ -144,6 +146,7 @@ export function placeTemplate(
       region
         ? `is bigger than the ${String(region.width)}x${String(region.height)} area`
         : `is bigger than the ${String(area.width)}x${String(area.height)} map`,
+      true,
     );
   }
   return fail(

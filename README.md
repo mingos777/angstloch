@@ -675,6 +675,54 @@ A footbridge is one tile of `Tile.Bridge` wide and goes square across the stream
 
 A `bridges` that is not a whole number of at least 0, a `width`, `tributaryWidth` or `tributaryLength` that is not a `Range` of whole numbers of at least 1, `tributaries` that is not a `Range` of whole numbers of at least 0, a `tributaryAngle` that is not a `Range` of whole degrees from 1 to 179, a `windiness` outside 0 to 1, a `shoreWidth` that is not a whole number of at least 0, an `angle` that is not finite or `'random'`, a `bridgeAngle` that is not a `Range` of whole degrees from 1 to 179, or a `shallowTile`, `deepTile` or `bridgeTile` that is not a `Tile` value throws a `RangeError`.
 
+### Templates in forests
+
+Put a ruin, a camp or a boss arena in the forest with `templates`: a list of the same [`RoomTemplate`](#room-templates) objects as the dungeons take. A forest has no tunnels, so a template has no exits: it is a design of `Floor`, `Wall` and `Unused` cells. A template with an `Exit`, `Door` or `OptionalExit` cell, or with `positions` or `areas`, throws a `RangeError`, as does an invalid `count`, `chance`, `margin` or `rotate`.
+
+```ts
+import { TemplateCell, generateForest, type RoomTemplate } from 'angstloch';
+
+const { Unused: _, Floor: F, Wall: W } = TemplateCell;
+
+const ruin: RoomTemplate = {
+  name: 'ruin',
+  cells: [
+    [_, W, W, W, _],
+    [W, F, F, F, W],
+    [W, F, F, F, W],
+    [W, F, F, F, W],
+    [_, W, F, W, _],
+  ],
+  rotate: [0, 90, 180, 270],
+  clearing: true,
+  margin: 3,
+};
+
+const { grid, templates } = generateForest({
+  width: 120,
+  height: 80,
+  roads: {},
+  clearings: [{ radiusX: { min: 8, max: 8 }, path: true }],
+  templates: [ruin],
+});
+```
+
+| Template field     | Default        | Meaning                                                                                                                                                                           |
+| ------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clearing`         | `false`        | Whether the template needs a clearing. A template that does not goes to a random spot, and the trees stay round it and in its `Unused` cells.                                     |
+| `chance`           | 1              | The chance that each copy is placed at all, from 0 to 1. With 1 every copy is placed, which is what a boss arena needs. With a lower chance it can happen that no copy is placed. |
+| `margin`           | 0              | For a template on a clearing of its own: how many tiles beyond its box the trees take to thicken from none to full density, a whole number, 0 or more. See below.                 |
+| `count`            | exactly 1      | Number of copies, a `Range` of at least 0. Each copy is rolled against `chance` on its own and goes on a clearing of its own.                                                     |
+| `rotate`, `mirror` | `[0]`, `false` | The variants a copy may be placed in, as for dungeons.                                                                                                                            |
+
+**Where a template goes.** A template with `clearing: true` is centered on a free clearing from `clearings`, picked at random among those where it fits. The clearing is never grown: ask for clearings of a fitting size. A clearing holds one template at most. When no free clearing has room for it, because there are none or all are taken or blocked, the template gets a clearing of its own: it goes to a random spot, and the whole box of the template is free of trees. The `margin` makes the trees thicken over that many tiles beyond the box, with the same ramp as the [`falloff`](#falloff-and-distance) (with a `margin` of 3 the first tile beyond the box has a quarter of the chance of a tree, the next half, the next three quarters), so a template leaves no bare rectangle. That clearing is not in `clearings`: `ownClearing` of the template says so. The `density` result follows the ramp.
+
+**Which tiles a template changes.** `Floor` cells become `Tile.Floor` and `Wall` cells `Tile.Wall`, over trees and ground. `Unused` cells leave whatever the map has there: a tree, grass, a road or water. A template never covers a road, a path or water: it is placed only where none of its `Floor` or `Wall` cells lies on one, and where it overlaps no other template. A path to the clearing it stands on (see [Paths to clearings](#paths-to-clearings)) stops at the edge of the template. A road that a template cannot be placed clear of makes that forest fail, see below.
+
+**A template always appears, or it throws.** A template is requested because the map needs it, so it is never quietly left out. A template that finds no place gets a new forest, up to three forests in all, and only after the third a [`TemplatePlacementError`](#room-templates) is thrown. Since every forest failed, the input is at fault (a template that fills the map, say) and not the map. A template that is bigger than the map throws at once. A `chance` below 1 is the only way a template is left out, and it is no error.
+
+The `templates` result lists the templates that were placed, in the order of the list and of their copies, each with its `template` (the index in `templates`), the box it fills (`x`, `y`, `width`, `height`), its `rotation` and `mirrored`, the `clearing` it stands on (the index in the `clearings` result, left out for a template placed anywhere or on a clearing of its own) and `ownClearing`.
+
 ### `ForestOptions`
 
 | Option            | Default             | Meaning                                                                                                                                                                  |
@@ -699,6 +747,7 @@ A `bridges` that is not a whole number of at least 0, a `width`, `tributaryWidth
 | `distance`        | `'chebyshev'`       | How distances to a road are measured for `clearance` and `falloff`: `'chebyshev'`, `'manhattan'` or `'euclidean'`. See [Falloff and distance](#falloff-and-distance).    |
 | `clearings`       | none                | Glades with ragged edges, free of trees: a list of `ClearingSpec`. See [Clearings](#clearings).                                                                          |
 | `clearingSpacing` | 0                   | How many tiles beyond their radii clearings placed at random keep from other clearings, a whole number, 0 or more. See [Clearings](#clearings).                          |
+| `templates`       | none                | Prefabricated [`RoomTemplate`](#room-templates)s to place, such as a ruin on a clearing. See [Templates in forests](#templates-in-forests).                              |
 | `bankClearance`   | 0                   | How many tiles beside the water of a stream are kept free of trees, a whole number, 0 or more. See [Banks](#banks).                                                      |
 | `bankFalloff`     | 0                   | How many tiles the trees take to thicken beyond the `bankClearance`, a whole number, 0 or more. See [Banks](#banks).                                                     |
 | `streams`         | no streams          | Lays a stream, or a river, through the forest, see [Streams and rivers](#streams-and-rivers).                                                                            |
@@ -721,6 +770,7 @@ Non-positive or non-integer dimensions, a `minDensity` or `maxDensity` outside 0
 - `streams`: the streams that were laid, as `Road`s: `width` in tiles and `points`, the tiles of the centerline from upstream to the mouth. Empty without the `streams` option. See [Streams and rivers](#streams-and-rivers).
 - `bridges`: the bridges, one point for each place where a road or a footbridge crosses water. Empty without streams.
 - `clearings`: the clearings that were made, each with its center `x` and `y`, `radiusX`, `radiusY` (the radii that were picked, plain numbers) and `angle`, the defaults filled in. Empty without the `clearings` option. See [Clearings](#clearings).
+- `templates`: the templates that were placed, each with its `template` index, its box (`x`, `y`, `width`, `height`), `rotation`, `mirrored`, the `clearing` it stands on and `ownClearing`. Empty without the `templates` option. See [Templates in forests](#templates-in-forests).
 
 ```ts
 const { grid, density } = generateForest({
@@ -892,7 +942,7 @@ Any layout can get rooms: a store, a chapel, a shaft office. They are dug into t
 
 **Ordinary rooms.** `rooms` takes the options of the [maze's](#rooms-in-mazes) rooms: `count` (1 when `rooms` is given), `width` and `height` (3 to 7), and `sizeUniformity` (0). Sizes are the floor, without the wall, and any size is allowed, since a mine has no lattice. A room is a rectangle of floor inside a ring of wall, which a gap can open anywhere along.
 
-**Templates.** `templates` takes the same [`RoomTemplate`](#room-templates) objects as the dungeons and mazes, with the same `count`, `rotate`, `mirror`, `positions`, `areas` and `positionAccuracy`. They are placed before the ordinary rooms. Placement is anywhere in the rock the template fits, or where its `positions` and `areas` say, and a template that cannot be placed throws a [`TemplatePlacementError`](#room-templates), as does one that cannot be joined to the mine. The cells of a template that stand for the wall around a room are part of it, so keep them in the design. There is no `templateSymmetry`.
+**Templates.** `templates` takes the same [`RoomTemplate`](#room-templates) objects as the dungeons and mazes, with the same `count`, `rotate`, `mirror`, `positions`, `areas` and `positionAccuracy`. They are placed before the ordinary rooms. Placement is anywhere in the rock the template fits, or where its `positions` and `areas` say, and a template that cannot be placed, or cannot be joined to the mine, gets a new mine, up to three in all, before a [`TemplatePlacementError`](#room-templates) is thrown (see [Room templates](#room-templates)). A template is never left out. The cells of a template that stand for the wall around a room are part of it, so keep them in the design. There is no `templateSymmetry`.
 
 **Where rooms go.** A room, with its wall, keeps at least 2 tiles of rock from the tunnels, halls, pillars and caverns, and from other rooms, and it never overlaps them. A room that finds no spot is left out, so a crowded map gets fewer rooms than asked for, and templates are the exception and throw. An ordinary room is put at the best of up to 20 places that fit, the nearest to the mine, which keeps its tunnels short.
 
@@ -936,7 +986,7 @@ The rooms are in `rooms`, templated ones first, with `template`, `rotation` and 
 | `cavernSize`     | `{ min: 12, max: 24 }`                     | The width and the height of a cavern in whole tiles, 3 or more, a `Range`.                                                                                                                        |
 | `cavernFill`     | 0.45                                       | The share of a cavern's box that is wall, from 0 to 1.                                                                                                                                            |
 | `rooms`          | none                                       | Ordinary rooms to place in the mine, with `count`, `width`, `height` and `sizeUniformity`, as for [mazes](#rooms-in-mazes).                                                                       |
-| `templates`      | none                                       | Prefabricated [`RoomTemplate`](#room-templates)s to place. A template that does not fit or cannot be joined throws a `TemplatePlacementError`.                                                    |
+| `templates`      | none                                       | Prefabricated [`RoomTemplate`](#room-templates)s to place. A template that finds no place, or cannot be joined, gets a new mine, up to three times, before a `TemplatePlacementError` is thrown.  |
 | `exitsPerRoom`   | `{ min: 1, max: 3 }`                       | Openings per room, a `Range` of whole numbers, 1 or more.                                                                                                                                         |
 | `doorChance`     | 1                                          | The chance that a room's opening gets a door, from 0 to 1.                                                                                                                                        |
 | `hallVeins`      | `{ min: 2, max: 4 }`                       | Pillars only. How many veins to dig between the halls in all, a `Range` of whole numbers, 1 or more. The veins that join the halls come first, and an extra vein that finds no route is left out. |
@@ -1291,6 +1341,8 @@ A template is valid if:
 - open cells (`Floor`, `Exit`, `Door`, `OptionalExit`) are walled in: none of their eight neighbors, diagonals included, is `Unused` or beyond the template's edge, except on the outward side of an exit candidate. Diagonal moves are common in games, so this keeps a corridor from touching a floor diagonally, and keeps a door from being sidestepped;
 - `count`, `rotate`, `positionAccuracy` and `positions` follow the table below.
 
+A forest takes templates without exits instead, and has its own rules, see [Templates in forests](#templates-in-forests).
+
 An invalid template throws a `RangeError` that names the template.
 
 | Field              | Default   | Description                                                                                                                                     |
@@ -1303,6 +1355,9 @@ An invalid template throws a `RangeError` that names the template.
 | `positions`        | none      | Acceptable targets, see below. One is picked at random per copy; copies beyond the list are placed at random.                                   |
 | `areas`            | none      | Rectangles of the map, `{ x, y, width, height }`, to place copies in, see below. Used for copies that have no position.                         |
 | `positionAccuracy` | `1`       | How exactly positions are honored, from 0 to 1: 1 is exact if possible, in between allows some variance, 0 ignores positions.                   |
+| `clearing`         | `false`   | Forests only: whether the template needs a clearing, see [Templates in forests](#templates-in-forests).                                         |
+| `chance`           | 1         | Forests only: the chance that each copy is placed, from 0 to 1.                                                                                 |
+| `margin`           | 0         | Forests only: how far the trees thin out beyond the box of a template with a clearing of its own, in tiles.                                     |
 
 A `Position` is `{ coords, anchor, rotations? }`. `anchor` says which point of the placed room's bounding box lands on `coords`: `'center'`, `'top'`, `'bottom'`, `'left'`, `'right'`, `'top-left'`, `'top-right'`, `'bottom-left'` or `'bottom-right'`. The anchor describes the room as it ends up on the map, so it does not rotate with the template. `rotations` limits the rotations allowed at that position, for example a door in the template's bottom wall and a `'bottom'` anchor call for `[90, 180, 270]`. The rotations used at a position are those in both `rotations` and the template's `rotate`; having none in common is an error.
 
@@ -1349,11 +1404,11 @@ const { grid, rooms } = generateRoomDungeon({
 - `Exit` cells become doors by `doorChance`, and `Door` cells always do. They are listed in `exits`, and `Exit` and `Door` cells inside the template, which lead nowhere, are tiles only: they are not listed, and the same `doorChance` applies to the `Exit` ones.
 - Every exit has a corridor tile in front of it and corridors keep the usual distance from one another, so a door cannot be sidestepped and corridors cannot be crossed diagonally.
 - With `templateSymmetry` set and a `layoutSymmetry` other than `none`, every copy of a template brings its mirror images along, always and whatever `layoutSymmetryChance` is. An image is the geometric image of the copy, whatever `rotate` and `mirror` allow, and `rotation` and `mirrored` describe it accordingly. A copy is only placed where its images fit too, and an image that equals the copy (a centered, symmetric template) is not added. Without `templateSymmetry`, a template is placed once per copy, even with a symmetric layout. `templateSymmetry` has no effect without a layout symmetry.
-- The corridor rules can occasionally box in the fixed exit of a template. The ordinary rooms and corridors are then built again (dug again, by the digger), up to ten times, before giving up with a `TemplatePlacementError`. The templates keep their places.
+- The corridor rules can occasionally box in the fixed exit of a template. The ordinary rooms and corridors are then built again (dug again, by the digger), up to ten times. If it still fails, the templates are placed again and the dungeon is built again, up to three times in all, before giving up with a `TemplatePlacementError`.
 
 With `placement: 'lattice'`, a template that cannot sit on the lattice is rejected before anything is generated, with a `RangeError` that names it: at least one of its variants must have an odd width and height, every `Exit` and `Door` that leads outside must face a tile with odd coordinates, which is where corridors start, and so must at least one exit candidate of any kind. Design lattice templates with their walls on even and their floors on odd rows and columns of the template, and exits on the walls at odd positions along them. An example is a 3x3 template with a floor in the middle and one exit in the top wall.
 
-A template that cannot be placed will always throw a `TemplatePlacementError` instead of being skipped silently. Its message says which template (by `name` and index) and why, and its `templateIndex` and `templateName` fields carry the same. A template that cannot be joined to the rest of the dungeon throws the same error.
+A template is never skipped silently, since a map may need it (a boss arena, a scripted ruin). When a template finds no place in a dungeon, a mine or a forest, a new map is generated, up to three in all, and only then a `TemplatePlacementError` is thrown: at that point the input is at fault and not the map, as every attempt failed. Errors that no other map could fix, such as a template bigger than the map or one that fits no lattice, are thrown at once. Mazes always have a lattice, so a template that does not fit throws at once there. Its message says which template (by `name` and index) and why, and its `templateIndex` and `templateName` fields carry the same. A template that cannot be joined to the rest of the dungeon throws the same error.
 
 ## Playground
 

@@ -31,6 +31,7 @@ export type { ClearingPathOptions } from './forest/clearing-path-options';
 export type { ClearingSpec } from './forest/clearing-spec';
 export type { ForestOptions } from './forest/forest-options';
 export type { ForestResult } from './forest/forest-result';
+export type { ForestTemplate } from './forest/forest-template';
 export { generateForest } from './forest/generate-forest';
 export { generateDigDungeon } from './dungeon/generate-dig-dungeon';
 export { generateMaze } from './maze/generate-maze';

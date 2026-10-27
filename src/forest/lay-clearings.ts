@@ -226,6 +226,7 @@ export function layClearings(
         to: center,
         width: options.width ?? DEFAULT_PATH_WIDTH,
         windiness: options.windiness ?? DEFAULT_PATH_WINDINESS,
+        clearing: clearings.length - 1,
       });
     }
   });

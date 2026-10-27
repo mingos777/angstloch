@@ -9,6 +9,7 @@ import type {
 import { buildForest } from '../src/forest/build-forest';
 import type { CrossingPlan } from '../src/streams/crossing-plan';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
+import { FOREST_TEMPLATES } from './forest-templates';
 import { downloadCanvas } from './download-canvas';
 import { Color, drawGrid } from './draw-grid';
 import type { DisplayMode } from './draw-grid';
@@ -81,120 +82,143 @@ function render(): void {
     const grown: Point[][] = [];
     // how they cross the streams
     const plans: CrossingPlan[] = [];
-    const { grid, density, roads, junctions, exits, streams, bridges } =
-      buildForest(
-        {
-          width: value('width'),
-          height: value('height'),
-          random: mulberry32(value('seed')),
-          minDensity: value('minDensity'),
-          maxDensity: value('maxDensity'),
-          scaleX: value('scaleX'),
-          scaleY: value('scaleY'),
-          rotation: value('rotation'),
-          octaves: value('octaves'),
-          persistence: value('persistence'),
-          lacunarity: value('lacunarity'),
-          groundTile: plain ? Tile.Floor : Tile.Grass,
-          treeTile: plain ? Tile.Wall : Tile.Tree,
-          // in the plain display the deep water is the wall that needs swimming
-          shallowTile: plain ? Tile.Floor : Tile.ShallowWater,
-          deepTile: plain ? Tile.Wall : Tile.DeepWater,
-          bridgeTile: plain ? Tile.Floor : Tile.Bridge,
-          streams: data.has('stream')
-            ? {
-                // a blank angle means a random one
-                angle:
-                  data.get('streamAngle') === ''
-                    ? 'random'
-                    : value('streamAngle'),
-                width: {
-                  min: value('streamWidthMin'),
-                  max: value('streamWidthMax'),
+    const {
+      grid,
+      density,
+      roads,
+      junctions,
+      exits,
+      streams,
+      bridges,
+      templates,
+    } = buildForest(
+      {
+        width: value('width'),
+        height: value('height'),
+        random: mulberry32(value('seed')),
+        minDensity: value('minDensity'),
+        maxDensity: value('maxDensity'),
+        scaleX: value('scaleX'),
+        scaleY: value('scaleY'),
+        rotation: value('rotation'),
+        octaves: value('octaves'),
+        persistence: value('persistence'),
+        lacunarity: value('lacunarity'),
+        groundTile: plain ? Tile.Floor : Tile.Grass,
+        treeTile: plain ? Tile.Wall : Tile.Tree,
+        // in the plain display the deep water is the wall that needs swimming
+        shallowTile: plain ? Tile.Floor : Tile.ShallowWater,
+        deepTile: plain ? Tile.Wall : Tile.DeepWater,
+        bridgeTile: plain ? Tile.Floor : Tile.Bridge,
+        streams: data.has('stream')
+          ? {
+              // a blank angle means a random one
+              angle:
+                data.get('streamAngle') === ''
+                  ? 'random'
+                  : value('streamAngle'),
+              width: {
+                min: value('streamWidthMin'),
+                max: value('streamWidthMax'),
+              },
+              windiness: value('streamWindiness'),
+              shoreWidth: value('shoreWidth'),
+              spring: data.has('spring'),
+              bridges: value('streamBridges'),
+              tributaries: {
+                min: value('tributariesMin'),
+                max: value('tributariesMax'),
+              },
+              tributaryWidth: {
+                min: value('tributaryWidthMin'),
+                max: value('tributaryWidthMax'),
+              },
+              tributaryAngle: {
+                min: value('tributaryAngleMin'),
+                max: value('tributaryAngleMax'),
+              },
+              tributaryLength: data.has('limitTributaries')
+                ? {
+                    min: value('tributaryLengthMin'),
+                    max: value('tributaryLengthMax'),
+                  }
+                : undefined,
+              bridgeAngle: {
+                min: value('bridgeAngleMin'),
+                max: value('bridgeAngleMax'),
+              },
+            }
+          : undefined,
+        clearance: value('clearance'),
+        falloff: value('falloff'),
+        bankClearance: value('bankClearance'),
+        bankFalloff: value('bankFalloff'),
+        clearingSpacing: value('clearingSpacing'),
+        distance: data.get('distance') as DistanceMetric,
+        clearings: readClearings(form),
+        templates: data.has('useTemplates')
+          ? [
+              {
+                ...(FOREST_TEMPLATES[data.get('templateKind') as string] ?? {
+                  cells: [],
+                }),
+                count: {
+                  min: value('templateCountMin'),
+                  max: value('templateCountMax'),
                 },
-                windiness: value('streamWindiness'),
-                shoreWidth: value('shoreWidth'),
-                spring: data.has('spring'),
-                bridges: value('streamBridges'),
-                tributaries: {
-                  min: value('tributariesMin'),
-                  max: value('tributariesMax'),
-                },
-                tributaryWidth: {
-                  min: value('tributaryWidthMin'),
-                  max: value('tributaryWidthMax'),
-                },
-                tributaryAngle: {
-                  min: value('tributaryAngleMin'),
-                  max: value('tributaryAngleMax'),
-                },
-                tributaryLength: data.has('limitTributaries')
-                  ? {
-                      min: value('tributaryLengthMin'),
-                      max: value('tributaryLengthMax'),
-                    }
-                  : undefined,
-                bridgeAngle: {
-                  min: value('bridgeAngleMin'),
-                  max: value('bridgeAngleMax'),
-                },
-              }
-            : undefined,
-          clearance: value('clearance'),
-          falloff: value('falloff'),
-          bankClearance: value('bankClearance'),
-          bankFalloff: value('bankFalloff'),
-          clearingSpacing: value('clearingSpacing'),
-          distance: data.get('distance') as DistanceMetric,
-          clearings: readClearings(form),
-          roads: data.has('road')
-            ? {
-                // a blank angle means a random one
-                angle:
-                  data.get('roadAngle') === '' ? 'random' : value('roadAngle'),
-                width: {
-                  min: value('roadWidthMin'),
-                  max: value('roadWidthMax'),
-                },
-                windiness: value('roadWindiness'),
-                crossings: {
-                  min: value('crossingsMin'),
-                  max: value('crossingsMax'),
-                },
-                crossingAngle: {
-                  min: value('crossingAngleMin'),
-                  max: value('crossingAngleMax'),
-                },
-                branches: {
-                  min: value('branchesMin'),
-                  max: value('branchesMax'),
-                },
-                branchWidth: {
-                  min: value('branchWidthMin'),
-                  max: value('branchWidthMax'),
-                },
-                branchAngle: {
-                  min: value('branchAngleMin'),
-                  max: value('branchAngleMax'),
-                },
-                branchLength: data.has('limitBranches')
-                  ? {
-                      min: value('branchLengthMin'),
-                      max: value('branchLengthMax'),
-                    }
-                  : undefined,
-                // exact roads replace the generated network, as the library says
-                specs: data.has('exactRoads')
-                  ? (JSON.parse(data.get('roadSpecs') as string) as RoadEntry[])
-                  : undefined,
-              }
-            : undefined,
-        },
-        {
-          grown: (points) => grown.push(points),
-          planned: (plan) => plans.push(plan),
-        },
-      );
+                chance: value('templateChance'),
+                clearing: data.has('templateClearing'),
+              },
+            ]
+          : undefined,
+        roads: data.has('road')
+          ? {
+              // a blank angle means a random one
+              angle:
+                data.get('roadAngle') === '' ? 'random' : value('roadAngle'),
+              width: {
+                min: value('roadWidthMin'),
+                max: value('roadWidthMax'),
+              },
+              windiness: value('roadWindiness'),
+              crossings: {
+                min: value('crossingsMin'),
+                max: value('crossingsMax'),
+              },
+              crossingAngle: {
+                min: value('crossingAngleMin'),
+                max: value('crossingAngleMax'),
+              },
+              branches: {
+                min: value('branchesMin'),
+                max: value('branchesMax'),
+              },
+              branchWidth: {
+                min: value('branchWidthMin'),
+                max: value('branchWidthMax'),
+              },
+              branchAngle: {
+                min: value('branchAngleMin'),
+                max: value('branchAngleMax'),
+              },
+              branchLength: data.has('limitBranches')
+                ? {
+                    min: value('branchLengthMin'),
+                    max: value('branchLengthMax'),
+                  }
+                : undefined,
+              // exact roads replace the generated network, as the library says
+              specs: data.has('exactRoads')
+                ? (JSON.parse(data.get('roadSpecs') as string) as RoadEntry[])
+                : undefined,
+            }
+          : undefined,
+      },
+      {
+        grown: (points) => grown.push(points),
+        planned: (plan) => plans.push(plan),
+      },
+    );
     error.textContent = '';
     const trees = grid
       .toString()
@@ -204,7 +228,7 @@ function render(): void {
       .toString()
       .split('')
       .filter((c) => c === '=').length;
-    stats.textContent = `${String(streams.length)} streams, ${String(bridges.length)} bridges, ${String(roads.length)} roads (${String(roadTiles)} tiles, ${String(junctions.length)} junctions), ${String(trees)} trees of ${String(grid.width * grid.height)} tiles (${((100 * trees) / (grid.width * grid.height)).toFixed(1)}%)`;
+    stats.textContent = `${String(streams.length)} streams, ${String(bridges.length)} bridges, ${String(templates.length)} templates, ${String(roads.length)} roads (${String(roadTiles)} tiles, ${String(junctions.length)} junctions), ${String(trees)} trees of ${String(grid.width * grid.height)} tiles (${((100 * trees) / (grid.width * grid.height)).toFixed(1)}%)`;
 
     const tileSize = value('tileSize');
     if (display.value === 'density') {
@@ -234,6 +258,19 @@ function render(): void {
         display.value as DisplayMode,
         data.has('showExits') ? exits : [],
       );
+      if (data.has('showTemplates')) {
+        // an outline round the box of every template
+        context.strokeStyle = Color.BrightMagenta;
+        context.lineWidth = Math.max(1, tileSize / 6);
+        for (const { x, y, width, height } of templates) {
+          context.strokeRect(
+            x * tileSize,
+            y * tileSize,
+            width * tileSize,
+            height * tileSize,
+          );
+        }
+      }
       if (data.has('showGrown')) {
         // a small dot on every tile of a road as it was grown
         context.fillStyle = Color.BrightMagenta;

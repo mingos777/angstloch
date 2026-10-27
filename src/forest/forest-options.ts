@@ -2,6 +2,7 @@ import type { BaseOptions } from '../core/base-options';
 import type { Tile } from '../core/tile';
 import type { NoiseFunction } from '../noise/noise-function';
 import type { DistanceMetric } from '../roads/distance-metric';
+import type { RoomTemplate } from '../rooms/templates/room-template';
 import type { RoadOptions } from '../roads/road-options';
 import type { StreamOptions } from '../streams/stream-options';
 import type { ClearingSpec } from './clearing-spec';
@@ -55,4 +56,6 @@ export interface ForestOptions extends BaseOptions {
   clearings?: ClearingSpec[];
   /** How many tiles beyond their radii the clearings that are placed at random keep from each other, a whole number of at least 0. Clearings with a center of their own are not moved. Defaults to 0, where the plain ovals of two clearings may touch. */
   clearingSpacing?: number;
+  /** Prefabricated [`RoomTemplate`]s to place: a ruin, a camp, an arena. A template that has `clearing: true` is centered on a free clearing of `clearings`, and any other goes to a random spot. Its `Floor` and `Wall` cells force their tiles, over trees and grass but never over a road or water, and its `Unused` cells leave the map as it is. A road or path never runs through a template: a path to the clearing stops at its edge. Exit, door and optional exit cells are bad input and throw a `RangeError`. A template that finds no place gets a new forest, up to three in all, and then throws a `TemplatePlacementError`. Defaults to none. */
+  templates?: RoomTemplate[];
 }

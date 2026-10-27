@@ -69,7 +69,7 @@ export interface MineOptions extends BaseOptions {
   cavernFill?: number;
   /** Ordinary rectangular rooms to place in the mine, for any layout. They are dug into the rock beside the tunnels once the rest is done, never over floor, and joined to the mine by a tunnel from each of their exits. A room that finds no room is left out. Defaults to no rooms. */
   rooms?: MineRoomOptions;
-  /** Prefabricated rooms, placed like the ordinary ones, before them, and joined to the mine from their exits. A template that cannot be placed or joined throws a `TemplatePlacementError`. Defaults to none. */
+  /** Prefabricated rooms, placed like the ordinary ones, before them, and joined to the mine from their exits. A template that cannot be placed or joined gets a new mine, up to three in all, and then throws a `TemplatePlacementError`. Defaults to none. */
   templates?: RoomTemplate[];
   /** Number of openings per room, a `Range` of whole numbers, 1 or more. The fixed exits of a template count, and more are opened from the optional ones. Defaults to 1 to 3. */
   exitsPerRoom?: Range;

@@ -2,6 +2,7 @@ import type { Grid } from '../core/grid';
 import type { Point } from '../core/point';
 import type { Road } from '../roads/road';
 import type { Clearing } from './clearing';
+import type { ForestTemplate } from './forest-template';
 
 export interface ForestResult {
   /** The generated map. */
@@ -20,4 +21,6 @@ export interface ForestResult {
   bridges: Point[];
   /** The clearings that were made, with the shape they were given. Empty without the `clearings` option. */
   clearings: Clearing[];
+  /** The templates that were placed, with the box each one fills. Empty without the `templates` option. */
+  templates: ForestTemplate[];
 }
