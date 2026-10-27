@@ -45,4 +45,40 @@ describe('curveTiles', () => {
     // then: it sets off downwards although the target is to the right
     expect(tiles[2]?.y).toBeGreaterThan(10);
   });
+
+  it('pushes the curve to the right of its way by the sway', () => {
+    // given
+    const from = { x: 0, y: 10 };
+    const to = { x: 20, y: 10 };
+
+    // when
+    const tiles = curveTiles(from, to, 0, 0, (t) => 3 * Math.sin(Math.PI * t));
+
+    // then
+    expect(tiles.find(({ x }) => x === 10)?.y).toBe(13);
+  });
+
+  it('swings wider with a higher tension', () => {
+    // given
+    const from = { x: 0, y: 0 };
+    const to = { x: 20, y: 0 };
+    const widest = (tension: number) =>
+      Math.max(
+        ...curveTiles(
+          from,
+          to,
+          Math.PI / 2,
+          -Math.PI / 2,
+          undefined,
+          tension,
+        ).map(({ y }) => y),
+      );
+
+    // when
+    const tight = widest(0.5);
+    const wide = widest(1.5);
+
+    // then
+    expect(wide).toBeGreaterThan(tight);
+  });
 });

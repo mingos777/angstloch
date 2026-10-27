@@ -182,4 +182,16 @@ describe('addRoad', () => {
       points.map((p) => p.y - base).join();
     expect(shape(first.points, 5)).not.toBe(shape(second.points, 15));
   });
+
+  it('covers the border where a road leaves the map as if it went on', () => {
+    // given
+    const map = emptyMap();
+
+    // when
+    addRoad(map, { ...HORIZONTAL, width: 3, angle: Math.PI / 6 });
+
+    // then
+    expect(map.covered[2 * 21 + 0]).toBe(1);
+    expect(map.covered[19 * 21 + 20]).toBe(1);
+  });
 });

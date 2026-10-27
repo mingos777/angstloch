@@ -104,4 +104,24 @@ describe('findDeepWater', () => {
     // then
     expect(deep.every((tile) => tile === 0)).toBe(true);
   });
+
+  it('carries the deep water on past the border where the stream leaves the map', () => {
+    // given
+    const streams: Road[] = [
+      {
+        kind: 'road',
+        width: 5,
+        points: [...Array(5).keys()].map((step) => ({
+          x: 2 + step,
+          y: 4 - step,
+        })),
+      },
+    ];
+
+    // when
+    const deep = findDeepWater(streams, 9, 9, 1);
+
+    // then
+    expect(deep[0 * 9 + 8]).toBe(1);
+  });
 });

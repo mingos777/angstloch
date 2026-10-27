@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Grid } from '../core/grid';
 import { Tile } from '../core/tile';
+import { brushOffsets } from '../roads/brush-offsets';
 import { findSpans } from '../streams/find-spans';
 import type { StreamOptions } from '../streams/stream-options';
 import { mulberry32 } from '../test-helpers/mulberry32';
@@ -236,7 +237,7 @@ describe('generateForest streams', () => {
 
   it('lays a footbridge across a stream that no road crosses', () => {
     // given
-    const options = { streams: LEVEL };
+    const options = { streams: { ...LEVEL, width: { min: 2, max: 2 } } };
 
     // when
     const { grid, bridges } = forest(options);
@@ -639,5 +640,36 @@ describe('generateForest streams', () => {
       // when / then
       expect(() => forest(options)).toThrow(RangeError);
     });
+  });
+
+  it('makes a bridge of every tile of a generated road over water', () => {
+    // given
+    const seeds = Array.from({ length: 10 }, (_, seed) => seed + 1);
+
+    // when
+    const wet = seeds.flatMap((seed) => {
+      const { grid, roads } = forest(
+        {
+          roads: { width: { min: 3, max: 3 } },
+          streams: {
+            width: { min: 3, max: 3 },
+            tributaries: { min: 2, max: 2 },
+          },
+        },
+        seed,
+      );
+      return roads.flatMap(({ points, width }) =>
+        points.flatMap(({ x, y }) =>
+          brushOffsets(width)
+            .map((offset) => grid.get(x + offset.x, y + offset.y))
+            .filter(
+              (tile) => tile === Tile.ShallowWater || tile === Tile.DeepWater,
+            ),
+        ),
+      );
+    });
+
+    // then
+    expect(wet).toEqual([]);
   });
 });

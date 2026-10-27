@@ -69,6 +69,7 @@ Angstloch is a map generator library for roguelike games on a 2D square grid. It
   - `maze/`, `dungeon/` (room-first and digger), `cave/`, `forest/` and `mine/`: one generator each, with `generate-*.ts` as the entry point.
   - `test-helpers/`: seedable PRNG and dungeon checks for tests.
 - `demo/`: visual playground, run with `npm run dev`. Not published.
+- `scripts/`: development scripts, run through Vite's `runnerImport`. Not published. `check-forest.ts` scores forests with roads and streams for artifacts over many seeds.
 - `dist/`: build output (gitignored).
 
 ## Commands
@@ -77,3 +78,4 @@ Angstloch is a map generator library for roguelike games on a 2D square grid. It
 - `npm run build`: build the library to `dist/`.
 - `npm test`: run unit tests with coverage (`npm run test:watch` for watch mode).
 - `npm run typecheck`, `npm run lint`, `npm run format` / `format:check`.
+- `npm run check:forest`: count the road and stream artifacts over seeds 1 to 200 (`-- --seeds 6,9 --show` prints the maps).

@@ -31,7 +31,7 @@ export function addRoad(map: RoadMap, spec: RoadSpec): Road {
   const backwards = spec.directions.includes(-1) ? grow(-1).reverse() : [];
   const forwards = spec.directions.includes(1) ? grow(1) : [];
   const grown = joinTiles([...backwards, spec.origin, ...forwards]);
-  const points = spec.reshape ? spec.reshape(grown) : grown;
+  const points = spec.reshape ? spec.reshape(grown, spec.width) : grown;
 
   return stampRoad(map, spec.kind, spec.width, points);
 }

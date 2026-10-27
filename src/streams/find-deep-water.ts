@@ -1,4 +1,5 @@
 import type { Road } from '../roads/road';
+import { extendPastBorder } from '../roads/extend-past-border';
 import { stampRoadBrush } from '../roads/stamp-road-brush';
 
 /**
@@ -19,7 +20,11 @@ export function findDeepWater(
     if (core < 1) {
       continue;
     }
-    for (const { x, y } of points) {
+    // past the border too, like the stream itself
+    for (const { x, y } of [
+      ...points,
+      ...extendPastBorder(points, mapWidth, mapHeight),
+    ]) {
       stampRoadBrush(deep, mapWidth, mapHeight, x, y, core);
     }
   }

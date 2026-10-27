@@ -15,14 +15,14 @@ const radians = (degrees: number) => (degrees * Math.PI) / 180;
  * Crossings and then branches are attached to the roads that are there. The
  * options must be valid, and `windiness` is the one of the map. When the
  * options have `specs`, those roads are laid instead. `reshape` changes the
- * centerline of every generated road before it is laid, and does not apply to
+ * centerline of every generated road before it is laid, and is told its width, and does not apply to
  * the roads of `specs`.
  */
 export function layRoadNetwork(
   map: RoadMap,
   random: Random,
   options: RoadOptions,
-  reshape?: (points: Point[]) => Point[],
+  reshape?: (points: Point[], width: number) => Point[],
 ): void {
   if (options.specs) {
     layRoadEntries(map, random, options.specs);

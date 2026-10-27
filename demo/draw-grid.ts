@@ -3,7 +3,8 @@ import type { Grid, Point } from '../src';
 
 export type DisplayMode = 'simple' | 'roguelike';
 
-const Color = {
+/** The ANSI terminal palette of the user's game. */
+export const Color = {
   Black: '#000000',
   Red: '#aa0000',
   Green: '#00aa00',

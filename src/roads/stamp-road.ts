@@ -1,6 +1,7 @@
 import type { Road } from './road';
 import type { RoadKind } from './road-kind';
 import type { RoadMap } from './road-map';
+import { extendPastBorder } from './extend-past-border';
 import { stampRoadBrush } from './stamp-road-brush';
 
 /**
@@ -30,6 +31,10 @@ export function stampRoad(
     if (owner === -1) {
       map.owner[at] = index;
     }
+  }
+  // the road goes on past the border, so that the border cuts it cleanly
+  for (const tile of extendPastBorder(points, mapWidth, mapHeight)) {
+    stampRoadBrush(map.covered, mapWidth, mapHeight, tile.x, tile.y, width);
   }
 
   const road: Road = { kind, width, points };

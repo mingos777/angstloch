@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { Point } from '../core/point';
 import { traceTiles } from '../roads/trace-tiles';
 import { mulberry32 } from '../test-helpers/mulberry32';
+import { createSimplexNoise } from '../noise/create-simplex-noise';
 import { createSteerAcrossStreams } from './create-steer-across-streams';
+import type { CrossingPlan } from './crossing-plan';
 import { layStreams } from './lay-streams';
 
 /** A straight stream that runs top to bottom on a map of 100 by 70 tiles. */
@@ -22,7 +24,7 @@ describe('createSteerAcrossStreams', () => {
     const steer = createSteerAcrossStreams(laid, mulberry32(1), RIGHT_ANGLE);
 
     // when
-    const points = steer(diagonal);
+    const points = steer(diagonal, 3);
 
     // then: the road runs straight across, along a row, near the stream
     const near = points.filter(({ x }) => Math.abs(x - streamX) <= 2);
@@ -34,7 +36,7 @@ describe('createSteerAcrossStreams', () => {
     const steer = createSteerAcrossStreams(laid, mulberry32(1), RIGHT_ANGLE);
 
     // when
-    const points = steer(diagonal);
+    const points = steer(diagonal, 3);
 
     // then
     const gaps = points.filter(
@@ -52,7 +54,7 @@ describe('createSteerAcrossStreams', () => {
     const steer = createSteerAcrossStreams(laid, mulberry32(1), RIGHT_ANGLE);
 
     // when
-    const points = steer(diagonal);
+    const points = steer(diagonal, 3);
 
     // then
     expect(points[0]).toEqual({ x: 0, y: 10 });
@@ -65,7 +67,7 @@ describe('createSteerAcrossStreams', () => {
     const road = traceTiles({ x: 1, y: 0 }, { x: 1, y: 69 });
 
     // when
-    const points = steer(road);
+    const points = steer(road, 3);
 
     // then
     expect(points).toEqual(road);
@@ -77,7 +79,7 @@ describe('createSteerAcrossStreams', () => {
     const road = traceTiles({ x: streamX - 1, y: 0 }, { x: streamX + 1, y: 4 });
 
     // when
-    const points = steer(road);
+    const points = steer(road, 3);
 
     // then
     expect(
@@ -97,7 +99,7 @@ describe('createSteerAcrossStreams', () => {
     ];
 
     // when
-    const points = steer(road);
+    const points = steer(road, 3);
 
     // then
     expect(points.filter(({ x }) => Math.abs(x - streamX) <= 2)).toEqual([]);
@@ -117,7 +119,7 @@ describe('createSteerAcrossStreams', () => {
     ];
 
     // when
-    const points = steer(weave);
+    const points = steer(weave, 3);
 
     // then: the road is at the stream's centerline on one row only
     expect(
@@ -131,11 +133,100 @@ describe('createSteerAcrossStreams', () => {
     const road = traceTiles({ x: streamX, y: 0 }, { x: streamX + 12, y: 69 });
 
     // when
-    const points = steer(road);
+    const points = steer(road, 3);
 
-    // then
+    // then: far enough that the road, 3 wide, keeps a tile of land from the water
     const start = points[0];
     expect(start?.y).toBe(0);
-    expect(Math.abs((start?.x ?? 0) - streamX)).toBeGreaterThan(3);
+    expect(Math.abs((start?.x ?? 0) - streamX)).toBeGreaterThan(2);
+  });
+
+  it('keeps a road that crosses off the water and its verge except on its bridge', () => {
+    // given
+    const plans: CrossingPlan[] = [];
+    const steer = createSteerAcrossStreams(
+      laid,
+      mulberry32(1),
+      RIGHT_ANGLE,
+      undefined,
+      (plan) => plans.push(plan),
+    );
+
+    // when
+    const points = steer(diagonal, 3);
+
+    // then: away from the straight run over the bridge, two tiles from the water
+    const crossing = plans[0]?.crossings[0];
+    const run = traceTiles(
+      crossing?.approach ?? { x: 0, y: 0 },
+      crossing?.departure ?? { x: 0, y: 0 },
+    );
+    const near = points.filter(
+      (tile) =>
+        Math.abs(tile.x - streamX) <= 2 &&
+        !run.some(({ x, y }) => x === tile.x && y === tile.y),
+    );
+    expect(near).toEqual([]);
+  });
+
+  it('winds a road between its waypoints', () => {
+    // given
+    const winding = { noise: createSimplexNoise(mulberry32(5)), windiness: 1 };
+    const straight = createSteerAcrossStreams(laid, mulberry32(1), RIGHT_ANGLE);
+    const windingSteer = createSteerAcrossStreams(
+      laid,
+      mulberry32(1),
+      RIGHT_ANGLE,
+      winding,
+    );
+
+    // when
+    const plain = straight(diagonal, 3);
+    const windy = windingSteer(diagonal, 3);
+
+    // then
+    expect(windy).not.toEqual(plain);
+  });
+
+  it('never lays a road that comes back on itself', () => {
+    // given
+    const winding = { noise: createSimplexNoise(mulberry32(5)), windiness: 1 };
+    const steer = createSteerAcrossStreams(
+      laid,
+      mulberry32(1),
+      RIGHT_ANGLE,
+      winding,
+    );
+
+    // when
+    const points = steer(diagonal, 3);
+
+    // then
+    const back = points.some((tile, at) =>
+      points
+        .slice(at + 7)
+        .some((other) => Math.hypot(other.x - tile.x, other.y - tile.y) <= 3),
+    );
+    expect(back).toBe(false);
+  });
+
+  it('lays a road that crosses no stream anew where it came near the water', () => {
+    // given
+    const steer = createSteerAcrossStreams(laid, mulberry32(1), RIGHT_ANGLE);
+    const road = [
+      ...traceTiles({ x: streamX + 20, y: 0 }, { x: streamX + 1, y: 35 }),
+      ...traceTiles(
+        { x: streamX + 1, y: 35 },
+        { x: streamX + 20, y: 69 },
+      ).slice(1),
+    ];
+
+    // when
+    const points = steer(road, 3);
+
+    // then
+    expect(points[0]).toEqual(road[0]);
+    expect(points[points.length - 1]).toEqual(road[road.length - 1]);
+    expect(Math.min(...points.map(({ x }) => x))).toBeGreaterThan(streamX + 2);
   });
 });

@@ -16,6 +16,6 @@ export interface RoadSpec {
   maxLength?: number;
   /** How much the road winds, from 0 (straight) to 1. Defaults to the windiness of the road map. */
   windiness?: number;
-  /** Changes the centerline once it is grown, before it is laid. */
-  reshape?: (points: Point[]) => Point[];
+  /** Changes the centerline once it is grown, before it is laid. It is told the width of the road as well. */
+  reshape?: (points: Point[], width: number) => Point[];
 }

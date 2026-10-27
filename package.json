@@ -29,7 +29,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run --coverage",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:forest": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-forest.ts'))\" --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
