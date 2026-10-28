@@ -71,3 +71,39 @@ export type { FractalNoiseOptions } from './noise/fractal-noise-options';
 export type { NoiseFunction } from './noise/noise-function';
 export type { NoiseTransformOptions } from './noise/noise-transform-options';
 export { transformNoise } from './noise/transform-noise';
+export { emptyMap } from './pipeline/empty-map';
+export type { EmptyMapOptions } from './pipeline/empty-map-options';
+export type { MapBase } from './pipeline/map-base';
+export type { MapState } from './pipeline/map-state';
+export type { MapStep } from './pipeline/map-step';
+export { pipeline } from './pipeline/pipeline';
+export type {
+  AnyStep,
+  ChainState,
+  StepOrderError,
+  ValidChain,
+} from './pipeline/pipeline-chain';
+export type { PipelineFailure } from './pipeline/pipeline-failure';
+export type { PipelineOptions } from './pipeline/pipeline-options';
+export type {
+  PipelineResult,
+  PipelineSummary,
+} from './pipeline/pipeline-result';
+export { stampTile } from './pipeline/stamp-tile';
+export { step } from './pipeline/step';
+export type { StepSpec } from './pipeline/step';
+export type { StepContext } from './pipeline/step-context';
+export { plantTrees } from './forest/plant-trees';
+export type { PlantTreesOptions } from './forest/plant-trees-options';
+export { pruneVerge } from './roads/prune-verge';
+export type { Verge } from './roads/verge';
+export { addStreams } from './streams/add-streams';
+export type { AddStreamsOptions } from './streams/add-streams-options';
+export { addRoads } from './streams/add-roads';
+export type { AddedRoads } from './streams/add-roads';
+export type { AddRoadsOptions } from './streams/add-roads-options';
+export type { CrossingPlan } from './streams/crossing-plan';
+export type { PlannedCrossing } from './streams/planned-crossing';
+export { placeClearings } from './forest/place-clearings';
+export type { PlaceClearingsOptions } from './forest/place-clearings-options';
+export type { PlacedClearing } from './forest/placed-clearing';

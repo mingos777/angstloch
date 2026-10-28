@@ -12,6 +12,7 @@ Currently available:
 - [`generateMine`](#mines): mines, as a main shaft with side tunnels branching off it, a web of winding veins, halls with pillars left standing, or concentric rings, dug until the map is as full as you want.
 - [`generateRoomDungeon`](#dungeons): room-first dungeons: rooms are placed first and joined by corridors afterwards.
 - [`generateDigDungeon`](#the-digger): dungeons that are dug: corridors and rooms grow out of a first room.
+- [`pipeline`](#composing-maps): builds a map from an empty base and a list of steps, with retries. The generators are being rebuilt on it, one at a time.
 
 ## Concepts
 
@@ -1410,9 +1411,218 @@ With `placement: 'lattice'`, a template that cannot sit on the lattice is reject
 
 A template is never skipped silently, since a map may need it (a boss arena, a scripted ruin). When a template finds no place in a dungeon, a mine or a forest, a new map is generated, up to three in all, and only then a `TemplatePlacementError` is thrown: at that point the input is at fault and not the map, as every attempt failed. Errors that no other map could fix, such as a template bigger than the map or one that fits no lattice, are thrown at once. Mazes always have a lattice, so a template that does not fit throws at once there. Its message says which template (by `name` and index) and why, and its `templateIndex` and `templateName` fields carry the same. A template that cannot be joined to the rest of the dungeon throws the same error.
 
+## Composing maps
+
+A map can be composed from an empty base and a list of steps, like middleware, instead of one generator with many options. `pipeline` runs the steps in order, merges what each reports into the map state, and builds the map again from the start when a step throws. The first ready-made step is [`plantTrees`](#planttrees), and the rest of the forest follows (see the roadmap); you can write steps of your own, and the machinery is the same.
+
+```ts
+import { Tile, emptyMap, pipeline, stampTile, step } from 'angstloch';
+
+// a step is a named function: it changes the map and returns the extras it adds
+const scatter = step<object, { scattered: number }>(
+  'scatter',
+  { adds: ['scattered'] },
+  ({ grid, base, prunable }, { random }) => {
+    let scattered = 0;
+    for (let y = 0; y < grid.height; ++y) {
+      for (let x = 0; x < grid.width; ++x) {
+        if (grid.get(x, y) === base && random() < 0.2) {
+          grid.set(x, y, Tile.Tree);
+          prunable[y * grid.width + x] = 1;
+          ++scattered;
+        }
+      }
+    }
+    return { scattered };
+  },
+);
+
+// this one needs the extra of the first, so it must come after it
+const fence = step<{ scattered: number }, object>(
+  'fence',
+  { needs: ['scattered'] },
+  (state) => {
+    for (let x = 0; x < state.grid.width; ++x) {
+      stampTile(state, x, 0, Tile.Road);
+    }
+    return {};
+  },
+);
+
+const { grid, scattered, attempts, failures } = pipeline(
+  emptyMap({ width: 80, height: 50, tile: Tile.Grass }),
+  [scatter, fence],
+  { random: mulberry32(42) },
+);
+```
+
+### `emptyMap`
+
+`emptyMap({ width, height, tile })` is the start of a pipeline: a map of one tile, grass for a forest and a wall for a dungeon or a mine. The dimensions and the tile are checked at once, and a bad one throws a `RangeError`. It returns a factory (`MapBase`, a function that returns a `MapState`), so that every attempt starts from a fresh state. Any function that returns a state works in its place.
+
+### `MapState`
+
+The map while it is built: `{ grid, base, prunable, ...extras }`.
+
+- `grid` is the `Grid`.
+- `base` is the tile the map started as. A tile that still holds it is untouched ground.
+- `prunable` is a `Uint8Array` with a byte per tile, row by row: 1 where the tile is ground cover that a later step may remove (a tree), 0 elsewhere. A step that lays something down clears the byte of its tiles, so that a later step does not take a wall or a road for ground cover. `stampTile(state, x, y, tile)` sets a tile and clears its byte in one go, and throws a `RangeError` outside the grid.
+- The extras are what the steps return: `streams`, `roads`, and so on.
+
+### `step`
+
+`step(name, spec, run)` makes a `MapStep`. `run(state, context)` changes `state.grid` and `state.prunable` in place and returns the extras the step adds, which the pipeline merges into the state (a later extra replaces an earlier one of the same name). It never mutates anything else.
+
+The type parameters are `step<Needs, Adds>`: `Needs` is what the state must hold, and `Adds` is what `run` returns. The `spec` lists the same extras by name, for run-time checks: `needs` the required ones (leave out an extra that the step only uses when it is there, which you type as `Partial<...>`), and `adds` the ones it returns. A step with none says `{}`.
+
+A step can also have a `validate(state)` in its `spec`, for what only the map can tell, such as its size. `pipeline` calls it once with a fresh base state before the first attempt, and whatever it throws, a `RangeError` for a bad option, is thrown at once and never retried.
+
+The context has `random`, the source of randomness, and `trace`, an optional function that receives the step's internal data for diagnostics, as `trace?.(name, data)`.
+
+A step can also be called by hand, as `mapStep(state, context?)`. The context is optional then, and `random` defaults to `Math.random`. A step whose needs are not in the state throws a `TypeError` that names the step and the extra. Its `stepName`, `needs` and `adds` are readable properties.
+
+### `pipeline`
+
+`pipeline(base, steps, options?)` returns the final state with the extras of every step, plus `attempts` and `failures`.
+
+| Option     | Default       | Meaning                                                                                                        |
+| ---------- | ------------- | -------------------------------------------------------------------------------------------------------------- |
+| `random`   | `Math.random` | The source of randomness, shared by all steps. A retry goes on with it and does not rewind it.                 |
+| `attempts` | 3             | How many times the map is built from the start when a step throws. An integer of at least 1.                   |
+| `onStep`   |               | `(name, state) => void`, called after every step. The state is the live one, so clone the grid if you keep it. |
+| `trace`    |               | `(name, data) => void`, which receives what steps report through the `trace` of their context.                 |
+
+- **Order.** Written as a literal list, the steps are checked at compile time: a step that needs an extra that no earlier step adds does not compile, and the error names the extra (`StepOrderError<"scattered">`). Before the first attempt the same check runs at run time, for callers without types, and a step that comes too early throws a `TypeError` that names it and the missing extra. An extra that a step only uses when it is there never fails the check.
+- **Retries.** When a step throws, the pipeline records the failure and builds the map again from a fresh base, up to `attempts` times in all. After the last attempt the last error is thrown. An error with `permanent` set to `true`, such as a `TemplatePlacementError` that no other map could fix, is thrown at once. A `RangeError` for a bad option of the pipeline itself, and anything a step's `validate` throws, is thrown before any attempt.
+- **`failures`** has one entry per failed attempt, also when a later attempt succeeded: `{ attempt, step, error }`, with the attempt counted from 1 and the name of the step that threw.
+- **Same seed, same pipeline.** All steps draw from one `Random` in order, so a seed gives the same map only for the same list of steps.
+
+### `plantTrees`
+
+`plantTrees(options?)` is a step that plants ground cover. Noise decides how thick it is, and every tile that still holds the base tile gets the planted tile with that chance. Planted tiles are marked prunable, so a later step can clear a verge round what it lays. It adds no extras. Run it first: it plants only on untouched base tiles, so a step that runs before it gets no verge. Every option is checked when the step is made, and a bad one throws a `RangeError` at once.
+
+It is general ground cover and not only trees: `tile` takes any `Tile` value, on any base. Rocks on dirt for a steppe are `emptyMap({ ..., tile: Tile.Floor })` with `plantTrees({ tile: Tile.Wall, density: { min: 0, max: 0.05 } })`. What a tile value looks like is up to your game, which maps the values to whatever it draws.
+
+```ts
+const { grid } = pipeline(
+  emptyMap({ width: 80, height: 50, tile: Tile.Grass }),
+  [plantTrees({ scaleX: 40, density: { min: 0, max: 0.25 } })],
+  { random: mulberry32(42) },
+);
+```
+
+| Option             | Default                 | Meaning                                                                                                                                                                                                                                                             |
+| ------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scaleX`, `scaleY` | 40                      | Size in tiles of a feature of the density noise along each axis, before rotation. Larger values make broader woods and glades.                                                                                                                                      |
+| `rotation`         | 0                       | Clockwise rotation of the noise in degrees, which makes stretched woods run diagonally.                                                                                                                                                                             |
+| `octaves`          | 1                       | Layers of the built-in noise, each finer than the one before. With 1, `persistence` and `lacunarity` have no effect.                                                                                                                                                |
+| `persistence`      | 0.2                     | How much each layer counts against the one before it, from 0 to 1.                                                                                                                                                                                                  |
+| `lacunarity`       | 1                       | How much finer each layer is than the one before it. 1 puts every layer at the same zoom.                                                                                                                                                                           |
+| `noise`            | built-in simplex        | Your own [`NoiseFunction`](#noise) instead. The scales and the rotation apply to it, but the octave options do not, so wrap it in `createFractalNoise` for layers.                                                                                                  |
+| `density`          | `{ min: 0, max: 0.25 }` | The chance of planting a tile, as fractions from 0 to 1 (unlike other ranges, which are whole numbers): `min` where the noise is lowest, rising to `max` where it is highest. The default leaves the lowest parts bare and makes the thickest woods a quarter full. |
+| `tile`             | `Tile.Tree`             | The tile to plant.                                                                                                                                                                                                                                                  |
+
+The step draws one random number for every base tile, and the built-in noise is seeded from the same `random`.
+
+### Verges and `pruneVerge`
+
+A verge is the strip beside a feature that is kept clear of ground cover. Steps that lay a feature (`addStreams` so far, roads and the rest as they arrive) take the three fields of a `Verge` among their options, and you can use the same code in a step of your own: `pruneVerge(state, mask, verge, random)`, where `mask` is a `Uint8Array` with a byte per tile, 1 where the feature is.
+
+| Field       | Default       | Meaning                                                                                                                                                                                                                          |
+| ----------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clearance` | 0             | Whole tiles beside the feature with no ground cover at all. Tiles count in any direction, so 1 clears all eight neighbors, diagonals included.                                                                                   |
+| `falloff`   | 0             | Whole tiles beyond the clearance over which the cover thickens from none to full, in equal steps: with 3, the first tile keeps a quarter of its cover, the next half, the next three quarters, and the one after that all of it. |
+| `distance`  | `'chebyshev'` | How the distance to the feature is measured: `'chebyshev'` makes square verges, `'manhattan'` diamonds and `'euclidean'` round ones.                                                                                             |
+
+`pruneVerge` touches prunable tiles only: a tile it removes goes back to the base tile and stops being prunable, and everything else, such as a road or a wall stamped by another step, is left alone. A tile in the falloff is removed with the chance that the ramp gives, so a tree planted with chance `p` ends up with `p` times the share kept. Verges from several steps add up, so where two overlap, slightly more is pruned than either alone. In a map with nothing prunable (a dungeon) it does nothing.
+
+### `addStreams`
+
+`addStreams(options?)` is a step that lays a stream or a river across the map: a main stream from one border to the opposite one (or from a spring), with shallow banks, deep water in the middle when it is wide enough, and optional tributaries. It paints over whatever is there, so it does not matter whether it runs before or after `plantTrees`, but only a `plantTrees` that ran before it lets it clear trees. A stream is a road made of water, so most options work like those of a [road](#roads) and are described in [Streams and rivers](#streams-and-rivers); the same fields are accepted here, apart from the bridges, which belong to the steps that lay them (`bridges` and `bridgeAngle` are not options of this step).
+
+```ts
+const { grid, streams } = pipeline(
+  emptyMap({ width: 80, height: 50, tile: Tile.Grass }),
+  [
+    plantTrees(),
+    addStreams({
+      width: { min: 2, max: 3 },
+      tributaries: { min: 1, max: 2 },
+      clearance: 1,
+      falloff: 3,
+    }),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
+- **Options.** `angle`, `spring`, `width`, `windiness`, `shoreWidth`, `tributaries`, `tributaryWidth`, `tributaryAngle` and `tributaryLength` as in [Streams and rivers](#streams-and-rivers) with the same defaults; `shallowTile` (default `Tile.ShallowWater`) and `deepTile` (default `Tile.DeepWater`); and the verge kept clear of trees beside the water, `clearance`, `falloff` and `distance` ([see above](#verges-and-pruneverge)), which default to 0, 0 and `'chebyshev'`, so trees grow right up to the water. The verge replaces `bankClearance` and `bankFalloff` of the forest. Every option is checked when the step is made.
+- **Adds `streams`**: an array of roads, `{ kind, width, points }`, the main stream first and then the tributaries. The `points` run with the water: a tributary runs from its source to where it joins. Later steps (roads that cross the stream, footbridges, clearings on the water) work from this list alone.
+- **Water tiles** are stamped over what is there, so they are not prunable, and the trees are cleared beside them by the verge.
+- **Order.** It must come before the steps that lay roads, so that the roads can cross it. With `roads` already in the state it throws a `TypeError` at once, without retrying, since no other map would help.
+
+### `addRoads`
+
+`addRoads(options?)` is a step that lays roads: a main road from one border to the opposite one, with the crossings and branches that [`RoadOptions`](#roads) ask for, or the exact `specs`. It paints road tiles over whatever is there and then clears the trees of its verge. Every option is checked when the step is made, and a bad one throws a `RangeError` at once.
+
+```ts
+const { grid, roads, bridges } = pipeline(
+  emptyMap({ width: 80, height: 50, tile: Tile.Grass }),
+  [
+    plantTrees(),
+    addStreams({ width: { min: 2, max: 3 }, tributaries: { min: 1, max: 1 } }),
+    addRoads({
+      width: { min: 3, max: 3 },
+      crossings: { min: 1, max: 1 },
+      clearance: 1,
+      falloff: 2,
+    }),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
+- **Options.** All the fields of the roads described under [Roads](#roads) (`angle`, `width`, `windiness`, `crossings`, `crossingAngle`, `branches`, `branchWidth`, `branchAngle`, `branchLength` and `specs`), with the same defaults, plus `roadTile` (default `Tile.Road`), `bridgeTile` (default `Tile.Bridge`), `bridgeAngle` (a `Range` of whole degrees from 1 to 179, default `{ min: 75, max: 90 }`, see below) and the verge, `clearance`, `falloff` and `distance` ([see above](#verges-and-pruneverge)), which default to 0, 0 and `'chebyshev'`. The verge replaces `clearance`, `falloff` and `distance` of the forest.
+- **Adds** `roads` (`{ kind, width, points }` for every road, crossing and branch, in the order they were laid), `junctions` (the tiles where roads meet), `exits` (the tiles where roads reach the border) and `bridges` (one point per group of bridge tiles).
+- **Streams.** When the state has `streams` (an `addStreams` step ran before), a generated road is planned across them: it is bent to cross at `bridgeAngle`, straight and square to the stream for the length of the bridge, and a road tile over water becomes `bridgeTile` along that straight run. A road tile over water that is no part of a crossing gives way to the water: a road that clips a bank, or runs along a stream, does not make a bridge. The roads of `specs` are not bent. They are bridged where they span the water. Without `streams` the step works on dry land, and `bridgeAngle` has no effect.
+- **Order.** `addStreams` must come before it. Put `plantTrees` first, so that the verge has trees to clear.
+- **Diagnostics.** Through the `trace` option of [`pipeline`](#pipeline) the step reports `trace('addRoads', { grown, plans })`: `grown`, the centerline of every generated road as it was grown, before the streams bent it, and `plans`, a `CrossingPlan` for every road that comes near a stream (its `start`, `end`, and for each crossing the `approach`, `entry`, `exit` and `departure` tiles, which are where the road turns onto and off the straight run, and where it reaches and leaves the water). Nothing is traced unless `trace` is given.
+
+### `placeClearings`
+
+`placeClearings({ clearings, spacing?, falloff?, distance? })` is a step that places clearings: glades with ragged edges, free of trees. It stamps nothing, since a clearing is ground, and removes the trees inside the ragged shape and across a falloff beyond it. Run it after `plantTrees`, so that there are trees to clear, and after `addStreams` and `addRoads`, which it reads. Every option is checked when the step is made, and a bad one throws a `RangeError` at once; a clearing whose center lies outside the map throws a `RangeError` too, from `pipeline` before the first attempt, since the step checks it in its `validate`.
+
+```ts
+const { clearings } = pipeline(
+  emptyMap({ width: 80, height: 50, tile: Tile.Grass }),
+  [
+    plantTrees(),
+    addRoads({
+      branches: { min: 3, max: 3 },
+      branchLength: { min: 20, max: 40 },
+    }),
+    placeClearings({
+      clearings: [
+        { radiusX: { min: 4, max: 7 }, roadDistance: { min: 8, max: 20 } },
+        { at: 'branch-end', radiusX: { min: 3, max: 3 } },
+      ],
+      spacing: 2,
+      falloff: 3,
+    }),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
+- **`clearings`** is a list of `ClearingSpec`s, described under [Forests](#forests): a center of its own (`x` and `y`), a random place within `roadDistance` of a road, or `at: 'branch-end'` or `at: 'stream'`; the radii as `Range`s, `angle`, `irregularity`, and `path`. A clearing that finds no room, or no branch end or stream, is left out. The ones `at: 'branch-end'` come last in the result and are never moved or dropped for overlapping.
+- **`spacing`** (default 0) is how many tiles beyond their radii the clearings placed at random keep from each other.
+- **`falloff`** (default 0) and **`distance`** (default `'chebyshev'`) are those of a [verge](#verges-and-pruneverge), counted from the edge of the clearing. There is no `clearance`: the inside of a clearing is always bare.
+- **Reads** `roads` (a random clearing keeps its `roadDistance` from the roads, and `at: 'branch-end'` takes the dead ends of branches that end inside the map, in the order the branches were laid) and `streams` (`at: 'stream'` is centered on a random tile of a stream's centerline, so the stream runs through it; the water stays water). Both are optional.
+- **Adds** `clearings`: for each clearing that was made, `x`, `y`, `radiusX`, `radiusY` and `angle`, with the defaults filled in. A clearing that was asked to have a path, `path: true` or `path: { width, windiness }`, also carries `path: { width, windiness }` (defaults 1 and 0.3), which the step that lays paths to clearings reads. A clearing on a stream never has one.
+
 ## Playground
 
-A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons, the caves, the mines, the forests and the noise each have their own page, and the dungeon page switches between the room-first generator and the digger, and has a **Connection** select (nearest, bsp or bsp-random) next to the partition for the room-first one. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
+A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons, the caves, the mines, the forests, the noise and the steps each have their own page, and the dungeon page switches between the room-first generator and the digger, and has a **Connection** select (nearest, bsp or bsp-random) next to the partition for the room-first one. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
 
 All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background, in the colors of an ANSI terminal: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500), grass `.` (#00aa00), tree `T` (#55ff55), road `.` (#aa5500), bridge `#` (#aa5500), shallow water `≈` (#5555ff), deep water `≈` (#0000aa) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
 
@@ -1425,6 +1635,8 @@ The forest page has a control for every `ForestOptions` field, including a switc
 The mine page has a control for every `MineOptions` field (hall entrances is a select of `facing` and `edge`), with the ranges as a min and a max, a blank angle for a random one, and a blank density, hall size or ring count for the default. The stats line shows the share of floor, the number of tunnels and the exits, and **Mark tunnels** paints the middle line of the main shaft red and of the other tunnels (adits, veins, rings and spokes) blue, **Mark halls** outlines the halls of the pillars layout, and **Mark caverns** outlines the caverns, the room count (a maximum of 0 means no rooms), size, exits and door chance work as on the maze page, and its Templates panel, shared with the maze and dungeon pages, takes templates with **Use templates**, which are outlined and labeled by **Outline templates**.
 
 The noise page paints a `NoiseFunction` as gray squares, black for -1 and white for 1, with controls for the size, the seed, the fractal options and the transform: `scaleX`, `scaleY` and `rotation`. The fractal controls start at the defaults of `createFractalNoise`, and the scales start at 40, which is a size that shows a few features on the default map. The stats line shows the lowest, highest and mean value.
+
+The steps page shows how [`pipeline`](#composing-maps) works, with [`plantTrees`](#planttrees), [`addStreams`](#addstreams) (a **Stream** switch with its angle (blank for random), width, windiness and tributaries, and the clearance and falloff of its bank), [`addRoads`](#addroads) (a **Roads** switch with angle (blank for random), width, windiness, crossings, branches, the bridge angle, and the clearance and falloff of its verge; **Show grown roads** puts a small magenta dot on every tile of a road as it was grown, and **Show crossing plans** outlines the ends of each road and the waypoints of its crossings, cyan where the road turns onto and off the straight run and yellow at both banks, both fed by `trace` and shown from the `addRoads` step on), a `border` step of its own that stamps a border with `stampTile` and then clears a [verge](#verges-and-pruneverge) round it with `pruneVerge`, and a `flaky` step that throws with the **Failure chance** you set, to show the retries. Controls: the size, the seed, the base tile, the planted tile (any of tree, wall, floor or grass, on any base, so a steppe of rocks on floor is a click away), the density range and scale of the noise, the border tile, the verge's clearance, falloff and distance, the failure chance and the number of attempts. **Show after step** picks the map after any step of the last attempt, starting with the base, through `onStep`. The stats line gives the attempts, the failures and how many tiles are still prunable, and the failures are listed under the map.
 
 The cave page has a control for every `CaveOptions` and `NoiseCaveOptions` field. Its **Generator** select switches between the automaton and the [noise cave](#noise-caves); the controls that belong to one generator only are marked "(automaton)" or "(noise)", and the others (connection, symmetry, exits, border walls) apply to both. The limits are blank by default, which means the defaults of the chosen neighborhood. The stats line shows the number of floor tiles, regions and exits, and **Mark region centers** highlights the `center` of every region, which makes it easy to see what `connect` and `minRegionSize` do to the caverns.
 

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Angstloch playground: steps</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <h1>Angstloch playground</h1>
+    <nav>
+      <a href="./index.html">Maze</a><a href="./dungeon.html">Dungeon</a
+      ><a href="./cave.html">Cave</a><a href="./mine.html">Mine</a
+      ><a href="./forest.html">Forest</a><a href="./noise.html">Noise</a
+      ><a href="./steps.html">Steps</a>
+    </nav>
+    <form id="controls">
+      <label
+        >Width <input name="width" type="number" value="40" min="3"
+      /></label>
+      <label
+        >Height <input name="height" type="number" value="20" min="3"
+      /></label>
+      <label>Seed <input name="seed" type="number" value="1" /></label>
+      <label
+        >Tile size <input name="tileSize" type="number" value="16" min="1"
+      /></label>
+      <label
+        >Base tile
+        <select name="baseTile">
+          <option value="3">grass</option>
+          <option value="0">wall</option>
+          <option value="1">floor</option>
+        </select>
+      </label>
+      <label
+        >Planted tile
+        <select name="plantedTile">
+          <option value="4">tree</option>
+          <option value="0">wall</option>
+          <option value="1">floor</option>
+          <option value="3">grass</option>
+        </select>
+      </label>
+      <label
+        >Density min
+        <input
+          name="densityMin"
+          type="number"
+          value="0"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Density max
+        <input
+          name="densityMax"
+          type="number"
+          value="0.25"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Scale <input name="scale" type="number" value="40" min="1"
+      /></label>
+      <label>Stream <input name="stream" type="checkbox" checked /></label>
+      <label
+        >Stream angle (blank: random)
+        <input name="streamAngle" type="number" step="5"
+      /></label>
+      <label
+        >Stream width min
+        <input name="streamWidthMin" type="number" value="1" min="1"
+      /></label>
+      <label
+        >Stream width max
+        <input name="streamWidthMax" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Stream windiness
+        <input
+          name="streamWindiness"
+          type="number"
+          value="0.5"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Tributaries <input name="tributaries" type="number" value="1" min="0"
+      /></label>
+      <label
+        >Bank clearance
+        <input name="bankClearance" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Bank falloff <input name="bankFalloff" type="number" value="2" min="0"
+      /></label>
+      <label>Roads <input name="roads" type="checkbox" checked /></label>
+      <label
+        >Road angle (blank: random)
+        <input name="roadAngle" type="number" step="5"
+      /></label>
+      <label
+        >Road width min
+        <input name="roadWidthMin" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Road width max
+        <input name="roadWidthMax" type="number" value="3" min="1"
+      /></label>
+      <label
+        >Road windiness
+        <input
+          name="roadWindiness"
+          type="number"
+          value="0.3"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Crossings <input name="crossings" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Branches <input name="branches" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Branch length (blank: to the edge)
+        <input name="branchLength" type="number" min="1" step="5"
+      /></label>
+      <label
+        >Bridge angle min
+        <input name="bridgeAngleMin" type="number" value="75" min="1" max="179"
+      /></label>
+      <label
+        >Bridge angle max
+        <input name="bridgeAngleMax" type="number" value="90" min="1" max="179"
+      /></label>
+      <label
+        >Road clearance
+        <input name="roadClearance" type="number" value="1" min="0"
+      /></label>
+      <label
+        >Road falloff <input name="roadFalloff" type="number" value="2" min="0"
+      /></label>
+      <label>Show grown roads <input name="showGrown" type="checkbox" /></label>
+      <label
+        >Show crossing plans <input name="showPlans" type="checkbox"
+      /></label>
+      <label
+        >Random clearings
+        <input name="clearings" type="number" value="2" min="0"
+      /></label>
+      <label
+        >Branch-end clearings
+        <input name="branchEndClearings" type="number" value="0" min="0"
+      /></label>
+      <label
+        >Clearing radius min
+        <input name="clearingRadiusMin" type="number" value="4" min="1"
+      /></label>
+      <label
+        >Clearing radius max
+        <input name="clearingRadiusMax" type="number" value="7" min="1"
+      /></label>
+      <label
+        >Clearing irregularity
+        <input
+          name="clearingIrregularity"
+          type="number"
+          value="0.5"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Clearing spacing
+        <input name="clearingSpacing" type="number" value="2" min="0"
+      /></label>
+      <label
+        >Clearing falloff
+        <input name="clearingFalloff" type="number" value="3" min="0"
+      /></label>
+      <label
+        >Mark clearing centers <input name="showClearings" type="checkbox"
+      /></label>
+      <label
+        >Border tile
+        <select name="borderTile">
+          <option value="5">road</option>
+          <option value="0">wall</option>
+          <option value="1">floor</option>
+          <option value="8">bridge</option>
+        </select>
+      </label>
+      <label
+        >Border clearance
+        <input name="clearance" type="number" value="1" min="0"
+      /></label>
+      <label
+        >Border falloff <input name="falloff" type="number" value="3" min="0"
+      /></label>
+      <label
+        >Distance (both verges)
+        <select name="distance">
+          <option value="chebyshev">chebyshev</option>
+          <option value="manhattan">manhattan</option>
+          <option value="euclidean">euclidean</option>
+        </select>
+      </label>
+      <label
+        >Failure chance
+        <input
+          name="failureChance"
+          type="number"
+          value="0"
+          min="0"
+          max="1"
+          step="0.05"
+      /></label>
+      <label
+        >Attempts <input name="attempts" type="number" value="3" min="1"
+      /></label>
+    </form>
+    <p id="stats"></p>
+    <div class="view">
+      <label for="after">Show after step</label>
+      <select id="after"></select>
+      <label for="display">Display</label>
+      <select id="display">
+        <option value="simple">simple</option>
+        <option value="roguelike">roguelike</option>
+      </select>
+      <button id="download" type="button">Download PNG</button>
+    </div>
+    <canvas id="map"></canvas>
+    <p id="error"></p>
+    <pre id="failures"></pre>
+    <script type="module" src="./steps.ts"></script>
+  </body>
+</html>

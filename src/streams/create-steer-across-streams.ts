@@ -8,7 +8,7 @@ import { createStreamTerrain } from './create-stream-terrain';
 import type { CrossingPlan } from './crossing-plan';
 import { curveTiles } from './curve-tiles';
 import { findLandPath } from './find-land-path';
-import type { LaidStreams } from './laid-streams';
+import type { StreamLayout } from './stream-layout';
 import { planCrossings } from './plan-crossings';
 import { smoothPath } from './smooth-path';
 import { splineTiles } from './spline-tiles';
@@ -61,7 +61,7 @@ export interface Winding {
  * cannot be planned is left as it is.
  */
 export function createSteerAcrossStreams(
-  streams: LaidStreams,
+  streams: StreamLayout,
   random: Random,
   angle: Range,
   winding?: Winding,

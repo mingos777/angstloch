@@ -77,7 +77,7 @@ The source layout and its import rule (imports only point down: `core`, then `ro
 
 ## Next up
 
-Nothing is being built. The design talk for **composable generation (steps)** is signed off except for one open question (see Composable generation under the backlog), and the forest is its pilot. The user has not said to start building yet; when they do, split it into small numbered tasks, tidy that section of the roadmap into clean sections in the same turn, and start with the first step's design (which `generateForest` options go to which step). The new generators the user wants (prison and sewers first) are listed under More generators, and should be built on the steps once they exist. Clearings with templates was built in three tasks and awaits the user's review (see its design decisions).
+**Composable generation (steps)** is being built, with the forest as its pilot, in the ten tasks of `generator-pipelines-plan.md`, one at a time with a review after each. Task 1, the machinery (`src/pipeline/`), is done; task 2 (verges and `plantTrees`) is next. The new generators the user wants (prison and sewers first) are listed under More generators, and should be built on the steps once they exist. Clearings with templates was built in three tasks and awaits the user's review (see its design decisions).
 
 ## Backlog
 
@@ -85,44 +85,61 @@ Roughly in the order the user wants them. Each needs a design talk before it is 
 
 ### Composable generation (steps)
 
-Under design, nothing built. Instead of one generator with a bajillion options, a map is composed from a base generator and a list of steps, like middleware:
+Design signed off, building started: the work is split into ten tasks in `generator-pipelines-plan.md`. Task 1 (the machinery in `src/pipeline/`, with a steps page in the playground) is done and reviewed; tasks 2 onward add the forest steps. Instead of one generator with a bajillion options, a map is composed from an empty base map and a list of steps, like middleware. The forest is the pilot.
 
 ```ts
-pipeline(baseForest(specs1), [
-  addClearings(specs2),
-  addStreams(specs3),
-  addRoads(specs4),
-  placeTemplates(specs5),
-]);
+pipeline(
+  emptyMap({ width: 80, height: 50, tile: Tile.Grass }),
+  [
+    plantTrees({ scaleX: 40, density: { min: 0, max: 0.25 } }),
+    addStreams({ ...streams, clearance: 1, falloff: 3 }),
+    addRoads({ ...roads, bridgeAngle, clearance: 1, falloff: 2 }),
+    placeClearings({ clearings, spacing: 2, falloff: 3 }),
+    placeTemplates({ templates }),
+    addClearingPaths(),
+    addFootbridges({ minimum: 2 }),
+  ],
+  { random, attempts: 3 },
+);
 ```
 
-Decisions so far:
+**Decisions**
 
-- **The old contract is broken on purpose.** Angstloch has never been released, so there is no external contract yet. Existing options may change or go when that serves the design. `CLAUDE.md` was updated to say so.
-- **The forest is the pilot**, and the **base forest is just noise with trees**. Clearings, streams, roads and templates are all steps.
-- **Any throw makes the pipeline retry** (up to 3 attempts), not only a `TemplatePlacementError`. The cause of every failed attempt is recorded and exposed in the result next to the attempt count, so the caller can see what went wrong. After the last attempt the last error is thrown. The `permanent` flag of `TemplatePlacementError` is to be reconsidered (a permanent error may skip the retries, as now).
-- **A step is a function from a result to a new result** (`{ grid, ...extras }` in, the same plus new extras out), with the shared `Random` in a context. Steps never mutate their input. The types say which extras a step needs, so a wrong order is a compile error.
-- **Composition is a `pipeline(base, steps)` helper** (option B). Calling steps by hand works too, since they are plain functions. A `steps` option on the generators was left for later, as sugar.
-- **The composition API is public**, steps and `pipeline` both.
-- **Presets stay**: `generateForest`, `generateMine` and the rest remain as ready-made compositions, and any number of presets can exist. They are built on the public steps.
-- **Retry belongs to the pipeline**: it runs up to 3 attempts by default, always, re-running from the base when a step fails (a template that finds no place, for instance). The result reports the number of attempts, so a caller who sees more than 1 often knows the input is a poor fit. This replaces the `MAP_ATTEMPTS` wrappers (`build-*.ts`).
-- **Naming**: `generateX` makes a map from nothing, and steps use verbs (`addStreams`, `addRoads`, `placeTemplates`, `placeClearings`).
-- **Ruins** become a step that decays walls and scatters rubble, usable on any map. Rooms in caves and mixed mine layouts would be steps as well.
+- **The old contract is broken on purpose.** Angstloch has never been released, so existing options may change or go. `CLAUDE.md` says so.
+- **The base is an empty map**: `emptyMap({ width, height, tile })`, nothing else. Grass for a forest, wall for a dungeon or mine. The forest's `groundTile` option goes away, since it is the base tile. The base is a factory, so every attempt starts from a fresh state.
+- **State and steps.** The state is `{ grid, base, prunable, ...extras }`. A step is `(state, ctx) => extras`: it mutates `grid` and `prunable` in place (safe, since a retry rebuilds the state) and returns only the extras it adds (`streams`, `roads`, `clearings`...), which the pipeline merges into the state. `ctx` holds the shared `Random`. Called by hand, a step takes an optional context that defaults to `resolveRandom`. Plain steps with a pipeline loop were chosen over a `next()` chain: the pipeline knows which step threw (for the failure record and the retry), nothing needs to act after the later steps, and the chain types stay simple.
+- **Types express dependencies.** A step is `Step<Needs, Adds>`, and `pipeline` chains them, so `addClearingPaths` before `placeClearings` is a compile error. Optional use (roads cross streams only when `streams` exists) is a `Partial` need. For plain-JS callers a missing extra throws a clear error naming the step that is missing. "Streams before roads" is documented, and checked at run time where it matters. The chain type may give unreadable errors; if so, fall back to overloads or a `.then()` builder (prototype in the first task).
+- **Ground cover first, features after.** `plantTrees` plants only on tiles that still hold the base tile. A step that runs before it gets no verge.
+- **Prunable is a mask**, not "tiles equal to the tree tile": the state carries a byte per tile. `plantTrees` sets it and any step that stamps a tile clears it, so a template's wall cells are never pruned by mistake. A tile is free to build on if it holds the base tile or is prunable (this replaces the `covered` and `water` masks for templates and clearings). In a dungeon nothing is prunable, so a verge prunes nothing.
+- **Every feature step prunes for itself** with a shared `Verge` option (`clearance`, `falloff`, `distance`, all defaulting as today): within the clearance the chance of pruning a tree is 100%, across the falloff it declines. A clearing is a ragged shape that is 100% pruned inside, with the ramp beyond it, as today. Verges from several steps combine, so overlapping ones prune slightly more than today's single ramp; defaults get tuned in the playground. This replaces the shared `clearance`, `falloff`, `distance`, `bankClearance` and `bankFalloff` of `generateForest`.
+- **Option mapping.** `emptyMap`: `width`, `height`, `tile`. `plantTrees`: the noise options, density range, the tile to plant (it need not be a tree) and `density` as an extra. `addStreams`: the water part of `StreamOptions` and the water tiles. `addRoads`: `RoadOptions`, `roadTile`, `bridgeTile` and `bridgeAngle` (it describes how roads cross). `placeClearings`: `clearings`, `spacing`. `placeTemplates`: `templates`. `addClearingPaths`: the `path` part of the clearings (after the templates, since a path stops at its template's edge). `addFootbridges`: an explicit opt-in step, with the `bridges` minimum; a stream through a cave gets none unless asked.
+- **Hidden state** is rebuilt from public extras. The stream terrain of the crossing planner is rebuilt from `streams` (centerlines and widths) in each step that needs it, at the price of one extra pass.
+- **The composition API is public** (steps, `pipeline`, `emptyMap`). Calling steps by hand works. Presets stay: `generateForest`, `generateMine` and the rest remain as ready-made compositions built on the public steps, and any number of presets can exist. A `steps` option on the generators is left for later, as sugar.
+- **Retry belongs to the pipeline**: up to 3 attempts by default, always, re-running from the base when any step throws. The result reports `attempts` and `failures`, one entry per failed attempt (`attempt`, step name, error), also when a later attempt succeeds. After the last attempt the last error is thrown. A `TemplatePlacementError` with `permanent` set skips the retries. This replaces the `MAP_ATTEMPTS` wrappers (`build-*.ts`).
+- **Validation when a step is created**: `addRoads(options)` throws a `RangeError` at once, before any attempt, so only a throw while the map is built is retried. A step is a named function (`step('addRoads', fn)`), which gives the failure record its names.
+- **Diagnostics.** `pipeline` takes an `onStep(name, state)` callback, so the playground can show the map after each step. A step's internal data (grown roads, crossing plans) goes through an optional `ctx.trace?.(name, data)`, which replaces `ForestObserver`.
+- **The playground is rebuilt on steps**, as part of the work.
+- **Decisions of the planning session** (`generator-pipelines-plan.md`): `generateForest` options become nested per step (`{ width, height, random, trees, streams, roads, clearings, templates, footbridges }`, each key holding that step's options, with the verges inside each feature); there is no `density` anywhere in the API (the chance of a tree is internal to `plantTrees`, the verges never see it, and a reporting option can be added later); the scope is the forest only, and mines and dungeons keep `retryPlacement` until each gets its own design talk.
+- **Built in task 1** (`src/pipeline/`): `step(name, { needs, adds }, run)` takes the extras by name as well as in the types, since `pipeline` checks the order up front at run time from the declared names; `pipeline` has a `trace` option as well as `onStep`, which is what hands `ctx.trace` to the steps; it recognizes a permanent error by its `permanent` field (`pipeline/` imports only `core/`, not `TemplatePlacementError`); and the chain types are `S & ValidChain<MapState, S>`, which gave a readable error (`StepOrderError<"clearings">` on the step that comes too early), so overloads and a `.then()` builder were not needed. The results keep `base` and `prunable`, so that a caller may chain a second pipeline by hand.
+- **Built in task 2**: `Verge` and `assertVerge` (`src/roads/verge.ts`), `pruneVerge(state, mask, verge, random)` (`src/roads/prune-verge.ts`) and the `plantTrees` step (`src/forest/plant-trees.ts`, options in `plant-trees-options.ts`). `pruneVerge` measures with `roadDistance` and keeps a prunable tile with chance `clamp((distance - clearance) / (falloff + 1), 0, 1)`; it draws one number only for tiles inside the falloff, so tiles in the clearance or beyond cost no draw. `density` is a `Range` whose ends are fractions (0 to 1), and `plantTrees` seeds its built-in noise from the context's `random`, then draws one number per base tile. Its options are checked when the step is made, by building the noise once with a stub source. `pruneVerge`, `Verge` and `plantTrees` are public, so steps of your own can use them. The steps page now runs `plantTrees` and a border step that prunes its verge.
+- **Built in task 3** (`src/streams/`): `addStreams` (`add-streams.ts`, `add-streams-options.ts`) wraps `layStreams`, stamps the water (`shallowTile`, `deepTile`) and prunes the bank verge, adding `streams`. Its options are the water part of `StreamOptions` (`Omit<StreamOptions, 'bridges' | 'bridgeAngle'>`) plus the three fields of `Verge` flat on the options object, not under a `verge` key, as in the roadmap's example. The verge is only pruned when `clearance + falloff` is above 0, which saves the distance pass for the default. With `roads` already in the state it throws a `TypeError` marked `permanent`, so the pipeline does not retry a mistake of order. `rebuildStreamMap(streams, width, height)` (`rebuild-stream-map.ts`, internal) re-reverses the tributaries, stamps every stream with `stampRoad` and returns `Omit<LaidStreams, 'deep'>` with `water`, `map.roads`, `junctions` and `owner` equal to the originals (tested over five seeds). Its map has a flat noise, since the steering, the terrain and the footbridges never read it. `createSteerAcrossStreams`, `createStreamTerrain` and `layFootbridges` still take `LaidStreams` and so do not accept it yet; task 4 narrows their parameter to what they read (`map`, `streams`, `water`).
+- **Built in task 4** (`src/streams/`): `addRoads` (`add-roads.ts`, `add-roads-options.ts`) is `RoadOptions` plus `roadTile`, `bridgeTile`, `bridgeAngle` and the flat `Verge` fields. It rebuilds the streams from the `streams` extra (`rebuildStreamMap`), builds a road map of its own, lays the network with the steering of `createSteerAcrossStreams` as `reshape`, and stamps `roadTile`, or `bridgeTile` where the crossing plans (`traceTiles` from approach to departure, brushed) or `findSpans` say so; any other road over water leaves the water as it is. It adds `roads`, `junctions`, `exits` and `bridges` (`findBridges` over the stamped road surface, so footbridges are `addFootbridges`' to add later). `ctx.trace('addRoads', { grown, plans })` replaces `ForestObserver`, and the wrapper that collects the grown roads is only installed when there is a `trace` or a steering. `StreamLayout` (`stream-layout.ts`: `map`, `streams`, `water`) is the parameter type of `createSteerAcrossStreams`, `createStreamTerrain` and `layFootbridges`, and `LaidStreams` extends it with `deep`. `CrossingPlan` and `PlannedCrossing` are public types now, for `trace`. **Checker**: a temporary copy of `scripts/check-forest.ts` run on `addStreams` + `addRoads` (the playground forest, 200 seeds, 2 tributaries) gave turn over 45° 7 (today 11), doubles back 1 (1), along the edge 3 (2; the grown roads have 1), along water 1 (2), given back to water 0 (2), square road end 1 (0, seed 187: the end of the road at the top of the map, cut by the stream), square stream end 0 (0), long footbridge 0 (0). A seed gives a different map in the two (the order of `random()` calls differs), so the counts are comparable only in size; the real checker moves onto `pipeline` in task 9.
+- **Built in task 5**: `placeClearings({ clearings, spacing, falloff, distance })` (`src/forest/place-clearings.ts`) wraps `layClearings` and `pruneVerge`. The verge has no `clearance`, since a clearing is bare inside (the mask is pruned with clearance 0, so inside is certain and the ramp starts at the edge, as `away / (falloff + 1)` did). It reads `roads` (distances and branch ends, through `rebuildRoadMap` in `src/roads/rebuild-road-map.ts`, which stamps the reported roads on a new map whose noise is made from the context's `random`) and `streams` (the centerline tiles for `at: 'stream'`), and adds `clearings: PlacedClearing[]`, where a clearing that asked for a path carries the resolved `path: { width, windiness }` and one on a stream never does. Creation validates every spec with `assertClearing` against an unbounded map; the check that a center lies on the map is the step's `validate` (see below). `makePermanent` (`src/pipeline/make-permanent.ts`) is used by `addStreams` for its order error. Paths are laid by `addClearingPaths` (task 7), which finds its clearings by position in the extra.
+- **`validate` hook on a step** (added after task 5, when the user asked why a step could not know the map size): `step(name, { validate })` takes a function of the base state, `MapStep#validate` carries it, and `pipeline` calls it once on a fresh `base()` before attempt 1, after the order check. Whatever it throws is thrown at once, with no failure record and no retry, so a bad option that depends on the map (a clearing's center outside it, later a template bigger than it) is a plain error and needs no `permanent` mark.
+- **Naming**: `generateX` makes a map from nothing, and steps use verbs (`plantTrees`, `addStreams`, `addRoads`, `placeClearings`, `placeTemplates`, `addClearingPaths`, `addFootbridges`).
+- **Ruins** become a step that decays walls and scatters rubble, usable on any map. Rooms in caves and mixed mine layouts would be steps as well. Dungeons and mines would carve into a wall map.
 
-Known difficulties to design around:
+**Known difficulties**
 
-- Steps coupled through hidden state: roads plan their crossings from the stream terrain and centerlines, footbridges and `at: 'stream'` clearings use them too. A step that only sees the grid cannot rebuild that, so the stream step must pass it on in its extras.
+- The order changes the map: all steps draw from one `Random` in order, so a seed gives the same map only for the same pipeline.
 - Steps over a finished grid treat everything as an obstacle, which was too slow for the mine rooms (see Rooms and templates in Mines), so spot searches need care.
-- Order changes the map: all steps draw from one `Random` in order, so a seed gives the same map only for the same pipeline.
 - Layout symmetry acts while a layout is being made, so it is probably the hardest to split into a step.
+- Footbridges count roads as land, so `addFootbridges` runs after every step that lays roads.
+- A path to a clearing stops at the edge of its template, hence `addClearingPaths` after `placeTemplates`.
 
-- **A step is fed the previous step's output** (the current map state, with its extras) and everything the caller provided (`random` and the like). The attempt number belongs to `pipeline`, not to the steps. More data in the context is designed around a specific use case when one comes up.
-- **The failure record is a list in the result, one entry per failed attempt**, with the attempt number, the step (number or name) that threw, and the error. It is also there when a later attempt succeeds.
-- **A `permanent` error skips the retries** (a template bigger than the map can never be placed), and is thrown at once.
+**Open**
 
-Open questions:
-
-- Which options of today's `generateForest` become the options of which step, and what does the preset look like? To be settled when the first step is designed.
+- Which task comes first (probably the state, `emptyMap`, `pipeline` and the types with a trivial step), and the exact tidy-up of the forest code into steps. To be split into small numbered tasks when the user says to start.
 
 ### Caves
 

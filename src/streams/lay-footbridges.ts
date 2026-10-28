@@ -5,7 +5,7 @@ import { extendPastBorder } from '../roads/extend-past-border';
 import { stampRoadBrush } from '../roads/stamp-road-brush';
 import { traceTiles } from '../roads/trace-tiles';
 import { findBridges } from './find-bridges';
-import type { LaidStreams } from './laid-streams';
+import type { StreamLayout } from './stream-layout';
 
 /** Tiles that a footbridge is kept from the bridges that are there already, along a row or a column. */
 const BRIDGE_GAP = 8;
@@ -52,7 +52,7 @@ interface Crossing {
  * Returns one byte per tile, row by row, 1 where a footbridge lies.
  */
 export function layFootbridges(
-  streams: LaidStreams,
+  streams: StreamLayout,
   crossed: Uint8Array | undefined,
   random: Random,
   minimum: number,

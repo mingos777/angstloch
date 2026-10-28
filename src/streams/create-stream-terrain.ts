@@ -1,11 +1,11 @@
-import type { LaidStreams } from './laid-streams';
+import type { StreamLayout } from './stream-layout';
 import type { StreamTerrain } from './stream-terrain';
 
 /** How many tiles of a centerline before and after a tile tell which way the stream runs there. */
 const LEAD = 3;
 
 /** Works out the terrain of the streams that the roads are planned on. */
-export function createStreamTerrain(streams: LaidStreams): StreamTerrain {
+export function createStreamTerrain(streams: StreamLayout): StreamTerrain {
   const { mapWidth, mapHeight } = streams.map;
   const { water } = streams;
   const key = (x: number, y: number) => y * mapWidth + x;
