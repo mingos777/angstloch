@@ -31,6 +31,10 @@ export interface RingsSettings {
   spokes: Range;
   veinWidth: Range;
   veinWindiness: number;
+  /** The lane of the noise for the wobble of the rings and for the first spoke, and the lanes of the spokes after it. Defaults to 0.5. */
+  lane?: number;
+  /** Tiles that are never dug, a byte for each tile of the grid, row by row: anything but 0 protects it. Defaults to none. */
+  protect?: Uint8Array;
 }
 
 /** The ovals that the rings follow: the middle of the map, and the radii of the outermost ring. */
@@ -99,7 +103,8 @@ function pickCount(
  * join them. The rings are ovals around the middle of the map, evenly spaced,
  * the outermost one near the border, and each wobbles by smooth noise so that
  * it is not perfect. Between every ring and the next, at least one spoke runs
- * at a random angle, which makes the mine one piece.
+ * at a random angle, which makes the mine one piece. Nothing is dug on a tile
+ * of `protect`, so a ring that crosses one is cut there.
  */
 export function layRings(
   grid: Grid,
@@ -107,8 +112,16 @@ export function layRings(
   noise: NoiseFunction,
   settings: RingsSettings,
 ): MinePassage[] {
-  const { ringShape, ringWidth, ringWobble, spokes, veinWidth, veinWindiness } =
-    settings;
+  const {
+    ringShape,
+    ringWidth,
+    ringWobble,
+    spokes,
+    veinWidth,
+    veinWindiness,
+    lane = 0.5,
+    protect,
+  } = settings;
   const halfWidth = (grid.width - 2 * MARGIN) / 2;
   const halfHeight = (grid.height - 2 * MARGIN) / 2;
   const fitX = halfWidth - ringWidth.max / 2 - MARGIN;
@@ -131,10 +144,11 @@ export function layRings(
   /** The point of a ring at an angle, in tile units. */
   const ringPoint = (ring: number, angle: number): Point => {
     const share = (ring + 1) / count;
+    // a later lane moves the wobble to another part of the noise
     const wobble =
       reach *
       noise(
-        Math.cos(angle) * WOBBLE_FREQUENCY + ring * 5.17,
+        Math.cos(angle) * WOBBLE_FREQUENCY + ring * 5.17 + lane - 0.5,
         Math.sin(angle) * WOBBLE_FREQUENCY + ring * 2.71,
       );
     return {
@@ -158,7 +172,7 @@ export function layRings(
       grid,
       joinTiles(first ? [...points, first] : points),
     );
-    carvePassageTiles(grid, tiles, width, MARGIN);
+    carvePassageTiles(grid, tiles, width, MARGIN, undefined, protect);
     passages.push({ kind: 'ring', tiles, width });
   }
 
@@ -178,8 +192,8 @@ export function layRings(
           toTile(grid, ringPoint(ring + 1, angle)),
         ],
         { from: 0, to: 1, length: spacing },
-        { width: veinWidth, windiness: veinWindiness },
-        0.5 + passages.length * LANE_SPACING,
+        { width: veinWidth, windiness: veinWindiness, protect },
+        lane + passages.length * LANE_SPACING,
       );
       if (vein) {
         passages.push({ ...vein.passage, kind: 'spoke' });

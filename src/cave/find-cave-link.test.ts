@@ -44,4 +44,22 @@ describe('findCaveLink', () => {
     // then
     expect(link).toBeUndefined();
   });
+
+  it('goes round blocked tiles, and finds nothing past a blocked wall', () => {
+    // given
+    const grid = new Grid(12, 3);
+    for (const x of [1, 9]) {
+      grid.set(x, 1, Tile.Floor);
+    }
+    const blocked = new Uint8Array(12 * 3);
+    for (let y = 0; y < 3; ++y) {
+      blocked[y * 12 + 5] = 1;
+    }
+
+    // when
+    const link = findCaveLink(grid, [{ x: 1, y: 1 }], blocked);
+
+    // then
+    expect(link).toBeUndefined();
+  });
 });

@@ -11,7 +11,7 @@ const NEIGHBORS = 3;
  * Lists the tunnels that would make loops in a map whose caverns are joined
  * already. `caverns` are the caverns as they were before they were joined.
  * Every cavern is paired with its three nearest neighbors, across rock or
- * anything else, and a pair is a candidate when walking between its closest
+ * anything else but the tiles that `blocked` marks, and a pair is a candidate when walking between its closest
  * tiles over the floor takes much longer than the gap itself. A pair that a
  * tunnel joins directly is not a candidate, because that walk is short.
  * Candidates come in the order of the caverns, nearest neighbor first, and
@@ -20,6 +20,7 @@ const NEIGHBORS = 3;
 export function planCaveLoops(
   grid: Grid,
   caverns: readonly (readonly Point[])[],
+  blocked?: Uint8Array,
 ): CaveLink[] {
   const { width, height } = grid;
   const owner = new Int32Array(width * height).fill(-1);
@@ -63,7 +64,11 @@ export function planCaveLoops(
       for (const step of DIRECTIONS) {
         const nx = x + step.x;
         const ny = y + step.y;
-        if (grid.inBounds(nx, ny) && gap[ny * width + nx] === -1) {
+        if (
+          grid.inBounds(nx, ny) &&
+          gap[ny * width + nx] === -1 &&
+          !blocked?.[ny * width + nx]
+        ) {
           gap[ny * width + nx] = (gap[at] as number) + 1;
           origin[ny * width + nx] = origin[at] as number;
           queue.push(ny * width + nx);

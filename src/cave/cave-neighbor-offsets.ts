@@ -1,4 +1,4 @@
-import type { CaveNeighborhood } from './cave-options';
+import type { CaveNeighborhood } from './cave-neighborhood';
 import { DIRECTIONS } from '../core/directions';
 import type { Point } from '../core/point';
 

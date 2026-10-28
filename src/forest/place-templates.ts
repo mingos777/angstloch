@@ -1,4 +1,7 @@
+import { isFree } from '../pipeline/is-free';
 import type { MapStep } from '../pipeline/map-step';
+import { Reserve } from '../pipeline/reserve';
+import { reserveTile } from '../pipeline/reserve-tile';
 import { stampTile } from '../pipeline/stamp-tile';
 import { step } from '../pipeline/step';
 import { assertDistanceMetric } from '../roads/assert-distance-metric';
@@ -17,7 +20,8 @@ import { templateTile } from './template-tile';
  * or gets a clearing of its own at a random spot, where its box is free of trees
  * and the trees thicken over its `margin`. Any other template goes to a random
  * spot and leaves the trees round it. `Floor` and `Wall` cells are stamped,
- * `Unused` ones leave the map as it is. It adds `templates`.
+ * `Unused` ones leave the map as it is. The stamped cells are reserved, so a
+ * later step does not dig through them. It adds `templates`.
  *
  * A template goes only where none of its cells, other than `Unused` ones, lies
  * on a tile that something has been stamped on (road, water, another template),
@@ -51,11 +55,11 @@ export function placeTemplates(
       },
     },
     (state, { random }) => {
-      const { grid, base, prunable } = state;
-      const { width, height } = grid;
-      // a tile is free to build on if it is untouched ground or ground cover
-      const blocked = Uint8Array.from(prunable, (cover, at) =>
-        cover || grid.get(at % width, Math.floor(at / width)) === base ? 0 : 1,
+      const { width, height } = state.grid;
+      // a tile is free to build on if it is untouched ground or ground cover,
+      // and nothing has reserved it
+      const blocked = Uint8Array.from({ length: width * height }, (_, at) =>
+        isFree(state, at % width, Math.floor(at / width)) ? 0 : 1,
       );
       const footprints = placeForestTemplates(
         random,
@@ -88,6 +92,7 @@ export function placeTemplates(
             const tile = templateTile(cell);
             if (tile !== undefined) {
               stampTile(state, placed.x + dx, placed.y + dy, tile);
+              reserveTile(state, placed.x + dx, placed.y + dy, Reserve.Solid);
             }
           });
         });

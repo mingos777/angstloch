@@ -19,6 +19,8 @@ export const LANE_SPACING = 7.31;
 export interface VeinStyle {
   width: Range;
   windiness: number;
+  /** Tiles that are never dug, a byte for each tile of the grid, row by row: anything but 0 protects it. */
+  protect?: Uint8Array;
 }
 
 /** Moves the tiles that stray onto the outer rings back in, so that a vein that winds off the map is not cut in two. */
@@ -61,6 +63,13 @@ export function digVein(
       lane,
     }),
   );
-  const carved = carvePassageTiles(grid, tiles, width, MARGIN);
+  const carved = carvePassageTiles(
+    grid,
+    tiles,
+    width,
+    MARGIN,
+    undefined,
+    style.protect,
+  );
   return { passage: { kind: 'vein', tiles, width }, carved };
 }

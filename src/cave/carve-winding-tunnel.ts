@@ -13,7 +13,8 @@ const MAX_WANDER = 0.8;
 /**
  * Carves a tunnel from one position to another by a random walk. Each step
  * either goes in a random direction or heads for the goal, and the windiness
- * sets how often it wanders. A walk that takes too long finishes straight.
+ * sets how often it wanders. A step onto a blocked tile is not taken. A walk
+ * that takes too long finishes straight.
  */
 export function carveWindingTunnel(
   grid: Grid,
@@ -22,11 +23,11 @@ export function carveWindingTunnel(
   to: Point,
   options: TunnelOptions,
 ): void {
-  const { width, windiness, borderWalls } = options;
+  const { width, windiness, borderWalls, blocked } = options;
   const margin = borderWalls ? 1 : 0;
   const maxSteps = grid.width * grid.height * 10;
   let { x, y } = from;
-  carveTunnelBrush(grid, x, y, width, borderWalls);
+  carveTunnelBrush(grid, x, y, width, borderWalls, blocked);
   for (let steps = 0; x !== to.x || y !== to.y; ++steps) {
     if (steps >= maxSteps) {
       carveDirectTunnel(grid, random, { x, y }, to, options);
@@ -51,12 +52,13 @@ export function carveWindingTunnel(
       nextX < margin ||
       nextY < margin ||
       nextX >= grid.width - margin ||
-      nextY >= grid.height - margin
+      nextY >= grid.height - margin ||
+      blocked?.[nextY * grid.width + nextX]
     ) {
       continue;
     }
     x = nextX;
     y = nextY;
-    carveTunnelBrush(grid, x, y, width, borderWalls);
+    carveTunnelBrush(grid, x, y, width, borderWalls, blocked);
   }
 }

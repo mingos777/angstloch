@@ -1,4 +1,4 @@
-import type { DistanceMetric, Range, Tile, Verge } from '../src';
+import type { AreaSize, DistanceMetric, Range, Tile, Verge } from '../src';
 
 /** What a control of a step holds: text for numbers and selects, a boolean for a checkbox. */
 export type FieldValue = string | boolean;
@@ -78,6 +78,18 @@ export function vergeFields(clearance: number, falloff: number): Field[] {
   ];
 }
 
+/** The fields of `area` and `count` of a feature step: sizes blank for the size of the map, and how many copies, unless `copies` is false. */
+export function areaFields(copies = true): Field[] {
+  const size = { min: '1' };
+  return [
+    number('areaWidthMin', 'Area width min (blank: map)', '', size),
+    number('areaWidthMax', 'Area width max (blank: map)', '', size),
+    number('areaHeightMin', 'Area height min (blank: map)', '', size),
+    number('areaHeightMax', 'Area height max (blank: map)', '', size),
+    ...(copies ? pair('count', 'Copies', 1, 1, { min: '0' }) : []),
+  ];
+}
+
 /** Reads the values of a card. */
 export class Values {
   constructor(private readonly raw: Record<string, FieldValue>) {}
@@ -116,6 +128,26 @@ export class Values {
   fixed(key: string): Range | undefined {
     const value = this.optional(key);
     return value === undefined ? undefined : { min: value, max: value };
+  }
+
+  /** The range of the controls `keyMin` and `keyMax`, or nothing when both are blank. One that is blank takes the value of the other. */
+  optionalRange(key: string): Range | undefined {
+    const min = this.optional(`${key}Min`);
+    const max = this.optional(`${key}Max`);
+    if (min === undefined && max === undefined) {
+      return undefined;
+    }
+    return { min: min ?? max ?? 0, max: max ?? min ?? 0 };
+  }
+
+  /** The `area` option, from the controls of `areaFields`. */
+  area(): AreaSize {
+    const width = this.optionalRange('areaWidth');
+    const height = this.optionalRange('areaHeight');
+    return {
+      ...(width && { width }),
+      ...(height && { height }),
+    };
   }
 
   verge(): Verge {

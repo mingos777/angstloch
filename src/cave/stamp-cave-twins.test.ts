@@ -53,4 +53,21 @@ describe('stampCaveTwins', () => {
     // then
     expect(grid.toString().split('.').length - 1).toBe(1);
   });
+
+  it('leaves out a twin on a blocked tile', () => {
+    // given
+    const before = new Grid(7, 5);
+    const grid = before.clone();
+    grid.set(1, 1, Tile.Floor);
+    const images = createTransforms('both', 7, 5, false);
+    const blocked = new Uint8Array(7 * 5);
+    blocked[1 * 7 + 5] = 1;
+
+    // when
+    stampCaveTwins(grid, before, images, blocked);
+
+    // then
+    expect(grid.get(5, 1)).toBe(Tile.Wall);
+    expect(grid.toString().split('.').length - 1).toBe(3);
+  });
 });

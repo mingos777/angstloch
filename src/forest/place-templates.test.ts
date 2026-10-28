@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Tile } from '../core/tile';
 import { emptyMap } from '../pipeline/empty-map';
 import { pipeline } from '../pipeline/pipeline';
+import { Reserve } from '../pipeline/reserve';
 import { addRoads } from '../streams/add-roads';
 import type { AddRoadsOptions } from '../streams/add-roads-options';
 import { addStreams } from '../streams/add-streams';
@@ -121,6 +122,25 @@ describe('placeTemplates', () => {
     // then
     expect(prunable[30 * 80 + 40]).toBe(0);
     expect(prunable[28 * 80 + 40]).toBe(0);
+  });
+
+  it('reserves the cells it stamps as solid and nothing else', () => {
+    // given
+    const clearings = [GLADE];
+
+    // when
+    const { reserved, templates } = build([RUIN], { clearings });
+
+    // then
+    const [placed] = templates;
+    expect(placed).toBeDefined();
+    const box = (placed?.width ?? 0) * (placed?.height ?? 0);
+    expect(reserved[30 * 80 + 40]).toBe(Reserve.Solid);
+    expect(reserved[28 * 80 + 40]).toBe(Reserve.Solid);
+    expect(reserved[(placed?.y ?? 0) * 80 + (placed?.x ?? 0)]).toBe(
+      Reserve.None,
+    );
+    expect(reserved.reduce((sum, kind) => sum + kind, 0)).toBe(box - 4);
   });
 
   it('leaves the map as it was under unused cells', () => {

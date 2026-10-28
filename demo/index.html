@@ -9,146 +9,21 @@
   <body>
     <h1>Angstloch playground</h1>
     <nav>
-      <a href="./index.html">Maze</a><a href="./dungeon.html">Dungeon</a
-      ><a href="./cave.html">Cave</a><a href="./mine.html">Mine</a
-      ><a href="./noise.html">Noise</a><a href="./steps.html">Steps</a>
+      <a href="./index.html">Index</a><a href="./steps.html">Steps</a
+      ><a href="./dungeon.html">Dungeon</a><a href="./noise.html">Noise</a>
     </nav>
-    <form id="controls">
-      <label
-        >Width <input name="width" type="number" value="41" min="3"
-      /></label>
-      <label
-        >Height <input name="height" type="number" value="25" min="3"
-      /></label>
-      <label>Seed <input name="seed" type="number" value="1" /></label>
-      <label
-        >Tile size <input name="tileSize" type="number" value="16" min="1"
-      /></label>
-      <label
-        >Horizontal bias
-        <input name="horizontalBias" type="number" value="0" min="0" step="0.5"
-      /></label>
-      <label
-        >Vertical bias
-        <input name="verticalBias" type="number" value="0" min="0" step="0.5"
-      /></label>
-      <label
-        >Loop chance
-        <input
-          name="loopChance"
-          type="number"
-          value="0"
-          min="0"
-          max="1"
-          step="0.05"
-      /></label>
-      <label
-        >Fill
-        <input name="fill" type="number" value="1" min="0" max="1" step="0.05"
-      /></label>
-      <label
-        >Straight
-        <input
-          name="straight"
-          type="number"
-          value="0"
-          min="0"
-          max="1"
-          step="0.05"
-      /></label>
-      <label
-        >Symmetry
-        <select name="symmetry">
-          <option value="none">none</option>
-          <option value="whirlpool">whirlpool</option>
-          <option value="snowflake">snowflake</option>
-        </select>
-      </label>
-      <label
-        >Symmetry chance
-        <input
-          name="symmetryChance"
-          type="number"
-          value="1"
-          min="0"
-          max="1"
-          step="0.05"
-      /></label>
-      <label
-        >Exits <input name="exits" type="number" value="0" min="0"
-      /></label>
-      <label
-        >Room count min
-        <input name="roomCountMin" type="number" value="0" min="0"
-      /></label>
-      <label
-        >Room count max
-        <input name="roomCountMax" type="number" value="0" min="0"
-      /></label>
-      <label
-        >Room width min
-        <input name="roomWidthMin" type="number" value="3" min="1"
-      /></label>
-      <label
-        >Room width max
-        <input name="roomWidthMax" type="number" value="7" min="1"
-      /></label>
-      <label
-        >Room height min
-        <input name="roomHeightMin" type="number" value="3" min="1"
-      /></label>
-      <label
-        >Room height max
-        <input name="roomHeightMax" type="number" value="7" min="1"
-      /></label>
-      <label
-        >Size uniformity
-        <input
-          name="sizeUniformity"
-          type="number"
-          value="0"
-          min="0"
-          max="1"
-          step="0.05"
-      /></label>
-      <label
-        >Exits per room min
-        <input name="exitsPerRoomMin" type="number" value="1" min="1"
-      /></label>
-      <label
-        >Exits per room max
-        <input name="exitsPerRoomMax" type="number" value="3" min="1"
-      /></label>
-      <label
-        >Door chance
-        <input
-          name="doorChance"
-          type="number"
-          value="1"
-          min="0"
-          max="1"
-          step="0.05"
-      /></label>
-      <label
-        >Show room gaps <input name="showExits" type="checkbox" checked
-      /></label>
-      <label
-        >Outline templates <input name="showTemplates" type="checkbox" checked
-      /></label>
-      <label>Use templates <input name="useTemplates" type="checkbox" /></label>
-    </form>
-    <p id="stats"></p>
-    <div class="view">
-      <label for="display">Display</label>
-      <select id="display">
-        <option value="simple">simple</option>
-        <option value="roguelike">roguelike</option>
-      </select>
-      <button id="download" type="button">Download PNG</button>
-    </div>
-    <canvas id="map"></canvas>
-    <p id="error"></p>
-    <section id="templates"></section>
-    <script type="module" src="./main.ts"></script>
+    <ul>
+      <li>
+        <a href="./steps.html">Steps</a>: compose a map from steps. Forests,
+        caves, mines and mazes are made here.
+      </li>
+      <li>
+        <a href="./dungeon.html">Dungeon</a>: the room-first dungeon and the
+        digger, with the template editor.
+      </li>
+      <li>
+        <a href="./noise.html">Noise</a>: the noise functions, painted in gray.
+      </li>
+    </ul>
   </body>
 </html>

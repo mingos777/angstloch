@@ -77,7 +77,7 @@ The source layout and its import rule (imports only point down: `core`, then `ro
 
 ## Next up
 
-**Underground generators on steps** is planned in `underground-generators-pipelines-plan.md`: the mine, cave, maze and dungeon move onto steps in 21 tasks, ordered from simplest to hardest, each in a session of its own with a review after it. The plan holds the decisions of its design talk (the `reserved` mask with `Openable` tiles, per-step symmetry, one `addExits` step, one step per variant, room shapes, the digger replaced by `growRooms`, halls and caverns as features joined by `carveCorridors`, and `area` and `count` on feature steps). Read it before starting a task, and start with the first task not yet marked done there. None is done yet.
+**Underground generators on steps** is planned in `underground-generators-pipelines-plan.md`: the mine, cave, maze and dungeon move onto steps in 21 tasks, ordered from simplest to hardest, each in a session of its own with a review after it. The plan holds the decisions of its design talk (the `reserved` mask with `Openable` tiles, per-step symmetry, one `addExits` step, one step per variant, room shapes, the digger replaced by `growRooms`, halls and caverns as features joined by `carveCorridors`, and `area` and `count` on feature steps). Read it before starting a task, and start with the first task not yet marked done there. Tasks 1 (the reserved mask), 2 (`addExits`), 3 (areas), 4 (`digFishbone` and `digVeins`), 5 (`digPillarHalls` and `digRings`), 6 (`placeMineRooms`), 7 (`growCave` and `carveNoiseCave`), 8 (`digCaveTunnels`), 9 (`generateCave` and `generateNoiseCave` as presets) 10 (`generateMine` as a preset, with the `placement` of the cave steps, decision 13), 11 (`placeMazeRooms`), 12 (`carveMaze` and `openMazeRooms`), 13 (`generateMaze` as a preset) and 14 (`check:dungeon`, the dungeon baseline) are done and await review.
 
 **Composable generation (steps)** was built with the forest as its pilot, in ten tasks with a review after each; all ten are done and the forest runs on steps. The playground is heading the same way for every generator: one page with a list of steps you add and configure (see the task 10 entry), so the other generators (dungeons, mines, caves, mazes) are to be moved onto steps one by one, each after its own design talk. The new generators the user wants (prison and sewers first) are listed under More generators, and should be built on the steps once they exist. Clearings with templates was built in three tasks and awaits the user's review (see its design decisions).
 
@@ -171,8 +171,9 @@ All of this is optional follow-up to the finished forest.
 
 ### Mines, follow-ups
 
-Nothing is planned, and everything here is optional:
+The first entry is wanted; the rest are optional:
 
+- **Roughly parallel adits in the fishbone.** The user wants the adits of `digFishbone` (and of the fishbone layout of `generateMine`) to run roughly parallel to each other, instead of leaving their tunnels at independent random angles as they do now. It is not part of the move onto steps (`underground-generators-pipelines-plan.md`) and comes after it. Needs a design talk.
 - **Symmetry** for mines was deferred; it would fit the cave's layout symmetry.
 - **Cave-ins**: parts of a mine cut off by a collapse, which the always-connected rule rules out now.
 - **Mixed layouts**, for example pillar halls joined by a fishbone, as an array of layouts.

@@ -1,21 +1,21 @@
 import type { BaseOptions } from '../core/base-options';
-import type { CaveConnectionOptions } from './cave-connection-options';
+import type { AddExitsOptions } from '../exits/add-exits-options';
+import type { DigCaveTunnelsOptions } from './dig-cave-tunnels-options';
+import type { GrowCaveOptions } from './grow-cave-options';
 
 /**
- * Which tiles count as neighbors: `moore` is the 8 tiles around a tile,
- * `von-neumann` the 4 tiles that share an edge with it.
+ * The options of a cellular-automaton cave that are not its size or its
+ * randomness: one key per step of the cave, each holding the options of that
+ * step.
  */
-export type CaveNeighborhood = 'moore' | 'von-neumann';
-
-export interface CaveOptions extends BaseOptions, CaveConnectionOptions {
-  /** Chance that a tile starts as a wall, from 0 to 1. Defaults to 0.45. */
-  fillChance?: number;
-  /** Number of smoothing passes. Defaults to 4. */
-  iterations?: number;
-  /** A floor tile turns into a wall when at least this many of its neighbors are walls. Defaults to 5 for the `moore` neighborhood and 3 for `von-neumann`. */
-  birthLimit?: number;
-  /** A wall tile stays a wall when at least this many of its neighbors are walls, and turns into floor otherwise. Defaults to 4 for the `moore` neighborhood and 2 for `von-neumann`. */
-  survivalLimit?: number;
-  /** Which tiles count as neighbors. Tiles outside the map always count as walls. Defaults to `moore`. */
-  neighborhood?: CaveNeighborhood;
+export interface CaveStepOptions {
+  /** The caverns: the starting noise, the smoothing, the symmetry and which caverns to keep. See `growCave`. Defaults to the defaults of that step. */
+  cave?: GrowCaveOptions;
+  /** The tunnels that join the caverns into one. See `digCaveTunnels`. On by default, with the defaults of that step. `false` leaves the caverns apart. */
+  tunnels?: DigCaveTunnelsOptions | false;
+  /** Exits on the map border. See `addExits`. Defaults to no exits. */
+  exits?: AddExitsOptions;
 }
+
+/** The options of `generateCave`. */
+export interface CaveOptions extends BaseOptions, CaveStepOptions {}

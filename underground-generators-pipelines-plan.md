@@ -57,9 +57,18 @@ The work is ordered from simplest to hardest, one task at a time with a review a
     - **The default** is the map's size, which is today's behavior. An area may be smaller than the map but never larger, checked in `validate`.
     - **A smaller area** goes on a random free spot: a box whose tiles are all free (`isFree`), with a margin of one free tile, tried a number of times, then an ordinary failure that the pipeline retries.
     - **Later rules:** rules per feature (keep off roads and streams, as clearings do; stay near the existing floor) may come later, as additions.
+    - **`count` may be 0** (confirmed in task 3), so a feature step can be optional; a caller who wants a feature with a chance of, say, 50% sets `count: { min: 0, max: 1 }`. The caller decides which features a map has.
+    - **Errors** need not have a special class, but their message, which ends up in the result's `failures`, must say what was wrong and what to do about it.
     - **Copies:** each copy of `count` gets its own spot. A `count` above 1 with the area as big as the map is a `RangeError`.
     - **How a step builds it:** it builds the feature on a scratch map the size of the box, made from a copy of the box's contents, then copies it back. It shifts its own extras by the offset. A generic wrapper was rejected, since it cannot shift arbitrary extras.
     - **Which steps get it in this plan:** every feature-making step: `growCave`, `carveNoiseCave`, the four mine layouts, `carveMaze`, `placeMazeRooms`, `scatterRooms`, `partitionRooms`, `growRooms`. Steps that join or open what is there (`digCaveTunnels`, `carveCorridors`, `openMazeRooms`, `placeMineRooms`, `addExits`) work on the whole map. Forest steps get it later (backlog).
+13. **Cave steps take a `placement`** (settled in task 10/21, when the mine caverns of the plan failed on most maps for want of a free box):
+    - **`'free'`**, the default, is decision 12's rule: the box and a margin of one tile are all free.
+    - **`'beside'`** is the old mine caverns' rule. The cave is built and culled on its own grid first, so its shape is known. It is then tried at up to 100 random spots (20 at first, raised in task 10/21: with 2 caverns of the preset on 80×50 maps, failed maps fell from 11–66% to 1–26%, rings aside). A spot fits when every floor tile of the cave, and the 8 tiles round it, is free. Of the spots that fit, the one whose floor comes nearest the dug ground wins. The box may overlap tunnels; the cavern's floor never touches them.
+      - **When no spot fits:** the copies up to `count.min` fail the map (an ordinary error the pipeline retries), and the copies above it are left out. So a `count` with a `min` of 0 never fails.
+    - **`'overlap'`** puts the box on any spot clear of the other copies and lays floor on free tiles only, so the cavern runs into what is there (a cave-in). Reserved tiles are never dug.
+    - **The mine preset's `caverns`** use `'beside'`, with an `area` of 12 to 24 a side, `largestOnly`, a noise scale of 7 and `count` 1 by default (to be tuned later).
+    - **Later:** the overlap may become a share, a fraction or a `Range` of the cave's tiles that may overlap other things (default 0 to 0), still never over reserved tiles.
 
 ## What the port changes for all four generators
 
@@ -90,7 +99,7 @@ The work is ordered from simplest to hardest, one task at a time with a review a
   - A new `isFree(state, x, y)` replaces the inline `grid === base || prunable` checks of the forest. It is true when the tile holds `base` or is prunable, and is `None`.
   - The forest's `placeTemplates` reserves its non-`Unused` cells as `Solid`, so a later underground step cannot dig through a ruin.
 - **`addExits`**, in a new `src/exits/` directory:
-  - It sits right under `pipeline/` and uses only `core/` and `pipeline/`, because maze, cave and mine all need it and the maze may not import `cave/`.
+  - It sits right under `rooms/` (not under `pipeline/`, as first planned) and uses `core/`, `pipeline/` and `rooms/`, because it mirrors exits with `createTransforms` of `rooms/templates/`, and maze, cave and mine all need it while the maze may not import `cave/`.
   - It is built from `carveCaveExit` (`src/cave/carve-cave-exit.ts`), which moves there.
   - Options:
     - `count: Range` (default 0 to 0);
@@ -155,7 +164,7 @@ Shared rules:
 
 ### Machinery
 
-- **Task 1/21: the reserved mask.**
+- **Task 1/21: the reserved mask. Done, awaiting review.**
   - **Code:** `MapState.reserved`, `Reserve`, `emptyMap`, `reserveTile`, `openReserved`, `isFree`; the forest's `placeTemplates`, `placeClearings` and the paths use `isFree`, and `placeTemplates` reserves its cells; `index.ts` exports.
   - **Tests:**
     - the mask starts empty;
@@ -165,7 +174,7 @@ Shared rules:
     - a forest template's cells are reserved.
   - **README:** `MapState`, `Reserve` and the free rule.
   - **Playground:** a "show reserved" overlay on the steps page, drawn from the snapshot, with `Solid` and `Openable` in two colors picked from `Color` (the user does not mind which).
-- **Task 2/21: `addExits`.**
+- **Task 2/21: `addExits`. Done, awaiting review.**
   - **Code:** `src/exits/add-exits.ts` plus its options file; `carveCaveExit` moves to `src/exits/` with a `lattice` flag and a reserved check. `generateCave` and `generateMine` import it from the new place for now.
   - **Tests:**
     - count and misses;
@@ -175,7 +184,7 @@ Shared rules:
     - an `exits` extra is appended to.
   - **Docs:** CLAUDE.md layout gains `exits/`.
   - **Playground:** `addExits` in the list, with a Wall base.
-- **Task 3/21: areas.**
+- **Task 3/21: areas. Done, awaiting review.**
   - **Code:** `AreaSize`, `assertAreaSize`, `placeAreas`, `buildInArea` (decision 12), exported.
   - **Tests:**
     - the default is the whole map;
@@ -190,7 +199,7 @@ Shared rules:
 
 ### Mine (the simplest: the stages already read only the grid)
 
-- **Task 4/21: `digFishbone` and `digVeins`.**
+- **Task 4/21: `digFishbone` and `digVeins`. Done, awaiting review.**
   - Options are today's fishbone and veins fields plus `density`, `area` and `count`. `density` is a share of the area. Layout options are no longer marked "fishbone only" or "veins only", since each step has its own. `assertMineOptions` splits per step.
   - **Tests:**
     - density reached;
@@ -199,10 +208,24 @@ Shared rules:
     - `passages` appended and shifted by the area's offset;
     - lanes continue from an existing `passages`;
     - two copies in two areas.
-- **Task 5/21: `digPillarHalls` and `digRings`.**
+  - **As built:**
+    - `layFishbone` and `layVeins` take an optional `lane` (the first lane of the noise) and `protect` (a mask of tiles never dug, fed from `reserved`) in their settings; `carvePassageTiles` protects any non-zero byte.
+    - `digInAreas` is the shared core: it picks the boxes with `placeAreas`, digs each with `buildInArea` on one noise shared by the copies, and shifts the passages by the box. Lanes continue from the passages so far.
+    - `assertFishboneOptions` and `assertVeinOptions` hold the checks that belong to one layout, and `assertMineOptions` calls them.
+    - Both steps need a map that starts as wall (`assertDigArea`, in `validate`), since the layouts only dig wall. A map of another base throws a `RangeError` that says how to start it.
+    - `buildMine` is untouched until task 10.
+    - The playground has cards for both and a "Load a mine" button that sets the base to wall.
+
+- **Task 5/21: `digPillarHalls` and `digRings`. Done, awaiting review.**
   - Both take `area` and `count`. A pillar hall on its own is `digPillarHalls` with `halls: 1` in a small area. `halls` boxes are shifted by the offset.
   - **Tests:** today's pillar and ring assertions, ported, plus one hall in an area.
-- **Task 6/21: `placeMineRooms`.**
+  - **As built:**
+    - `layPillars`, `growHallNetwork`, `digRoutedVein` and `layRings` take the optional `lane` and `protect` of task 4. A hall is never placed over a protected tile, and a routed vein treats protected tiles as blocked. The wobble of the rings moves with the lane, so two ring sets do not wobble alike; at the default lane the old mines are unchanged.
+    - `digInAreas` now returns `{ passages, halls }` and shifts both; `lay` may return `halls`.
+    - `assertPillarOptions` and `assertRingOptions` hold the checks of the two layouts, and `assertMineOptions` calls them.
+    - The tests port the core assertions (halls apart, pillars standing, one piece, rings first and closed, ring count, border ring); the full set stays on `generateMine` until task 10.
+    - The playground has cards for both and an **Outline halls** overlay, and the stats count `passages` and `halls`.
+- **Task 6/21: `placeMineRooms`. Done, awaiting review.**
   - Rooms already use shapes (`createOrdinaryRoom`), so this is where the shared `roomShapes` type and `createRoomShape` move into `src/rooms/`.
   - Rooms reserve from their shapes (`Solid` and `Openable`), add or append `roomShapes`, and call `openReserved` for every opening. The step leaves reserved tiles alone.
   - A template that cannot be joined throws the ordinary `TemplatePlacementError`, which the pipeline retries.
@@ -210,50 +233,94 @@ Shared rules:
     - rooms on a mine;
     - rooms on a map with hand-made floor, to show that any floor works, not only a mine;
     - the reserved mask is set (walls `Solid`, potential exits `Openable`, opened exits and their neighbors `Solid`) and respected.
+  - **As built:**
+    - `RoomShape` (`src/rooms/room-shape.ts`) is a `TemplatePlacement` plus `doors: { x, y, door }[]`, the door decisions of its `Exit` and `Door` cells in map coordinates. It is exported, with `TemplatePlacement` and `TemplateExit`. The helper that rebuilds the door map from it waits for the task that first reads it (11 or 16).
+    - `createRoomShape(floor: Area)` returns the ring placement round a floor. `reserveRoomShape(state, shape)` reserves walls, floor and inner doorways as `Solid`, and `OptionalExit` cells plus the `Exit` and `Door` cells that lead outside as `Openable`; the step then calls `openReserved` for every opening.
+    - `layRooms` takes `protect` (fed from `reserved`): protected tiles are solid for room spots, templates (through the mine obstacle), the reach and the tunnels, so their floor is never joined. It also returns `roomShapes`. `generateMine` is unchanged.
+    - Options follow the dungeon's names: `roomCount` (default 1 to 1), `roomWidth`, `roomHeight`, `sizeUniformity`, plus `templates`, `exitsPerRoom`, `doorChance`, `veinWidth`, `veinWindiness`, with today's defaults. `assertMineRoomOptions` checks them and validates the templates when the step is made.
+    - `assertWallBase` was split out of `assertDigArea`, since the step needs a wall base but has no area.
+    - The playground has a card (templates as JSON) and an **Outline rooms** overlay, and the stats count `rooms` and `roomExits`.
 
 ### Cave
 
-- **Task 7/21: `growCave` and `carveNoiseCave`.**
+- **Task 7/21: `growCave` and `carveNoiseCave`. Done, awaiting review.**
   - **Options:** each has its own generator options, `borderWalls` (at the edge of its area), `symmetry`, `symmetryChance`, `minRegionSize`, `largestOnly`, `area` and `count`. Each adds or appends `caverns`.
   - **Tests:**
     - today's noise, smoothing, symmetry and culling assertions, ported;
     - a cavern in an area keeps its largest piece and leaves the rest of the map alone.
-- **Task 8/21: `digCaveTunnels`.**
+  - **As built:**
+    - The shared options are `CaveAreaOptions` (`src/cave/cave-area-options.ts`, exported), checked by `assertCaveAreaOptions`. Defaults are today's: `borderWalls` true, `symmetry` none, `symmetryChance` 1, `minRegionSize` 0, `largestOnly` false (today's default `connect: 'tunnel'` culls nothing either).
+    - `carveCaveInAreas` is the shared core, like the mine's `digInAreas`: per box it makes the cave on its own grid (`createCaveNoise` plus `smoothCave`, or `createNoiseCaveGrid`), lays it over the scratch, culls, and stamps floor on free tiles only. Every other tile keeps what it has, so earlier floor and doors survive and reserved tiles get no floor.
+    - **Culling and old floor:** unreserved floor that was there already counts as part of a cavern it touches, so a cavern cut by an earlier tunnel is still one cavern for `largestOnly`, and reserved tiles count as wall. A piece of old floor that no new floor touches is not a cavern of this cave, so it can never win `largestOnly` or be culled.
+    - `carveNoiseCave` makes one noise per run and samples it at map coordinates (box offset added after the scale and rotation), so copies in two areas differ, a custom `noise` included.
+    - Both need a wall base. `assertWallBase` moved from `src/mine/` to `src/pipeline/`, since `cave/` may not import `mine/`; its message now says the step "digs its floor out of rock".
+    - New checks that today's generators lack: `neighborhood` and `shape` must be one of their values.
+    - The playground has cards for both (sharing `caveFields`, and a `SYMMETRIES` list now also used by `addExits`), an **Outline caverns** overlay in cyan, and the stats count `caverns`.
+- **Task 8/21: `digCaveTunnels`. Done, awaiting review.**
   - Options: `style`, `width`, `windiness`, `loops`, `borderWalls`, `symmetry`, `symmetryChance`.
   - It joins every floor region of the map, whatever made it, so it also joins a mine to its caverns.
   - The brush skips reserved tiles, and a tunnel that would need one is left out. Floor inside a room's footprint is not a region it joins; joining rooms is `carveCorridors`' job, or task 20's.
   - **Tests:**
     - the tunnel, loop and twin assertions, ported;
     - a mine and two caverns joined into one piece.
-- **Task 9/21: `generateCave` and `generateNoiseCave` as presets.**
+  - **As built:**
+    - Defaults are today's (`winding`, width 1, windiness 0.5, loops 0, `borderWalls` true, `symmetry` none, `symmetryChance` 1). New check: `style` must be `winding` or `direct`. It adds no extras and needs a wall base.
+    - It runs `connectCaves` on a copy of the grid with reserved floor turned to wall, with a `blocked` mask (new optional field of `TunnelOptions`): reserved tiles, the border ring with `borderWalls`, and every tile that is neither floor nor free (a door, a road). New floor is stamped back with `stampTile`.
+    - The mask reaches `carveTunnelBrush`, the winding walk (a step onto a blocked tile is not taken), `findCaveLink`, `planCaveLoops` and `stampCaveTwins` (a twin on a blocked tile is left out). `carveDirectTunnel` takes the other bend when the drawn one is blocked, and the shortest way round (new `findTunnelPath`) when both are. Without a mask every path draws and digs as before, so `generateCave` and `generateNoiseCave` make the same maps.
+    - **"Left out" means stranded, not dropped:** a group that cannot reach another piece without crossing a blocked tile is marked stranded and the next largest group carries on, so a reserved wall that splits the map leaves two joined halves rather than stopping. A dig that fails to join its ends also strands the group, so the loop always ends.
+    - The mine-plus-caverns test lives in `src/mine/mine-with-caverns.test.ts`, since `cave/` may not import `mine/`.
+    - The playground has a card for it (before `addExits`).
+- **Task 9/21: `generateCave` and `generateNoiseCave` as presets. Done, awaiting review.**
   - **Options:** nested (`cave` or `noise`, `tunnels`, `exits`). The old one-key-many-meanings `connect` goes, since a step present or absent says it.
   - **Result:** `regions` is computed after the pipeline.
   - **Docs:** rewrite the README caves section.
   - **Playground:** retire `demo/cave.html` and `demo/cave.ts`.
+  - **As built:**
+    - The key is `cave` for both presets (not `noise` for the noise cave, which would give `noise.noise` for a custom noise function). `tunnels` is on by default and `false` leaves it out, like the forest's `footbridges`; `exits` is left out unless given. `connect: 'largest'` is now `cave: { largestOnly: true }, tunnels: false`, and the old one `layoutSymmetry` is passed to each step that should follow it.
+    - `createCaveSteps` and `createNoiseCaveSteps` list the steps; `runCaveSteps` runs them on a wall map and computes `regions` with `findCaveRegions` and `describeCaveRegion`. `CaveResult` gains `attempts` and `failures` (always 1 and empty, since no cave step throws) and has no `caverns`, which would only hold the whole map.
+    - Gone: `finish-cave.ts`, `cave-connection-options.ts` (`CaveConnect`, `CaveConnectionOptions`), `resolve-cave-connection-options.ts` and the four `generate-cave-*.test.ts` files, whose assertions the step tests hold. `CaveNeighborhood`, `NoiseCaveShape` and `CaveTunnelStyle` moved to files of their own.
+    - Tests that only the old presets had moved to the steps: fill, corner bias, rotation, scales and shapes to `carveNoiseCave`, the limits and the von Neumann defaults to `growCave`, wide direct twins to `digCaveTunnels`. `carveNoiseCave` now checks `scaleX`, `scaleY`, `rotation`, `octaves`, `persistence` and `lacunarity` when it is made (they were checked only when it ran).
+    - The mine's `layCaverns` calls the new `generateNoiseCave` until task 10 deletes it; a mine caverns test changed seed, since the draws moved.
+    - Playground: the cave page is gone; the steps page has **Load a cave** and **Load a noise cave**, a **Mark region centers** overlay, and the regions of floor in the stats.
 
 ### Mine preset (needs the cave steps)
 
-- **Task 10/21: `generateMine` as a preset.**
+- **Task 10/21: `generateMine` as a preset. Done, awaiting review.**
   - **Options:** nested.
     - One key per layout step (`fishbone`, `veins`, `pillars`, `rings`). At most one may be given; none means `fishbone` with defaults, and more than one throws a `RangeError`.
     - The other keys are `caverns`, `rooms` (with `templates`, `exitsPerRoom` and `doorChance` inside it) and `exits`.
-  - **Caverns** become `carveNoiseCave` with `area` from `cavernSize`, `count` from `caverns`, `fill` from `cavernFill` and `largestOnly`, followed by `digCaveTunnels` with the vein width and windiness.
-    - A cavern now goes on a random free spot instead of the one nearest the mine, so its tunnel can be longer. The README says so.
-    - Nearest-the-floor placement is a possible later rule of decision 12.
+  - **Caverns** become `carveNoiseCave` with `placement: 'beside'` (decision 13), `area` from `cavernSize`, `count` from `caverns`, `fill` from `cavernFill` and `largestOnly`, followed by `digCaveTunnels`.
+    - `placement` (`'free'`, `'beside'`, `'overlap'`) is built in this task, for `growCave` and `carveNoiseCave`, with a `placeBeside` helper in `src/pipeline/` and a field on both cave cards.
   - **Two layouts in one map** are two step calls in a pipeline of your own, never two keys of the preset. The README says so.
   - **Code:** delete `build-mine.ts`, `lay-caverns.ts` and the mine's `retryPlacement`.
   - **Docs:** rewrite the README mines section: options, defaults, result, examples.
   - **Playground:** retire `demo/mine.html` and `demo/mine.ts`, and keep `GLYPHS` and the README colors in sync.
+  - **As built:**
+    - `createMineSteps` lists the steps: the layout (a `RangeError` for two or more keys, which points to `pipeline`), then `carveNoiseCave` and `digCaveTunnels` when `caverns` is given (`tunnels: false` leaves the tunnel step out), then `placeMineRooms` for `rooms` and `addExits` for `exits`. `MineOptions` and the new `MineStepOptions` have the keys `fishbone`, `veins`, `pillars`, `rings`, `caverns`, `tunnels`, `rooms` and `exits`; `MineResult` gains `attempts` and `failures`, and its `caverns`, `rooms` and `roomExits` are now documented in the README too.
+    - The preset's `caverns` default to `placement: 'beside'`, sides of 12 to 24 (cut down to the map less its border ring, so a small map does not throw for an area the caller never set), scales of 7 and `largestOnly`. Without it, the old `cavernSize` failed maps under 24 tiles a side.
+    - **Placement (decision 13):** `CavePlacement` on `CaveAreaOptions`, checked by `assertCaveAreaOptions`. `carveCaveInAreas` takes it: `'beside'` builds and culls the cave on its own grid, with the noise sampled at a random spot, and places it with the new `placeBeside` (`src/pipeline/`, exported); `'overlap'` uses `placeAreas` with a new `overlap` flag that checks only the other boxes. `pickAreaSize` moved out of `place-areas.ts` to be shared. `placeBeside` tries 100 spots, not 20 (see decision 13).
+    - Failure rates measured with the preset on 80×50, seeds 1–100, maps that still failed after 3 attempts: 1 cavern 0% (fishbone), 2% (veins), 0% (pillars), 93% (rings, which fill the map); 2 caverns 1%, 26%, 7%, 100%. A `count` with a `min` of 0, or `'overlap'`, never fails.
+    - **Behavior changes:** the tunnels that join caverns are no longer in `passages` (`digCaveTunnels` adds none); `rooms` with `templates` alone now also places one ordinary room (`roomCount` defaults to 1 to 1), so templates alone need `roomCount: { min: 0, max: 0 }`; caverns are joined by `digCaveTunnels` instead of the old vein tunnel.
+    - Gone: `build-mine.ts`, `lay-caverns.ts`, `assert-mine-options.ts`, `mine-layout.ts` (`MineLayout`), and the `MineRoomOptions` export (the type stays, for `layRooms`). `retryPlacement` stays for the dungeons.
+    - **Tests:** the layout tests of `generate-mine.test.ts`, `generate-mine-veins.test.ts`, `generate-mine-pillars.test.ts` and `generate-mine-rings.test.ts` moved to the step tests, through a `dig` helper that runs the step alone, without the ones the step tests had already, the exit tests and "ignores the other layouts". One pillar test changed seed (a vein that runs too long is left out on some seeds). The room tests stay on the preset, nested; the cavern tests are new, for the new placement. New tests for `placeBeside`, the `overlap` flag and `placement` on both cave steps.
+    - **Playground:** the mine page and its links are gone. The steps page gains **Load a mine with caverns** (cards may now be loaded with values of their own), a **Placement** select on both cave cards, and a **Mark tunnels** overlay, carried over from the mine page. **Load a mine** now loads `digFishbone` alone, the preset's default.
 
 ### Maze
 
-- **Task 11/21: `placeMazeRooms`.**
+- **Task 11/21: `placeMazeRooms`. Done, awaiting review.**
   - **Code:** wraps `prepareMazeRooms`, without `reachExits`.
     - Options: `rooms`, `templates`, `doorChance` (doors of templates), `keepClear?: Point` (which the preset fills with `start` so rooms avoid it) and `area`.
     - Ordinary rooms get their shape from `createRoomShape`. It reserves from the shapes and adds `rooms` and `roomShapes`.
   - **Known limit:** rooms for a maze in a smaller area must land in that maze's area. Two steps pick their spots independently, so rooms in a sub-area maze wait for a rule that pins an area to a position (later).
   - **Tests:** today's room and template placement assertions, ported, plus the reserved mask: the whole ring is `Openable`, and the lattice is filtered only when openings are listed.
-- **Task 12/21: `carveMaze` and `openMazeRooms`.**
+  - **As built:**
+    - **Options are flat**, as `placeMineRooms`' are, not a nested `rooms`: `roomCount` (default 1 to 1), `roomWidth`, `roomHeight`, `sizeUniformity`, `templates`, `doorChance`, `keepClear` and `area` (one box, on the lattice through `placeAreas({ lattice: true })`, so no `count`). Templates alone need `roomCount: { min: 0, max: 0 }`, as in the mine.
+    - It wraps `prepareMazeRooms` in `buildInArea`, so template positions and areas are in the coordinates of the box. `prepareMazeRooms` now also returns `placements`, `doors` and `fail`, and no longer throws for a `start` in a template: `generateMaze` checks that itself (same `RangeError`), and the step fails the attempt with a `TemplatePlacementError` naming the template that covers `keepClear` (retried, since another map may put the template elsewhere).
+    - The internal `src/maze/place-maze-rooms.ts` (ordinary rooms only) is renamed `plan-maze-rooms.ts` (`planMazeRooms`), to free the name. The `doorsOf` helper of `lay-rooms.ts` moved to `src/rooms/list-shape-doors.ts` (`listShapeDoors`), shared by both room steps.
+    - **Not done:** on the whole map the rooms ignore what earlier steps built (as `prepareMazeRooms` always did); with an `area` the box only goes where the map is free. Avoiding non-free tiles is the composition work of task 15, and could be brought here then.
+    - **Tests:** `place-maze-rooms.test.ts`, the room and template placement assertions of the two maze test files, ported to the step (those stay on `generateMaze` until task 13), plus the reserved mask (the whole ring of an ordinary room `Openable` at odd and even offsets alike, corners and floor `Solid`; a template's exit `Openable`, its walls `Solid`; nothing outside the footprints), the shapes and their door lists, rooms in an area on the map's lattice, appending to an earlier step's rooms, and the option checks.
+    - **Playground:** a `placeMazeRooms` card (keep-clear x and y, blank for none, and the area without copies: `areaFields(false)`); the Templates label of both room cards now points to the template editor, as the mine page is gone.
+- **Task 12/21: `carveMaze` and `openMazeRooms`. Done, awaiting review.**
   - **`carveMaze`:** the backtracker, with `isBlocked` from `reserved`.
     - Options: biases, `loopChance`, `fill`, `straight`, `pattern`, `patternChance`, `start`, `area` (lattice-aligned) and `count`.
     - A `start` on a reserved tile throws a `RangeError`.
@@ -264,14 +331,26 @@ Shared rules:
     - Options: `exitsPerRoom`, `doorChance`.
   - **Exits:** `addExits({ lattice: true })` replaces `carveExit`, which is deleted.
   - **Tests:** the maze, room-opening and template-exit assertions, ported, plus a maze in an area.
-- **Task 13/21: `generateMaze` as a preset.**
+  - **As built:**
+    - **`carveMaze`** (`CarveMazeOptions`, checked by `assertCarveMazeOptions`): the backtracker keeps off every tile that is not free (`isFree`, taken before carving), not only reserved ones, so it routes round the floor of earlier steps too. `start` is in the coordinates of the map and only for a maze on the whole map (a `RangeError` with an `area`); a `start` that is not a cell, or an area below 3, is a `RangeError` in `validate`; a `start` that is not free fails the attempt (a `RangeError` thrown in the run, so retried). Each copy starts at `start` or at the free cell nearest the middle of its box. It reserves nothing and adds `start` (none for 0 copies). The internal `carve-maze.ts` is renamed `backtrack-maze.ts` (`backtrackMaze`).
+    - **`openMazeRooms`** needs `rooms` and `roomShapes` (not only `rooms`: every room step adds shapes) and opens only the rooms with no exits yet, on copies of them. Openings are `findTemplateOpenings` on each shape, with `isBlocked` from `reserved`, keeping only walls that are `Openable`; the fixed exits are reached by `reachFixedExits` (from `prepareMazeRooms`' `reachExits`, which goes), and the rest by the internal `openMazeOpenings` (the old `open-maze-rooms.ts`, renamed). Every exit goes through `openReserved` after all are made, so a room can still open two walls that meet diagonally at a corner, as before. A fixed exit that cannot be reached is a `TemplatePlacementError` with the template's index but no name, since the step has no templates.
+    - **`findRoomOpenings`** is deleted. A one-off test gave the same openings for five ring shapes (map edges and a blocked cell included) before it went; the order differs, so seeds give other maps.
+    - **`generateMaze`** now runs `placeMazeRooms` (with `rooms` or non-empty `templates`), `carveMaze`, `openMazeRooms` and `addExits({ lattice: true })` through `pipeline` with `attempts: 1`, keeping its flat options and result until task 13. Hence: the rooms-with-symmetry throw is gone; a template that covers `start` is a `TemplatePlacementError` (was a `RangeError`); room option errors name `roomCount`, `roomWidth` and `roomHeight`; `carveExit` is deleted. `prepareMazeRooms` lost its openings and `reachExits`.
+    - **Tests:** `carve-maze.test.ts` (31: carving, perfect maze, loops, fill, start, pattern, reserved tiles and the parts they cut off, floor of earlier steps, a reserved start, an area on the lattice, copies, 0 copies, option checks) and `open-maze-rooms.test.ts` (21: room and template openings ported, the reserved mask after opening, rooms with exits left alone, appending to `roomExits`, rooms of earlier steps unchanged, needs, option checks). The `generateMaze` tests stay, with the throws above updated.
+    - **Playground:** `carveMaze` and `openMazeRooms` cards, and **Load a maze with rooms** (`placeMazeRooms` with 3 to 5 rooms, `carveMaze`, `openMazeRooms`, `addExits` on the lattice). That composition failed on none of 100 seeds at 80×50.
+- **Task 13/21: `generateMaze` as a preset. Done, awaiting review.**
   - **Options:** nested (`rooms`, `maze`, `openings`, `exits`).
   - **Docs:** rewrite the README mazes section.
   - **Playground:** retire the maze page (`demo/index.html` and `demo/main.ts` become the index that links to the steps page and the noise page).
+  - **As built:**
+    - `createMazeSteps` lists the steps: `placeMazeRooms` for `rooms` (its `keepClear` defaulting to `maze.start`), `carveMaze`, `openMazeRooms` with `openings` when there are `rooms` (`openings` alone is ignored, as the mine's `tunnels` are without `caverns`), and `addExits` for `exits` (its `lattice` defaulting to true). `MazeOptions` and the new `MazeStepOptions` have the keys `maze`, `rooms`, `openings` and `exits`; `maze` is `CarveMazeOptions` less `area` and `count`, so the preset's maze is always on the whole map and `start` is always reported. The pipeline's 3 attempts replace the single one of task 12/21; `MazeResult` gains `attempts` and `failures`.
+    - **Behavior changes:** the old flat options are gone (`symmetry` and `symmetryChance` are `maze.pattern` and `maze.patternChance`, `minExits` and `maxExits` are `exits.count`, the room options are named as `placeMazeRooms`' are, `templates` is under `rooms`, and templates alone need `roomCount: { min: 0, max: 0 }`, as in the mine); a template that finds no place or covers the start is retried. `MazeRoomOptions` is no longer exported (the type stays, for `planMazeRooms`), and `prepareMazeRooms` takes only `templates` and `rooms`.
+    - **Tests:** the carving tests of `generate-maze.test.ts` (tiny maze, dead ends, loops, fill 0, even-sized start, biases, straight, both patterns, the pattern chance, other seeds) moved to `carve-maze.test.ts`. `generate-maze-rooms.test.ts` and `generate-maze-templates.test.ts` are deleted, since the step tests of tasks 11/21 and 12/21 cover them; what only the preset can check moved into `generate-maze.test.ts`: the options reaching each step, rooms kept off `maze.start`, a start outside rooms and templates in the middle, every room opened and joined, template exits joined at a low fill, rooms with a pattern, a retry (seed 3: a template whose two spots include the start) and the error after 3 attempts, option errors named after their steps, and the exits on the lattice.
+    - **Playground:** the maze page is gone; `index.html` links to the steps, dungeon and noise pages, and every page's nav starts with **Index**. The steps page gains **Load a maze** (`carveMaze` alone, the preset's default) and the maze page's two overlays, **Show room gaps** and **Mark maze start**. The template editor is now on the dungeon page only.
 
 ### Dungeon (the hardest)
 
-- **Task 14/21: measure today's dungeons** (decisions 5 and 8).
+- **Task 14/21: measure today's dungeons** (decisions 5 and 8). **Done, awaiting review.**
   - **Code:** `scripts/check-dungeon.ts`, run through Vite's `runnerImport` like `check-forest.ts`, plus `npm run check:dungeon`. It runs today's two dungeons over seeds 1 to 200, with 0, 2 and 5 templates that have fixed exits (from the playground's templates).
   - **Failure figures:**
     - inner attempts used;
@@ -285,6 +364,27 @@ Shared rules:
     - dead ends;
     - room count.
   - **Outcome:** report the numbers. They are the baseline against which task 16 checks the retry rule of decision 5 and task 18 compares `growRooms` with the digger.
+  - **As built:**
+    - `npm run check:dungeon` (`scripts/check-dungeon.ts`) runs room-first scatter, room-first bsp (added, as the baseline of `partitionRooms`) and the digger at 61×41 with the dungeon page's defaults, over seeds 1 to 200, with 0, 2 and 5 templated rooms: the playground's closet and hall, both with a fixed exit, two in five of them halls (2 is a closet and a hall, 5 is three closets and two halls). Flags: `--from`, `--to`, `--seeds`, `--templates 10,15,20` and `--placement lattice`.
+    - **Counting the tries:** `buildRoomDungeon` and `buildDigDungeon` take an optional `onTry` callback, called before each of their 10 tries; the script does the 3 maps of `retryPlacement` itself, to count them. The maps are unchanged. Both functions go in tasks 17 and 19.
+    - **Look figures:** a corridor is a piece of open tiles outside every room and exit, joined orthogonally, so a piece that branches or joins several rooms counts as one. "Longest" is the mean of each map's longest piece. Spread is the box round every room over the map. Exits per room count a shared door for both rooms. Dead ends are corridor tiles with one open neighbor; at the default `deadEndChance` of 0 there are none.
+    - **Baseline (free placement, 200 seeds):**
+
+      | dungeon, templates | tries (most) | maps | retried | failed | ms (most)  | rooms | corridor | longest | spread | exits |
+      | ------------------ | ------------ | ---- | ------- | ------ | ---------- | ----- | -------- | ------- | ------ | ----- |
+      | scatter, 0         | 1.00 (1)     | 1.00 | 0       | 0      | 2.6 (13)   | 12.8  | 22.3     | 66.6    | 0.77   | 1.98  |
+      | scatter, 2         | 1.00 (1)     | 1.00 | 0       | 0      | 4.0 (14)   | 14.3  | 24.0     | 73.8    | 0.79   | 1.92  |
+      | scatter, 5         | 1.00 (1)     | 1.00 | 0       | 0      | 8.0 (24)   | 16.2  | 26.3     | 82.8    | 0.83   | 1.81  |
+      | bsp, 0             | 1.00 (1)     | 1.00 | 0       | 0      | 4.3 (40)   | 16.5  | 20.2     | 68.3    | 0.88   | 1.99  |
+      | bsp, 2             | 1.00 (1)     | 1.00 | 0       | 0      | 5.0 (43)   | 17.2  | 23.0     | 78.2    | 0.89   | 1.93  |
+      | bsp, 5             | 1.00 (2)     | 1.00 | 0       | 0      | 11.7 (570) | 19.2  | 25.9     | 90.1    | 0.89   | 1.83  |
+      | digger, 0          | 1.00 (1)     | 1.00 | 0       | 0      | 2.1 (30)   | 13.2  | 10.0     | 35.0    | 0.58   | 1.98  |
+      | digger, 2          | 1.00 (1)     | 1.00 | 0       | 0      | 2.8 (11)   | 14.7  | 11.7     | 43.6    | 0.65   | 1.91  |
+      | digger, 5          | 1.00 (1)     | 1.00 | 0       | 0      | 6.9 (17)   | 16.5  | 15.5     | 59.4    | 0.74   | 1.78  |
+
+    - **Under load** (`--templates 10,15,20`): no seed fails, but tries and time grow from 15 templated rooms on. Room-first scatter: 1.11 tries per map, 2 seeds of 200 needing a second map, 81 ms per seed and 3.9 s at most at 15; 1.21 tries, 4 seeds, 94 ms and 2.2 s at 20. Bsp is alike (1.10 and 1.20 tries, 1 and 4 seeds, 3.1 and 2.1 s at most). The digger holds out longer: 1.02 and 1.05 tries, 0 and 1 seeds, 2.6 s at most at 20. At 10 templated rooms no dungeon needs a second try.
+    - **Lattice placement:** no retries at 0, 2 and 5, with a look close to free placement (scatter 13.1 rooms, corridors 23.6, spread 0.79; digger 13.5, 9.7, 0.58).
+    - **What it means for tasks 16 and 18:** at the defaults the retry rule is all but untested, so task 16 compares at `--templates 15,20` too, where the failures and the slow seeds are. For the look, the digger's corridors are half as long as room-first's (10 against 22, longest 35 against 67) and its rooms cluster (spread 0.58 against 0.77): those are the figures `growRooms` has to come near.
 - **Task 15/21: `scatterRooms` and `partitionRooms`.**
   - **Code:** the shared placement core plus the two steps. The core wraps `prepareTemplates`, `createRoomPlan`, carving and reserving. The steps wrap the renamed `scatterRoomPlan` and `partitionRoomPlan`.
     - Options (both steps):
@@ -394,6 +494,7 @@ Shared rules:
 
 - **Corridor-first dungeon:** tunnels laid first (straight, lattice-friendly), rooms sprouted off them where they fit, with doors, and dead ends where none fit. It is kept only if it produces dungeons clearly distinct from `scatterRooms`, `partitionRooms` and `growRooms` with `carveCorridors`, and from a mine with rooms; otherwise it is dropped. Needs a design talk.
 - **Areas for the forest steps** (`plantTrees`, `addStreams`, `addRoads`, `placeClearings`, `placeTemplates`).
+- **Overlap as a share** (decision 13): `placement: 'overlap'` may become a fraction or a `Range` of a cave's tiles that may overlap other things (default 0 to 0), never over reserved tiles.
 - **Rules for area spots per feature:** keep off roads and streams, stay near the existing floor (the old mine caverns), or a pinned position, which also lets rooms land in a sub-area maze.
 
 ## Critical files

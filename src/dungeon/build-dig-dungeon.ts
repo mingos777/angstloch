@@ -43,8 +43,12 @@ const MAX_ATTEMPTS = 10;
  * room at the end of it, until there are enough rooms. Corridors that find no
  * space for a room are filled in again. Afterwards rooms get the exits they
  * want, and loops and dead ends are added.
+ * `onTry` is called before each try, for `check:dungeon` to count them.
  */
-export function buildDigDungeon(options: DigDungeonOptions): DungeonResult {
+export function buildDigDungeon(
+  options: DigDungeonOptions,
+  onTry?: () => void,
+): DungeonResult {
   const resolved = resolveDungeonOptions(options);
   const { width, height, random, placement, roomCount, fill } = resolved;
   const corridorLength = options.corridorLength ?? { min: 1, max: 8 };
@@ -351,6 +355,7 @@ export function buildDigDungeon(options: DigDungeonOptions): DungeonResult {
   // Corridors can box in a fixed exit of a template, which digging again
   // usually fixes, so the dungeon is tried again before giving up.
   for (let tries = 1; ; ++tries) {
+    onTry?.();
     const built = attempt();
     if ('grid' in built) {
       return built;

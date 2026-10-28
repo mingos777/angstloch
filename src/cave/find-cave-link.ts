@@ -6,13 +6,14 @@ import { Tile } from '../core/tile';
 
 /**
  * Finds the shortest way from a group of floor tiles to any other floor tile,
- * through rock or anything else, and returns its two ends: a tile of the
- * group and the tile it reaches. Returns undefined when there is no other
- * floor.
+ * through rock or anything else but the tiles that `blocked` marks, and
+ * returns its two ends: a tile of the group and the tile it reaches. Returns
+ * undefined when there is no other floor it can reach.
  */
 export function findCaveLink(
   grid: Grid,
   group: readonly Point[],
+  blocked?: Uint8Array,
 ): CaveLink | undefined {
   const { width, height } = grid;
   const origin = new Int32Array(width * height).fill(-1);
@@ -37,7 +38,11 @@ export function findCaveLink(
     for (const step of DIRECTIONS) {
       const nx = x + step.x;
       const ny = y + step.y;
-      if (grid.inBounds(nx, ny) && origin[ny * width + nx] === -1) {
+      if (
+        grid.inBounds(nx, ny) &&
+        origin[ny * width + nx] === -1 &&
+        !blocked?.[ny * width + nx]
+      ) {
         origin[ny * width + nx] = origin[index] as number;
         queue.push(ny * width + nx);
       }

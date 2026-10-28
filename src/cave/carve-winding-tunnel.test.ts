@@ -99,4 +99,28 @@ describe('carveWindingTunnel', () => {
     // then
     expect(findCaveRegions(grid)).toHaveLength(1);
   });
+
+  it('never steps onto a blocked tile', () => {
+    // given
+    const grid = twoSpots();
+    const blocked = new Uint8Array(21 * 15);
+    for (let y = 0; y < 12; ++y) {
+      blocked[y * 21 + 10] = 1;
+    }
+
+    // when
+    carveWindingTunnel(
+      grid,
+      mulberry32(2),
+      { x: 3, y: 3 },
+      { x: 17, y: 11 },
+      { ...OPTIONS, width: 2, blocked },
+    );
+
+    // then
+    expect(findCaveRegions(grid)).toHaveLength(1);
+    for (let y = 0; y < 12; ++y) {
+      expect(grid.get(10, y)).toBe(Tile.Wall);
+    }
+  });
 });

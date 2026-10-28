@@ -7,13 +7,15 @@ import { randomInt } from '../core/random-int';
 import type { Range } from '../core/range';
 import { Tile } from '../core/tile';
 import type { NoiseFunction } from '../noise/noise-function';
+import { createRoomShape } from '../rooms/create-room-shape';
+import { listShapeDoors } from '../rooms/list-shape-doors';
 import { pickRoomSize } from '../rooms/pick-room-size';
 import type { Exit } from '../rooms/exit';
 import type { PlacementArea } from '../rooms/placement-area';
 import type { Room } from '../rooms/room';
+import type { RoomShape } from '../rooms/room-shape';
 import { carveTemplate } from '../rooms/templates/carve-template';
 import { decideTemplateDoors } from '../rooms/templates/decide-template-doors';
-import { findTemplateExits } from '../rooms/templates/find-template-exits';
 import { placeTemplateCopies } from '../rooms/templates/place-template-copies';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 import { TemplateCell } from '../rooms/templates/template-cell';
@@ -21,7 +23,6 @@ import type { TemplateExit } from '../rooms/templates/template-exit';
 import type { TemplatePlacement } from '../rooms/templates/template-placement';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
 import { carvePassageTiles } from './carve-passage-tiles';
-import { createOrdinaryRoom } from './create-ordinary-room';
 import { keepInside, LANE_SPACING, MARGIN } from './dig-vein';
 import type { MinePassage } from './mine-passage';
 import type { MineRoomOptions } from './mine-room-options';
@@ -40,6 +41,8 @@ export interface RoomSettings {
   exitsPerRoom: Range;
   veinWidth: Range;
   veinWindiness: number;
+  /** Tiles that are never dug or built on, a byte for each tile of the grid, row by row: anything but 0 protects it. Defaults to none. */
+  protect?: Uint8Array;
 }
 
 /** A room that is placed but not yet joined to the mine. */
@@ -57,11 +60,16 @@ interface Opening {
   door: boolean;
 }
 
-/** The mine as a placement that the templates keep away from: every tile of floor is a cell. */
-function createMineObstacle(grid: Grid): TemplatePlacement {
+/**
+ * The mine as a placement that the templates keep away from: every tile of
+ * floor, and every solid tile, is a cell.
+ */
+function createMineObstacle(grid: Grid, solid: Uint8Array): TemplatePlacement {
   const cells = Array.from({ length: grid.height }, (_, y) =>
     Array.from({ length: grid.width }, (__, x) =>
-      grid.get(x, y) === Tile.Wall ? TemplateCell.Unused : TemplateCell.Floor,
+      grid.get(x, y) === Tile.Wall && solid[y * grid.width + x] !== 1
+        ? TemplateCell.Unused
+        : TemplateCell.Floor,
     ),
   );
   return {
@@ -309,7 +317,9 @@ function digTunnel(
  * tunnels, apart from them and from each other, and joins each to the mine by
  * a tunnel from every exit it opens. Ordinary rooms that find no room, or that
  * cannot be joined, are left out, and a template that cannot be placed or
- * joined throws a `TemplatePlacementError`.
+ * joined throws a `TemplatePlacementError`. Nothing is built on a tile of
+ * `protect`, and its floor is not the mine. Returns the rooms with ids from 0,
+ * their exits, the tunnels, and the shape of every room, by id.
  */
 export function layRooms(
   grid: Grid,
@@ -317,8 +327,13 @@ export function layRooms(
   noise: NoiseFunction,
   settings: RoomSettings,
   lane: number,
-): { rooms: Room[]; roomExits: Exit[]; passages: MinePassage[] } {
-  const none = { rooms: [], roomExits: [], passages: [] };
+): {
+  rooms: Room[];
+  roomExits: Exit[];
+  passages: MinePassage[];
+  roomShapes: RoomShape[];
+} {
+  const none = { rooms: [], roomExits: [], passages: [], roomShapes: [] };
   const { width: mapWidth, height: mapHeight } = grid;
   const interior: Area = {
     x: MARGIN,
@@ -335,7 +350,13 @@ export function layRooms(
     spacing: SPACING,
     lattice: false,
   };
-  const mine = createMineObstacle(grid);
+  const solid = new Uint8Array(mapWidth * mapHeight);
+  settings.protect?.forEach((value, at) => {
+    if (value !== 0) {
+      solid[at] = 1;
+    }
+  });
+  const mine = createMineObstacle(grid, solid);
   const pending: Pending[] = [];
   const obstacles = () => [mine, ...pending.map(({ placement }) => placement)];
 
@@ -351,7 +372,6 @@ export function layRooms(
       pending.push({ placement, template: index, name: template.name });
     }
   });
-  const solid = new Uint8Array(mapWidth * mapHeight);
   for (const room of pending) {
     mark(solid, mapWidth, room, 1);
   }
@@ -386,17 +406,13 @@ export function layRooms(
       if (!spot) {
         continue;
       }
-      const { cells } = createOrdinaryRoom(floorWidth, floorHeight);
       const room: Pending = {
-        placement: {
-          ...spot,
-          width: floorWidth + 2,
-          height: floorHeight + 2,
-          cells,
-          exits: findTemplateExits(cells),
-          rotation: 0,
-          mirrored: false,
-        },
+        placement: createRoomShape({
+          x: spot.x + 1,
+          y: spot.y + 1,
+          width: floorWidth,
+          height: floorHeight,
+        }),
       };
       pending.push(room);
       mark(solid, mapWidth, room, 1);
@@ -441,6 +457,7 @@ export function layRooms(
 
   const rooms: Room[] = [];
   const roomExits: Exit[] = [];
+  const roomShapes: RoomShape[] = [];
   kept.forEach(({ room, openings }, id) => {
     const { placement } = room;
     carveTemplate(grid, placement, doors);
@@ -473,6 +490,10 @@ export function layRooms(
     }
     record.exitCount = record.exits.length;
     rooms.push(record);
+    roomShapes.push({
+      ...placement,
+      doors: listShapeDoors(placement, doors, mapWidth),
+    });
   });
-  return { rooms, roomExits, passages };
+  return { rooms, roomExits, passages, roomShapes };
 }

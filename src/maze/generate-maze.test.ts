@@ -2,9 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { generateMaze } from './generate-maze';
 import type { Grid } from '../core/grid';
 import type { MazeOptions } from './maze-options';
+import type { MazeResult } from './maze-result';
 import type { Point } from '../core/point';
+import type { Room } from '../rooms/room';
+import type { RoomTemplate } from '../rooms/templates/room-template';
+import { TemplateCell } from '../rooms/templates/template-cell';
+import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { Tile } from '../core/tile';
+
+const { Floor: F, Wall: W, Exit: E, OptionalExit: O } = TemplateCell;
 
 const NEIGHBORS: readonly Point[] = [
   { x: 0, y: -1 },
@@ -13,6 +20,30 @@ const NEIGHBORS: readonly Point[] = [
   { x: -1, y: 0 },
 ];
 
+const SEEDS = Array.from({ length: 20 }, (_, i) => i + 1);
+
+/** Three by three: the exit is in the top wall and everything is on the lattice. */
+const closet: RoomTemplate = {
+  name: 'closet',
+  cells: [
+    [W, E, W],
+    [W, F, W],
+    [W, W, W],
+  ],
+};
+
+/** A hall with a fixed exit and two optional ones. */
+const hall: RoomTemplate = {
+  name: 'hall',
+  cells: [
+    [W, W, W, W, W, W, W, W, W],
+    [W, F, F, F, F, F, F, F, W],
+    [W, F, F, F, F, F, F, F, W],
+    [W, F, F, F, F, F, F, F, W],
+    [W, W, W, E, W, O, W, O, W],
+  ],
+};
+
 function maze(options: Partial<MazeOptions> = {}, seed = 1) {
   return generateMaze({
     width: 21,
@@ -20,6 +51,11 @@ function maze(options: Partial<MazeOptions> = {}, seed = 1) {
     random: mulberry32(seed),
     ...options,
   });
+}
+
+/** A maze with rooms, on a map big enough for a few. */
+function withRooms(options: Partial<MazeOptions> = {}, seed = 1) {
+  return maze({ width: 41, height: 31, ...options }, seed);
 }
 
 function positions(grid: Grid, predicate: (x: number, y: number) => boolean) {
@@ -42,15 +78,10 @@ function cells(grid: Grid) {
   return floors(grid).filter(({ x, y }) => x % 2 === 1 && y % 2 === 1);
 }
 
-function neighborCount(grid: Grid, { x, y }: Point) {
-  return NEIGHBORS.filter((n) => grid.get(x + n.x, y + n.y) !== Tile.Wall)
-    .length;
-}
-
-/** Counts the passable tiles reachable from `from`. */
-function reachable(grid: Grid, from: Point) {
-  const seen = new Set([`${String(from.x)},${String(from.y)}`]);
-  const queue = [from];
+/** Counts the passable tiles reachable from the start. */
+function reachable({ grid, start }: MazeResult) {
+  const seen = new Set([`${String(start.x)},${String(start.y)}`]);
+  const queue = [start];
   for (let point = queue.shift(); point; point = queue.shift()) {
     for (const n of NEIGHBORS) {
       const next = { x: point.x + n.x, y: point.y + n.y };
@@ -64,45 +95,17 @@ function reachable(grid: Grid, from: Point) {
   return seen.size;
 }
 
-function passable(grid: Grid) {
+function passable({ grid }: MazeResult) {
   return positions(grid, (x, y) => grid.get(x, y) !== Tile.Wall).length;
 }
 
-function corners(grid: Grid) {
-  return cells(grid).filter(({ x, y }) => {
-    const horizontal =
-      grid.get(x - 1, y) === Tile.Floor || grid.get(x + 1, y) === Tile.Floor;
-    const vertical =
-      grid.get(x, y - 1) === Tile.Floor || grid.get(x, y + 1) === Tile.Floor;
-    return horizontal && vertical;
-  }).length;
-}
-
-/**
- * Horizontal share of the passages in the wedges left and right of the center
- * (`sides`) and above and below it (`ends`).
- */
-function horizontalShares(grid: Grid) {
-  const center = {
-    x: Math.floor(grid.width / 2),
-    y: Math.floor(grid.height / 2),
-  };
-  const counts = {
-    sides: { horizontal: 0, vertical: 0 },
-    ends: { horizontal: 0, vertical: 0 },
-  };
-  for (const { x, y } of floors(grid)) {
-    const wedge =
-      Math.abs(x - center.x) > Math.abs(y - center.y) ? 'sides' : 'ends';
-    if (x % 2 === 0 && y % 2 === 1) {
-      counts[wedge].horizontal++;
-    } else if (x % 2 === 1 && y % 2 === 0) {
-      counts[wedge].vertical++;
-    }
-  }
-  const share = ({ horizontal, vertical }: typeof counts.sides) =>
-    horizontal / (horizontal + vertical);
-  return { sides: share(counts.sides), ends: share(counts.ends) };
+function contains(room: Room, { x, y }: Point) {
+  return (
+    x >= room.x &&
+    x < room.x + room.width &&
+    y >= room.y &&
+    y < room.y + room.height
+  );
 }
 
 describe('generateMaze', () => {
@@ -117,26 +120,17 @@ describe('generateMaze', () => {
     expect([grid.width, grid.height]).toEqual([15, 9]);
   });
 
-  it('carves a tiny maze consisting of a single cell', () => {
-    // given
-    const options = { width: 3, height: 3 };
-
-    // when
-    const { grid } = maze(options);
-
-    // then
-    expect(grid.toString()).toBe('###\n#.#\n###');
-  });
-
-  it('carves every cell of an odd-sized map by default', () => {
+  it('makes a perfect maze of the whole map by default', () => {
     // given
     const options = { width: 21, height: 15 };
 
     // when
-    const { grid } = maze(options);
+    const result = maze(options);
 
     // then
-    expect(cells(grid)).toHaveLength(10 * 7);
+    expect(cells(result.grid)).toHaveLength(10 * 7);
+    expect(floors(result.grid)).toHaveLength(2 * 10 * 7 - 1);
+    expect(reachable(result)).toBe(floors(result.grid).length);
   });
 
   it('leaves the wall frame intact when there are no exits', () => {
@@ -151,65 +145,6 @@ describe('generateMaze', () => {
     expect(border.every(({ x, y }) => grid.get(x, y) === Tile.Wall)).toBe(true);
   });
 
-  it('makes a perfect maze by default: connected, with exactly one route between cells', () => {
-    // given / when
-    const { grid, start } = maze();
-
-    // then
-    expect(floors(grid)).toHaveLength(2 * cells(grid).length - 1);
-    expect(reachable(grid, start)).toBe(floors(grid).length);
-  });
-
-  it('leaves dead ends in a perfect maze', () => {
-    // given / when
-    const { grid } = maze();
-    const deadEnds = cells(grid).filter((c) => neighborCount(grid, c) === 1);
-
-    // then
-    expect(deadEnds.length).toBeGreaterThan(0);
-  });
-
-  it('removes all dead ends when the loop chance is 1', () => {
-    // given / when
-    const { grid } = maze({ loopChance: 1 });
-    const deadEnds = cells(grid).filter((c) => neighborCount(grid, c) === 1);
-
-    // then
-    expect(deadEnds).toHaveLength(0);
-  });
-
-  it('adds loops when the loop chance is above 0', () => {
-    // given / when
-    const { grid, start } = maze({ loopChance: 1 });
-
-    // then
-    expect(floors(grid).length).toBeGreaterThan(2 * cells(grid).length - 1);
-    expect(reachable(grid, start)).toBe(floors(grid).length);
-  });
-
-  it('carves only the requested fraction of the cells', () => {
-    // given
-    const options = { fill: 0.5 };
-
-    // when
-    const { grid, start } = maze(options);
-
-    // then
-    expect(cells(grid)).toHaveLength(50);
-    expect(reachable(grid, start)).toBe(floors(grid).length);
-  });
-
-  it('carves a single cell when the fill is 0', () => {
-    // given
-    const options = { fill: 0 };
-
-    // when
-    const { grid } = maze(options);
-
-    // then
-    expect(floors(grid)).toHaveLength(1);
-  });
-
   it('starts near the center by default', () => {
     // given / when
     const { start, grid } = maze();
@@ -219,21 +154,9 @@ describe('generateMaze', () => {
     expect(grid.get(11, 11)).toBe(Tile.Floor);
   });
 
-  it('picks a valid default start on even-sized maps', () => {
+  it('carves the maze with the options of maze', () => {
     // given
-    const options = { width: 4, height: 6 };
-
-    // when
-    const { start, grid } = maze(options);
-
-    // then
-    expect(start).toEqual({ x: 1, y: 3 });
-    expect(grid.get(1, 3)).toBe(Tile.Floor);
-  });
-
-  it('starts carving at the requested cell', () => {
-    // given
-    const options = { start: { x: 3, y: 5 }, fill: 0 };
+    const options = { maze: { start: { x: 3, y: 5 }, fill: 0 } };
 
     // when
     const { grid, start } = maze(options);
@@ -251,7 +174,7 @@ describe('generateMaze', () => {
     { x: 1.5, y: 3 },
   ])('rejects the start %o', (start) => {
     // given
-    const generate = () => maze({ start });
+    const generate = () => maze({ maze: { start } });
 
     // when / then
     expect(generate).toThrow(RangeError);
@@ -269,51 +192,6 @@ describe('generateMaze', () => {
     expect(generate).toThrow(RangeError);
   });
 
-  it('adds the requested number of exits as doors on the border', () => {
-    // given
-    const options = { minExits: 3, maxExits: 3 };
-
-    // when
-    const { grid, exits } = maze(options);
-
-    // then
-    expect(exits).toHaveLength(3);
-    expect(exits.every(({ x, y }) => grid.get(x, y) === Tile.Door)).toBe(true);
-    expect(
-      exits.every(({ x, y }) => x === 0 || y === 0 || x === 20 || y === 20),
-    ).toBe(true);
-    expect(
-      positions(grid, (x, y) => grid.get(x, y) === Tile.Door),
-    ).toHaveLength(3);
-  });
-
-  it('adds a number of exits between min and max', () => {
-    // given
-    const options = { minExits: 1, maxExits: 4 };
-
-    // when
-    const counts = Array.from(
-      { length: 20 },
-      (_, seed) => maze(options, seed).exits.length,
-    );
-
-    // then
-    expect(Math.min(...counts)).toBeGreaterThanOrEqual(1);
-    expect(Math.max(...counts)).toBeLessThanOrEqual(4);
-    expect(new Set(counts).size).toBeGreaterThan(1);
-  });
-
-  it('adds exactly minExits exits when maxExits is omitted', () => {
-    // given
-    const options = { minExits: 2 };
-
-    // when
-    const { exits } = maze(options);
-
-    // then
-    expect(exits).toHaveLength(2);
-  });
-
   it('adds no exits by default', () => {
     // given / when
     const { exits } = maze();
@@ -322,171 +200,307 @@ describe('generateMaze', () => {
     expect(exits).toEqual([]);
   });
 
-  it('connects every exit to the maze, also on even-sized maps', () => {
+  it('adds the requested exits as doors on the border, facing maze cells', () => {
     // given
-    const options = { width: 20, height: 18, minExits: 4, maxExits: 4 };
+    const exits = { count: { min: 3, max: 3 } };
 
     // when
-    const { grid, start } = maze(options);
+    const { grid, exits: doors } = maze({ exits });
 
     // then
-    expect(reachable(grid, start)).toBe(passable(grid));
+    expect(doors).toHaveLength(3);
+    for (const { x, y } of doors) {
+      expect(grid.get(x, y)).toBe(Tile.Door);
+      expect(x === 0 || y === 0 || x === 20 || y === 20).toBe(true);
+      expect(x % 2 === 1 || y % 2 === 1).toBe(true);
+    }
+  });
+
+  it('connects every exit to the maze, also on even-sized maps', () => {
+    // given
+    const options = {
+      width: 20,
+      height: 18,
+      exits: { count: { min: 4, max: 4 } },
+    };
+
+    // when
+    const result = maze(options);
+
+    // then
+    expect(result.exits).toHaveLength(4);
+    expect(reachable(result)).toBe(passable(result));
   });
 
   it('tunnels from the border to a partially carved maze', () => {
     // given
-    const options = { fill: 0, minExits: 1, start: { x: 9, y: 9 } };
+    const options = {
+      maze: { fill: 0, start: { x: 9, y: 9 } },
+      exits: { count: { min: 1, max: 1 } },
+    };
 
     // when
-    const { grid, exits } = maze(options);
+    const result = maze(options);
 
     // then
-    expect(exits).toHaveLength(1);
-    expect(reachable(grid, { x: 9, y: 9 })).toBe(passable(grid));
+    expect(result.exits).toHaveLength(1);
+    expect(reachable(result)).toBe(passable(result));
   });
 
-  it('prefers horizontal corridors when horizontal bias dominates', () => {
-    // given
-    const options = { horizontalBias: 1, verticalBias: 0 };
-
-    // when
-    const { grid } = maze(options);
-    const horizontal = positions(
-      grid,
-      (x, y) => x % 2 === 0 && y % 2 === 1 && grid.get(x, y) === Tile.Floor,
-    );
-    const vertical = positions(
-      grid,
-      (x, y) => x % 2 === 1 && y % 2 === 0 && grid.get(x, y) === Tile.Floor,
-    );
-
-    // then
-    expect(horizontal.length).toBeGreaterThan(2 * vertical.length);
-  });
-
-  it('prefers vertical corridors when vertical bias dominates', () => {
-    // given
-    const options = { horizontalBias: 1, verticalBias: 5 };
-
-    // when
-    const { grid } = maze(options);
-    const horizontal = positions(
-      grid,
-      (x, y) => x % 2 === 0 && y % 2 === 1 && grid.get(x, y) === Tile.Floor,
-    );
-    const vertical = positions(
-      grid,
-      (x, y) => x % 2 === 1 && y % 2 === 0 && grid.get(x, y) === Tile.Floor,
-    );
-
-    // then
-    expect(vertical.length).toBeGreaterThan(horizontal.length);
-  });
-
-  it('winds less when straight corridors are preferred', () => {
+  it('places no rooms unless asked to', () => {
     // given / when
-    const winding = maze({ straight: 0 });
-    const straight = maze({ straight: 1 });
+    const { rooms, roomExits } = withRooms();
 
     // then
-    expect(corners(straight.grid)).toBeLessThan(corners(winding.grid));
+    expect(rooms).toEqual([]);
+    expect(roomExits).toEqual([]);
   });
 
-  it.each(['whirlpool', 'snowflake'] as const)(
-    'still makes a perfect maze with %s symmetry',
-    (symmetry) => {
-      // given
-      const options = { symmetry };
-
-      // when
-      const { grid, start } = maze(options);
-
-      // then
-      expect(floors(grid)).toHaveLength(2 * cells(grid).length - 1);
-      expect(reachable(grid, start)).toBe(floors(grid).length);
-    },
-  );
-
-  it.each(['whirlpool', 'snowflake'] as const)(
-    'lays out the maze differently with %s symmetry',
-    (symmetry) => {
-      // given
-      const plain = maze();
-
-      // when
-      const symmetric = maze({ symmetry });
-
-      // then
-      expect(symmetric.grid.toString()).not.toBe(plain.grid.toString());
-    },
-  );
-
-  it('radiates corridors from the center with snowflake symmetry', () => {
+  it('places the rooms and templates, templated ones first', () => {
     // given
-    const options = { width: 41, height: 41, symmetry: 'snowflake' } as const;
+    const rooms = { roomCount: { min: 3, max: 3 }, templates: [closet] };
 
     // when
-    const shares = horizontalShares(maze(options).grid);
+    const result = withRooms({ rooms });
 
     // then
-    expect(shares.sides).toBeGreaterThan(0.75);
-    expect(shares.ends).toBeLessThan(0.25);
+    expect(result.rooms).toHaveLength(4);
+    expect(result.rooms[0]?.template).toBe(0);
+    expect(
+      result.rooms.slice(1).every((room) => room.template === undefined),
+    ).toBe(true);
   });
 
-  it('twirls corridors around the center with whirlpool symmetry', () => {
+  it('opens every room and joins it to the maze', () => {
     // given
-    const options = { width: 41, height: 41, symmetry: 'whirlpool' } as const;
+    const rooms = {
+      roomCount: { min: 4, max: 4 },
+      templates: [{ ...hall, count: { min: 2, max: 2 } }, closet],
+    };
 
     // when
-    const shares = horizontalShares(maze(options).grid);
+    const results = SEEDS.map((seed) => withRooms({ rooms }, seed));
 
     // then
-    expect(shares.sides).toBeLessThan(0.25);
-    expect(shares.ends).toBeGreaterThan(0.75);
+    for (const result of results) {
+      for (const room of result.rooms) {
+        expect(room.exitCount).toBeGreaterThanOrEqual(1);
+      }
+      expect(reachable(result)).toBe(passable(result));
+    }
   });
 
-  it('enforces symmetry more strongly as its chance grows', () => {
+  it('joins the exits of templates to the maze even when little of it is carved', () => {
     // given
-    const options = { width: 41, height: 41, symmetry: 'snowflake' } as const;
+    const options = {
+      rooms: {
+        roomCount: { min: 0, max: 0 },
+        templates: [{ ...closet, count: { min: 4, max: 4 } }],
+      },
+      maze: { fill: 0.05 },
+    };
 
     // when
-    const [none, some, full] = [0, 0.5, 1].map(
-      (symmetryChance) =>
-        horizontalShares(maze({ ...options, symmetryChance }).grid).sides,
+    const results = SEEDS.map((seed) => withRooms(options, seed));
+
+    // then
+    for (const result of results) {
+      expect(result.roomExits).toHaveLength(4);
+      expect(reachable(result)).toBe(passable(result));
+    }
+  });
+
+  it('opens the rooms with the options of openings', () => {
+    // given
+    const options = {
+      rooms: { roomCount: { min: 3, max: 3 } },
+      openings: { doorChance: 0 },
+    };
+
+    // when
+    const { grid, roomExits } = withRooms(options);
+
+    // then
+    expect(roomExits.length).toBeGreaterThan(0);
+    for (const { position, door } of roomExits) {
+      expect(door).toBe(false);
+      expect(grid.get(position.x, position.y)).toBe(Tile.Floor);
+    }
+  });
+
+  it('keeps rooms off the start of the maze', () => {
+    // given
+    const start = { x: 9, y: 9 };
+    const rooms = { roomCount: { min: 6, max: 6 } };
+
+    // when
+    const results = SEEDS.map((seed) =>
+      withRooms({ maze: { start }, rooms }, seed),
     );
 
     // then
-    expect(none).toBeLessThan(0.6);
-    expect(some).toBeGreaterThan(none ?? 0);
-    expect(full).toBeGreaterThan(some ?? 1);
+    for (const result of results) {
+      expect(result.start).toEqual(start);
+      expect(result.rooms.some((room) => contains(room, start))).toBe(false);
+    }
   });
 
-  it('ignores the symmetry chance when there is no symmetry', () => {
+  it('starts outside the rooms when the middle is taken', () => {
     // given
-    const plain = maze({ symmetry: 'none', symmetryChance: 0 });
+    const rooms = {
+      roomWidth: { min: 31, max: 31 },
+      roomHeight: { min: 21, max: 21 },
+    };
 
     // when
-    const other = maze({ symmetry: 'none', symmetryChance: 1 });
+    const result = withRooms({ rooms });
 
     // then
-    expect(other.grid.toString()).toBe(plain.grid.toString());
+    expect(result.rooms).toHaveLength(1);
+    expect(result.rooms.some((room) => contains(room, result.start))).toBe(
+      false,
+    );
+    expect(result.grid.get(result.start.x, result.start.y)).toBe(Tile.Floor);
+  });
+
+  it('starts outside a template that sits in the middle', () => {
+    // given
+    const rooms = {
+      roomCount: { min: 0, max: 0 },
+      templates: [
+        {
+          ...closet,
+          positions: [{ coords: { x: 20, y: 15 }, anchor: 'center' as const }],
+        },
+      ],
+    };
+
+    // when
+    const result = withRooms({ rooms });
+
+    // then
+    const [room] = result.rooms as [Room];
+    expect(contains(room, result.start)).toBe(false);
+    expect(result.grid.get(result.start.x, result.start.y)).toBe(Tile.Floor);
+  });
+
+  it('combines rooms with a pattern', () => {
+    // given
+    const options = {
+      rooms: { roomCount: { min: 3, max: 3 } },
+      maze: { pattern: 'whirlpool' as const },
+    };
+
+    // when
+    const result = withRooms(options);
+
+    // then
+    expect(result.rooms).toHaveLength(3);
+    expect(reachable(result)).toBe(passable(result));
+  });
+
+  it('builds the map once when nothing fails', () => {
+    // given / when
+    const { attempts, failures } = withRooms({ rooms: {} });
+
+    // then
+    expect(attempts).toBe(1);
+    expect(failures).toEqual([]);
+  });
+
+  it('builds the map again when a template covers the start, and reports it', () => {
+    // given: one of the two spots of the template covers the start
+    const rooms = {
+      roomCount: { min: 0, max: 0 },
+      templates: [
+        {
+          ...closet,
+          positions: [
+            { coords: { x: 11, y: 11 }, anchor: 'center' as const },
+            { coords: { x: 29, y: 19 }, anchor: 'center' as const },
+          ],
+        },
+      ],
+    };
+    const options = { rooms, maze: { start: { x: 11, y: 11 } } };
+
+    // when
+    const { attempts, failures, rooms: placed } = withRooms(options, 3);
+
+    // then
+    expect(attempts).toBe(2);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.step).toBe('placeMazeRooms');
+    expect(failures[0]?.error).toBeInstanceOf(TemplatePlacementError);
+    expect(placed).toHaveLength(1);
+  });
+
+  it('throws a TemplatePlacementError for a template that always covers the start', () => {
+    // given
+    const rooms = {
+      roomCount: { min: 0, max: 0 },
+      templates: [
+        {
+          ...closet,
+          positions: [{ coords: { x: 11, y: 11 }, anchor: 'center' as const }],
+        },
+      ],
+    };
+    const options = { rooms, maze: { start: { x: 11, y: 11 } } };
+
+    // when
+    const act = () => withRooms(options);
+
+    // then
+    expect(act).toThrow(TemplatePlacementError);
+  });
+
+  it('throws a TemplatePlacementError for a template that does not fit', () => {
+    // given
+    const rooms = { templates: [hall] };
+
+    // when
+    const act = () => maze({ rooms, width: 7, height: 7 });
+
+    // then
+    expect(act).toThrow(TemplatePlacementError);
+  });
+
+  it.each([
+    ['roomCount', { rooms: { roomCount: { min: 3, max: 1 } } }],
+    ['loopChance', { maze: { loopChance: 2 } }],
+    [
+      'exitsPerRoom',
+      { rooms: {}, openings: { exitsPerRoom: { min: 0, max: 2 } } },
+    ],
+    ['count', { exits: { count: { min: -1, max: 2 } } }],
+  ])('rejects an invalid %s, named after its step', (name, options) => {
+    // given
+    const invalid = options as Partial<MazeOptions>;
+
+    // when
+    const act = () => maze(invalid);
+
+    // then
+    expect(act).toThrow(new RegExp(name));
   });
 
   it('produces the same maze for the same random sequence', () => {
     // given
     const options = {
-      loopChance: 0.3,
-      minExits: 2,
-      symmetry: 'snowflake',
-    } as const;
+      maze: { loopChance: 0.3, pattern: 'snowflake' as const },
+      rooms: { roomCount: { min: 2, max: 3 } },
+      exits: { count: { min: 2, max: 2 } },
+    };
 
     // when
-    const first = maze(options, 42);
-    const second = maze(options, 42);
+    const first = withRooms(options, 42);
+    const second = withRooms(options, 42);
 
     // then
     expect(second.grid.toString()).toBe(first.grid.toString());
     expect(second.exits).toEqual(first.exits);
+    expect(second.roomExits).toEqual(first.roomExits);
   });
 
   it('produces different mazes for different random sequences', () => {
@@ -496,6 +510,25 @@ describe('generateMaze', () => {
 
     // then
     expect(second.grid.toString()).not.toBe(first.grid.toString());
+  });
+
+  it('does not change the options', () => {
+    // given
+    const options: MazeOptions = {
+      width: 21,
+      height: 21,
+      maze: { start: { x: 5, y: 5 } },
+      rooms: { roomCount: { min: 2, max: 2 } },
+      openings: { exitsPerRoom: { min: 1, max: 2 } },
+      exits: { count: { min: 1, max: 1 } },
+    };
+    const copy = structuredClone(options);
+
+    // when
+    generateMaze(options);
+
+    // then
+    expect(options).toEqual(copy);
   });
 
   it('draws randomness from the injected source only', () => {

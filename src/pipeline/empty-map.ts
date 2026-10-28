@@ -17,5 +17,6 @@ export function emptyMap(options: EmptyMapOptions): MapBase {
     grid: new Grid(width, height, tile),
     base: tile,
     prunable: new Uint8Array(width * height),
+    reserved: new Uint8Array(width * height),
   });
 }

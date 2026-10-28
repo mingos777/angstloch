@@ -111,4 +111,86 @@ describe('carveDirectTunnel', () => {
     // then
     expect(grid.get(2, 0)).toBe(Tile.Wall);
   });
+
+  it('takes the other bend when blocked tiles stand in the way of the first', () => {
+    // given
+    const grid = new Grid(10, 8);
+    const blocked = new Uint8Array(10 * 8);
+    blocked[2 * 10 + 4] = 1;
+
+    // when
+    carveDirectTunnel(
+      grid,
+      () => 0,
+      { x: 2, y: 2 },
+      { x: 5, y: 5 },
+      {
+        ...OPTIONS,
+        blocked,
+      },
+    );
+
+    // then
+    expect(floors(grid)).toEqual([
+      '2,2',
+      '2,3',
+      '2,4',
+      '2,5',
+      '3,5',
+      '4,5',
+      '5,5',
+    ]);
+  });
+
+  it('walks round blocked tiles that stand in the way of both bends', () => {
+    // given
+    const grid = new Grid(12, 8);
+    const blocked = new Uint8Array(12 * 8);
+    for (let y = 0; y < 6; ++y) {
+      blocked[y * 12 + 5] = 1;
+    }
+
+    // when
+    carveDirectTunnel(
+      grid,
+      () => 0,
+      { x: 2, y: 2 },
+      { x: 8, y: 2 },
+      {
+        ...OPTIONS,
+        blocked,
+      },
+    );
+
+    // then
+    expect(floors(grid)).toContain('5,6');
+    expect(
+      floors(grid).some((tile) => tile.startsWith('5,') && tile !== '5,6'),
+    ).toBe(false);
+    expect(floors(grid)).toContain('8,2');
+  });
+
+  it('carves nothing when blocked tiles shut the goal off', () => {
+    // given
+    const grid = new Grid(12, 8);
+    const blocked = new Uint8Array(12 * 8);
+    for (let y = 0; y < 8; ++y) {
+      blocked[y * 12 + 5] = 1;
+    }
+
+    // when
+    carveDirectTunnel(
+      grid,
+      () => 0,
+      { x: 2, y: 2 },
+      { x: 8, y: 2 },
+      {
+        ...OPTIONS,
+        blocked,
+      },
+    );
+
+    // then
+    expect(floors(grid)).toEqual([]);
+  });
 });

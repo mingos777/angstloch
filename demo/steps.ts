@@ -1,11 +1,17 @@
-import { Tile, emptyMap, pipeline } from '../src';
+import { Reserve, Tile, emptyMap, pipeline } from '../src';
 import type {
+  Area,
   CrossingPlan,
+  Exit,
   ForestTemplate,
   Grid,
+  MinePassage,
   PlacedClearing,
   Point,
+  Room,
 } from '../src';
+import { describeCaveRegion } from '../src/cave/describe-cave-region';
+import { findCaveRegions } from '../src/cave/find-cave-regions';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
 import { Color, drawGrid } from './draw-grid';
@@ -40,12 +46,19 @@ interface Extras {
   templates: ForestTemplate[];
   junctions: Point[];
   exits: Point[];
+  passages: MinePassage[];
+  halls: Area[];
+  caverns: Area[];
+  rooms: Room[];
+  roomExits: Exit[];
+  start: Point;
 }
 
 /** The map after a step of the last attempt. */
 interface Snapshot {
   name: string;
   grid: Grid;
+  reserved: Uint8Array;
   extras: Partial<Extras>;
 }
 
@@ -58,17 +71,24 @@ let snapshots: Snapshot[] = [];
 /** What `addRoads` traced in the last attempt: the roads as grown and how they cross the streams. */
 let traced: { grown: Point[][]; plans: CrossingPlan[] } | undefined;
 
-function newCard(name: string): Card | undefined {
+function newCard(
+  name: string,
+  values: Record<string, FieldValue> = {},
+): Card | undefined {
   const def = STEP_DEFS.find((candidate) => candidate.name === name);
   return (
     def && {
       def,
-      values: Object.fromEntries(
-        def.fields.map(({ key, value }) => [key, value]),
-      ),
+      values: {
+        ...Object.fromEntries(def.fields.map(({ key, value }) => [key, value])),
+        ...values,
+      },
     }
   );
 }
+
+/** A step to load, by name, with the values that differ from its card's defaults. */
+type CardSpec = string | readonly [string, Record<string, FieldValue>];
 
 /** The steps of a forest, to start from. */
 const FOREST = [
@@ -77,6 +97,45 @@ const FOREST = [
   'addRoads',
   'placeClearings',
   'addFootbridges',
+];
+
+/** The steps of `generateMine`, with its defaults. It is dug out of wall, so the base tile is set to wall. */
+const MINE: CardSpec[] = ['digFishbone'];
+
+/** The steps of `generateMine` with `caverns: {}`: the caverns get the preset's defaults, which differ from the step's. */
+const MINE_WITH_CAVERNS: CardSpec[] = [
+  'digFishbone',
+  [
+    'carveNoiseCave',
+    {
+      scaleX: '7',
+      scaleY: '7',
+      largestOnly: true,
+      areaWidthMin: '12',
+      areaWidthMax: '24',
+      areaHeightMin: '12',
+      areaHeightMax: '24',
+      placement: 'beside',
+    },
+  ],
+  'digCaveTunnels',
+];
+
+/** The steps of `generateCave`, with its defaults. It is dug out of wall too. */
+const CAVE = ['growCave', 'digCaveTunnels'];
+
+/** The steps of `generateNoiseCave`, with its defaults. */
+const NOISE_CAVE = ['carveNoiseCave', 'digCaveTunnels'];
+
+/** The steps of `generateMaze`, with its defaults. It is carved out of wall too. */
+const MAZE: CardSpec[] = ['carveMaze'];
+
+/** The steps of `generateMaze` with rooms and exits (on the lattice, as the preset puts them), with the step defaults. */
+const MAZE_WITH_ROOMS: CardSpec[] = [
+  ['placeMazeRooms', { roomCountMin: '3', roomCountMax: '5' }],
+  'carveMaze',
+  'openMazeRooms',
+  ['addExits', { lattice: true }],
 ];
 
 /** Outlines a tile. */
@@ -114,12 +173,46 @@ function paint(): void {
     shown.grid,
     tileSize,
     display.value as DisplayMode,
-    show.has('showExits') ? (extras.exits ?? []) : [],
+    [
+      ...(show.has('showExits') ? (extras.exits ?? []) : []),
+      // room openings without a door
+      ...(show.has('showGaps')
+        ? (extras.roomExits ?? [])
+            .filter(({ door }) => !door)
+            .map(({ position }) => position)
+        : []),
+    ],
   );
+  if (show.has('showReserved')) {
+    // a tinted square on every reserved tile, one color for each kind
+    context.globalAlpha = 0.5;
+    shown.reserved.forEach((kind, tile) => {
+      if (kind !== Reserve.None) {
+        context.fillStyle =
+          kind === Reserve.Solid ? Color.Red : Color.BrightCyan;
+        context.fillRect(
+          (tile % shown.grid.width) * tileSize,
+          Math.floor(tile / shown.grid.width) * tileSize,
+          tileSize,
+          tileSize,
+        );
+      }
+    });
+    context.globalAlpha = 1;
+  }
   if (show.has('showClearings')) {
     // an outlined square on the center of every clearing
     for (const center of extras.clearings ?? []) {
       mark(context, center, Color.BrightYellow, tileSize);
+    }
+  }
+  if (show.has('showCenters')) {
+    // an outlined square on the center of every region of floor, as the cave
+    // presets report them
+    for (const { center } of findCaveRegions(shown.grid).map(
+      describeCaveRegion,
+    )) {
+      mark(context, center, Color.BrightRed, tileSize);
     }
   }
   if (show.has('showTemplates')) {
@@ -134,6 +227,70 @@ function paint(): void {
         height * tileSize,
       );
     }
+  }
+  if (show.has('showTunnels')) {
+    // a small square on the middle line of every passage: red for a main
+    // shaft, blue for every other tunnel
+    for (const { kind, tiles } of extras.passages ?? []) {
+      context.fillStyle = kind === 'shaft' ? Color.BrightRed : Color.BrightBlue;
+      for (const { x, y } of tiles) {
+        context.fillRect(
+          x * tileSize + tileSize / 3,
+          y * tileSize + tileSize / 3,
+          tileSize / 3,
+          tileSize / 3,
+        );
+      }
+    }
+  }
+  if (show.has('showHalls')) {
+    // an outline round the box of every hall
+    context.strokeStyle = Color.BrightYellow;
+    context.lineWidth = Math.max(1, tileSize / 6);
+    for (const { x, y, width, height } of extras.halls ?? []) {
+      context.strokeRect(
+        x * tileSize,
+        y * tileSize,
+        width * tileSize,
+        height * tileSize,
+      );
+    }
+  }
+  if (show.has('showCaverns')) {
+    // an outline round the area of every cave
+    context.strokeStyle = Color.BrightCyan;
+    context.lineWidth = Math.max(1, tileSize / 6);
+    for (const { x, y, width, height } of extras.caverns ?? []) {
+      context.strokeRect(
+        x * tileSize,
+        y * tileSize,
+        width * tileSize,
+        height * tileSize,
+      );
+    }
+  }
+  if (show.has('showRooms')) {
+    // an outline round the floor of every room
+    context.strokeStyle = Color.BrightGreen;
+    context.lineWidth = Math.max(1, tileSize / 6);
+    for (const { x, y, width, height } of extras.rooms ?? []) {
+      context.strokeRect(
+        x * tileSize,
+        y * tileSize,
+        width * tileSize,
+        height * tileSize,
+      );
+    }
+  }
+  if (show.has('showStart') && extras.start) {
+    // a green square on the cell the maze was carved from
+    context.fillStyle = Color.BrightGreen;
+    context.fillRect(
+      extras.start.x * tileSize + tileSize / 4,
+      extras.start.y * tileSize + tileSize / 4,
+      tileSize / 2,
+      tileSize / 2,
+    );
   }
   if (show.has('showJunctions')) {
     // a red square on every junction
@@ -204,7 +361,14 @@ function render(): void {
         // a new attempt starts here, so keep the snapshots of the last one only
         const state = makeBase();
         traced = undefined;
-        snapshots = [{ name: 'base', grid: state.grid.clone(), extras: {} }];
+        snapshots = [
+          {
+            name: 'base',
+            grid: state.grid.clone(),
+            reserved: state.reserved.slice(),
+            extras: {},
+          },
+        ];
         return state;
       },
       steps,
@@ -219,23 +383,44 @@ function render(): void {
           snapshots.push({
             name,
             grid: state.grid.clone(),
+            reserved: state.reserved.slice(),
             extras: {
               clearings: extras.clearings,
               templates: extras.templates,
               junctions: extras.junctions,
               exits: extras.exits,
+              passages: extras.passages,
+              halls: extras.halls,
+              caverns: extras.caverns,
+              rooms: extras.rooms,
+              roomExits: extras.roomExits,
+              start: extras.start,
             },
           });
         },
       },
     );
     const done = run as unknown as Partial<Record<string, unknown[]>>;
-    const counts = ['roads', 'streams', 'bridges', 'clearings', 'templates']
+    const counts = [
+      'roads',
+      'streams',
+      'bridges',
+      'clearings',
+      'templates',
+      'passages',
+      'halls',
+      'caverns',
+      'rooms',
+      'roomExits',
+    ]
       .filter((name) => done[name])
       .map((name) => `${String(done[name]?.length)} ${name}`);
+    // the regions of floor, which the cave presets report
+    const regions = findCaveRegions(run.grid).length;
     summary = [
       `${String(run.attempts)} attempt(s), ${String(run.failures.length)} failure(s)`,
       ...counts,
+      ...(regions > 0 ? [`${String(regions)} regions of floor`] : []),
     ].join(', ');
     failed = run.failures;
     error.textContent = '';
@@ -332,8 +517,12 @@ function renderCards(): void {
   );
 }
 
-function setCards(names: string[]): void {
-  cards = names.flatMap((name) => newCard(name) ?? []);
+function setCards(specs: readonly CardSpec[]): void {
+  cards = specs.flatMap((spec) =>
+    typeof spec === 'string'
+      ? (newCard(spec) ?? [])
+      : (newCard(spec[0], spec[1]) ?? []),
+  );
   renderCards();
   render();
 }
@@ -356,6 +545,33 @@ document.querySelector('#add-step')?.addEventListener('click', () => {
 });
 document.querySelector('#load-forest')?.addEventListener('click', () => {
   setCards(FOREST);
+});
+/** Loads steps that dig out of rock, on a base of wall. */
+function setWallCards(specs: readonly CardSpec[]): void {
+  const base = form?.elements.namedItem('baseTile');
+  if (base instanceof HTMLSelectElement) {
+    base.value = String(Tile.Wall);
+  }
+  setCards(specs);
+}
+
+document.querySelector('#load-mine')?.addEventListener('click', () => {
+  setWallCards(MINE);
+});
+document.querySelector('#load-mine-caverns')?.addEventListener('click', () => {
+  setWallCards(MINE_WITH_CAVERNS);
+});
+document.querySelector('#load-cave')?.addEventListener('click', () => {
+  setWallCards(CAVE);
+});
+document.querySelector('#load-noise-cave')?.addEventListener('click', () => {
+  setWallCards(NOISE_CAVE);
+});
+document.querySelector('#load-maze')?.addEventListener('click', () => {
+  setWallCards(MAZE);
+});
+document.querySelector('#load-maze-rooms')?.addEventListener('click', () => {
+  setWallCards(MAZE_WITH_ROOMS);
 });
 document.querySelector('#clear-steps')?.addEventListener('click', () => {
   setCards([]);

@@ -24,8 +24,12 @@ const MAX_ATTEMPTS = 10;
  * Builds one dungeon room-first: templated rooms are placed first, then the
  * other rooms around them without overlapping, then everything is joined by
  * corridors, and exits get doors.
+ * `onTry` is called before each try, for `check:dungeon` to count them.
  */
-export function buildRoomDungeon(options: RoomDungeonOptions): DungeonResult {
+export function buildRoomDungeon(
+  options: RoomDungeonOptions,
+  onTry?: () => void,
+): DungeonResult {
   const resolved = resolveDungeonOptions(options);
   const { width, height, random, placement } = resolved;
   const partition = options.partition ?? 'scatter';
@@ -159,6 +163,7 @@ export function buildRoomDungeon(options: RoomDungeonOptions): DungeonResult {
   // Corridors can box in a fixed exit of a template, which new rooms and
   // corridors usually fix, so the dungeon is tried again before giving up.
   for (let tries = 1; ; ++tries) {
+    onTry?.();
     const built = attempt();
     if ('grid' in built) {
       return built;

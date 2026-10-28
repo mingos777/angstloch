@@ -3,7 +3,8 @@ import { Tile } from '../core/tile';
 
 /**
  * Turns a square of `width` by `width` tiles around the position into floor.
- * With `borderWalls`, the outermost ring of the map is left alone.
+ * With `borderWalls`, the outermost ring of the map is left alone, and so is
+ * every tile that `blocked` marks.
  */
 export function carveTunnelBrush(
   grid: Grid,
@@ -11,6 +12,7 @@ export function carveTunnelBrush(
   y: number,
   width: number,
   borderWalls: boolean,
+  blocked?: Uint8Array,
 ): void {
   const margin = borderWalls ? 1 : 0;
   const start = -Math.floor((width - 1) / 2);
@@ -22,7 +24,8 @@ export function carveTunnelBrush(
         tx >= margin &&
         ty >= margin &&
         tx < grid.width - margin &&
-        ty < grid.height - margin
+        ty < grid.height - margin &&
+        !blocked?.[ty * grid.width + tx]
       ) {
         grid.set(tx, ty, Tile.Floor);
       }

@@ -18,6 +18,17 @@ describe('emptyMap', () => {
     expect(state.prunable).toEqual(new Uint8Array(12));
   });
 
+  it('makes a reserved mask with nothing reserved', () => {
+    // given
+    const base = emptyMap({ width: 4, height: 3, tile: Tile.Wall });
+
+    // when
+    const state = base();
+
+    // then
+    expect(state.reserved).toEqual(new Uint8Array(12));
+  });
+
   it('makes a new state on every call', () => {
     // given
     const base = emptyMap({ width: 2, height: 2, tile: Tile.Wall });

@@ -16,4 +16,11 @@ export interface MapState {
    * stamps a tile clears its byte, see `stampTile`.
    */
   prunable: Uint8Array;
+  /**
+   * One byte per tile, row by row, holding a `Reserve` value: `None` where a
+   * step may build, `Solid` where none may dig through (a room, a template) and
+   * `Openable` where a step may also open an exit. Unlike `prunable`,
+   * `stampTile` leaves it alone, see `reserveTile` and `openReserved`.
+   */
+  reserved: Uint8Array;
 }

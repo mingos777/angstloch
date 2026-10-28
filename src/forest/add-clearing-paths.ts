@@ -1,5 +1,6 @@
 import { assertTile } from '../core/assert-tile';
 import { Tile } from '../core/tile';
+import { isFree } from '../pipeline/is-free';
 import type { MapStep } from '../pipeline/map-step';
 import { stampTile } from '../pipeline/stamp-tile';
 import { step } from '../pipeline/step';
@@ -63,16 +64,14 @@ export function addClearingPaths(
     'addClearingPaths',
     { needs: ['clearings'], adds: ['roads', 'junctions', 'exits', 'bridges'] },
     (state, { random }) => {
-      const { grid, base, prunable } = state;
+      const { grid } = state;
       const { width, height } = grid;
       const templates = state.templates ?? [];
       const map = rebuildRoadMap(state.roads ?? [], width, height, random);
       const water =
         state.streams && rebuildStreamMap(state.streams, width, height).water;
 
-      // untouched ground and ground cover can be built on
-      const free = (x: number, y: number) =>
-        grid.get(x, y) === base || prunable[y * width + x] === 1;
+      const free = (x: number, y: number) => isFree(state, x, y);
       const inBox = (x: number, y: number, box: ForestTemplate) =>
         x >= box.x &&
         y >= box.y &&

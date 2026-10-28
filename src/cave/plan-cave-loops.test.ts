@@ -105,4 +105,17 @@ describe('planCaveLoops', () => {
     // then
     expect(links).toEqual([[], []]);
   });
+
+  it('proposes no tunnel across blocked tiles', () => {
+    // given
+    const { grid, caverns } = detour();
+    const blocked = new Uint8Array(10 * 5);
+    blocked.fill(1, 2 * 10, 3 * 10);
+
+    // when
+    const links = planCaveLoops(grid, caverns, blocked);
+
+    // then
+    expect(links).toEqual([]);
+  });
 });

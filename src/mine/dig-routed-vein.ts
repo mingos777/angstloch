@@ -14,15 +14,16 @@ const DETOUR_FACTOR = 1.5;
 const DETOUR_SLACK = 8;
 
 /**
- * Marks the tiles a vein may not use: the border, and everything within
- * `clearance` tiles of floor, so that a wall is left between the vein and the
- * rest of the mine. Around each of the entrances the floor does not count,
- * since that is where the vein has to leave.
+ * Marks the tiles a vein may not use: the border, the tiles that `protect`
+ * marks, and everything within `clearance` tiles of floor, so that a wall is
+ * left between the vein and the rest of the mine. Around each of the entrances
+ * the floor does not count, since that is where the vein has to leave.
  */
 function blockTiles(
   grid: Grid,
   clearance: number,
   entrances: readonly Point[],
+  protect?: Uint8Array,
 ): Uint8Array {
   const { width, height } = grid;
   const blocked = new Uint8Array(width * height);
@@ -32,7 +33,8 @@ function blockTiles(
         x <= MARGIN ||
         y <= MARGIN ||
         x >= width - 1 - MARGIN ||
-        y >= height - 1 - MARGIN
+        y >= height - 1 - MARGIN ||
+        (protect?.[y * width + x] ?? 0) !== 0
       ) {
         blocked[y * width + x] = 1;
       }
@@ -64,7 +66,8 @@ function blockTiles(
           y > MARGIN &&
           x < width - 1 - MARGIN &&
           y < height - 1 - MARGIN &&
-          grid.get(x, y) === Tile.Wall
+          grid.get(x, y) === Tile.Wall &&
+          (protect?.[y * width + x] ?? 0) === 0
         ) {
           blocked[y * width + x] = 0;
         }
@@ -111,7 +114,8 @@ function findMouth(
  * thickness from every hall and every earlier vein, so the vein runs around
  * the halls and never across one, and then it is given a natural look and
  * carved. A vein that would be much longer than the distance between its ends,
- * along the grid, is not dug: there is no route then. `relaxed` is a last
+ * along the grid, is not dug: there is no route then. A vein never runs over
+ * a tile that `protect` marks with anything but a 0. `relaxed` is a last
  * resort for ends that are boxed in: only floor blocks the route, there is no
  * limit to its length, and veins may run close to the halls and to each other.
  * Returns the vein and the tiles of floor it made, as indexes into the grid,
@@ -122,13 +126,13 @@ export function digRoutedVein(
   noise: NoiseFunction,
   from: Point,
   to: Point,
-  style: { width: number; windiness: number },
+  style: { width: number; windiness: number; protect?: Uint8Array },
   lane: number,
   relaxed = false,
 ): { passage: MinePassage; carved: number[] } | undefined {
   // a passage reaches half its width from its middle line, and one wall is left beyond that
   const clearance = relaxed ? 0 : Math.floor(style.width / 2) + 1;
-  const blocked = blockTiles(grid, clearance, [from, to]);
+  const blocked = blockTiles(grid, clearance, [from, to], style.protect);
   const start = findMouth(grid, blocked, from, to);
   const end = findMouth(grid, blocked, to, from);
   if (!start || !end) {
@@ -165,8 +169,15 @@ export function digRoutedVein(
     to,
   ];
   const carved: number[] = [];
-  carvePassageTiles(grid, tiles, style.width, MARGIN, (x, y) => {
-    carved.push(y * grid.width + x);
-  });
+  carvePassageTiles(
+    grid,
+    tiles,
+    style.width,
+    MARGIN,
+    (x, y) => {
+      carved.push(y * grid.width + x);
+    },
+    style.protect,
+  );
   return { passage: { kind: 'vein', tiles, width: style.width }, carved };
 }

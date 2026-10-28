@@ -39,6 +39,10 @@ export interface PillarsSettings {
   pillarJitter: number;
   veinWidth: Range;
   veinWindiness: number;
+  /** The lane of the noise for the first vein, and the lanes of the veins after it. Defaults to 0.5. */
+  lane?: number;
+  /** Tiles that are never dug, a byte for each tile of the grid, row by row: anything but 0 protects it. No hall covers one. Defaults to none. */
+  protect?: Uint8Array;
 }
 
 const average = (range: Range) => (range.min + range.max) / 2;
@@ -54,9 +58,30 @@ function isCrowded(area: Area, others: readonly Area[], gap: number): boolean {
   );
 }
 
-/** Looks for a place where a hall of the size fits, apart from the others. */
+/** Whether any tile of the rectangle is marked in `protect`. */
+function isProtected(
+  area: Area,
+  gridWidth: number,
+  protect: Uint8Array | undefined,
+): boolean {
+  if (!protect) {
+    return false;
+  }
+  for (let y = area.y; y < area.y + area.height; ++y) {
+    for (let x = area.x; x < area.x + area.width; ++x) {
+      if ((protect[y * gridWidth + x] ?? 0) !== 0) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Looks for a place where a hall of the size fits, apart from the others and off the protected tiles. */
 function tryPlace(
+  grid: Grid,
   random: Random,
+  protect: Uint8Array | undefined,
   halls: readonly Area[],
   interiorWidth: number,
   interiorHeight: number,
@@ -70,7 +95,10 @@ function tryPlace(
       width,
       height,
     };
-    if (!isCrowded(hall, halls, HALL_GAP)) {
+    if (
+      !isCrowded(hall, halls, HALL_GAP) &&
+      !isProtected(hall, grid.width, protect)
+    ) {
       return hall;
     }
   }
@@ -141,7 +169,9 @@ function digHalls(
         ? height
         : fit(height, interiorHeight);
       const hall = tryPlace(
+        grid,
         random,
+        settings.protect,
         halls,
         interiorWidth,
         interiorHeight,
@@ -163,7 +193,7 @@ function digHalls(
  * veins that join them. A few large halls of floor are placed apart from one
  * another and joined into a network of veins that are routed through the rock
  * around the halls (see `growHallNetwork`). Last, pillars are left standing in
- * the halls.
+ * the halls. No hall covers a tile of `protect`, and no vein digs one.
  */
 export function layPillars(
   grid: Grid,

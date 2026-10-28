@@ -1,5 +1,5 @@
 import { caveNeighborOffsets } from './cave-neighbor-offsets';
-import type { CaveNeighborhood } from './cave-options';
+import type { CaveNeighborhood } from './cave-neighborhood';
 import { Grid } from '../core/grid';
 import { Tile } from '../core/tile';
 

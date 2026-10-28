@@ -7,7 +7,7 @@ import { brushOffsets } from '../roads/brush-offsets';
  * Turns the walls around the given tiles into floor, as far as a passage of
  * the given width reaches. Anything that is not wall is left as it is, and so
  * are the `margin` outermost rings of the grid and the tiles that `protect`
- * marks with a 1, row by row. Calls `onCarve` for every tile that became
+ * marks with anything but a 0, row by row. Calls `onCarve` for every tile that became
  * floor, and returns how many there were.
  */
 export function carvePassageTiles(
@@ -30,7 +30,7 @@ export function carvePassageTiles(
         x < grid.width - margin &&
         y < grid.height - margin &&
         grid.get(x, y) === Tile.Wall &&
-        protect?.[y * grid.width + x] !== 1
+        (protect?.[y * grid.width + x] ?? 0) === 0
       ) {
         grid.set(x, y, Tile.Floor);
         ++carved;

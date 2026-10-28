@@ -27,6 +27,10 @@ export interface HallNetworkSettings {
   hallEntrances: MineHallEntrances;
   veinWidth: Range;
   veinWindiness: number;
+  /** The lane of the noise for the first vein, and the lanes of the veins after it. Defaults to 0.5. */
+  lane?: number;
+  /** Tiles that are never dug, a byte for each tile of the grid, row by row: anything but 0 protects it. Defaults to none. */
+  protect?: Uint8Array;
 }
 
 /** A tile on the boundary of a hall or a vein, where a new vein may end, and which of them it is. */
@@ -136,8 +140,9 @@ export function growHallNetwork(
             settings.veinWidth.max,
           ),
           windiness: settings.veinWindiness,
+          protect: settings.protect,
         },
-        0.5 + veins.length * LANE_SPACING,
+        (settings.lane ?? 0.5) + veins.length * LANE_SPACING,
         relaxed,
       );
       if (vein) {

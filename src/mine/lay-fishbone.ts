@@ -31,6 +31,10 @@ export interface FishboneSettings {
   aditLength: Range;
   branchAngle: Range;
   loops: number;
+  /** The lane of the noise for the main shaft, and the first of the lanes of the adits after it. Defaults to 0.5. */
+  lane?: number;
+  /** Tiles that are never dug, a byte for each tile of the grid, row by row: anything but 0 protects it. Defaults to none. */
+  protect?: Uint8Array;
 }
 
 /** A tile of a tunnel that an adit can leave from. */
@@ -220,6 +224,7 @@ export function layFishbone(
   settings: FishboneSettings,
 ): MinePassage[] {
   const { width: mapWidth, height: mapHeight } = grid;
+  const firstLane = settings.lane ?? 0.5;
   const shaftWidth = randomInt(
     random,
     settings.shaftWidth.min,
@@ -242,7 +247,7 @@ export function layFishbone(
     directions: [-1, 1],
     width: shaftWidth,
     windiness: settings.shaftWindiness,
-    lane: 0.5,
+    lane: firstLane,
   });
   // A winding shaft may leave the map and return. Only the stretch around
   // the origin is dug, which keeps the shaft in one piece.
@@ -264,7 +269,14 @@ export function layFishbone(
   const claim = (passage: number) => (x: number, y: number) => {
     owner[y * mapWidth + x] = passage;
   };
-  let floor = carvePassageTiles(grid, shaft, shaftWidth, MARGIN, claim(0));
+  let floor = carvePassageTiles(
+    grid,
+    shaft,
+    shaftWidth,
+    MARGIN,
+    claim(0),
+    settings.protect,
+  );
   const passages: MinePassage[] = [
     { kind: 'shaft', tiles: shaft, width: shaftWidth },
   ];
@@ -281,7 +293,7 @@ export function layFishbone(
       noise,
       owner,
       pickRandom(random, anchors),
-      0.5 + passages.length * LANE_SPACING,
+      firstLane + passages.length * LANE_SPACING,
       settings,
     );
     const carved = adit
@@ -291,6 +303,7 @@ export function layFishbone(
           adit.width,
           MARGIN,
           claim(passages.length),
+          settings.protect,
         )
       : 0;
     if (!adit || carved === 0) {

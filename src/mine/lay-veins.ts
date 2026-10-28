@@ -14,6 +14,10 @@ export interface VeinSettings {
   veinWidth: Range;
   veinWindiness: number;
   veinSpacing: number;
+  /** The lane of the noise for the first vein, and the lanes of the veins after it. Defaults to 0.5. */
+  lane?: number;
+  /** Tiles that are never dug, a byte for each tile of the grid, row by row: anything but 0 protects it. Defaults to none. */
+  protect?: Uint8Array;
 }
 
 /**
@@ -95,8 +99,8 @@ export function layVeins(
       noise,
       junctions,
       link,
-      { width: veinWidth, windiness: veinWindiness },
-      0.5 + passages.length * LANE_SPACING,
+      { width: veinWidth, windiness: veinWindiness, protect: settings.protect },
+      (settings.lane ?? 0.5) + passages.length * LANE_SPACING,
     );
     if (vein) {
       floor += vein.carved;
