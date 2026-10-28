@@ -13,10 +13,10 @@ import { TemplateCell } from '../rooms/templates/template-cell';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
 import { overlap, SEEDS } from '../test-helpers/dungeon-checks';
 import { mulberry32 } from '../test-helpers/mulberry32';
-import { growRooms } from './grow-rooms';
-import { partitionRooms } from './partition-rooms';
+import { placeClusteredRooms } from './place-clustered-rooms';
+import { placePartitionedRooms } from './place-partitioned-rooms';
 import type { RoomPlacementOptions } from './room-placement-options';
-import { scatterRooms } from './scatter-rooms';
+import { placeScatteredRooms } from './place-scattered-rooms';
 
 const { Floor: F, Wall: W, Exit: E } = TemplateCell;
 
@@ -79,9 +79,9 @@ function asymmetry(
 }
 
 describe.each([
-  ['scatterRooms', scatterRooms],
-  ['partitionRooms', partitionRooms],
-  ['growRooms', growRooms],
+  ['placeScatteredRooms', placeScatteredRooms],
+  ['placePartitionedRooms', placePartitionedRooms],
+  ['placeClusteredRooms', placeClusteredRooms],
 ] as const)('%s', (_name, makeStep) => {
   /** Runs the step alone on a wall map, 61 by 41 unless the size is given. */
   const place = (options: Options = {}, seed = 1, width = 61, height = 41) =>
@@ -725,7 +725,7 @@ describe.each([
 
     it('brings a mirror image of a template along with templateSymmetry', () => {
       // given
-      // off the axis, as growRooms puts its first template in the middle
+      // off the axis, as placeClusteredRooms puts its first template in the middle
       const options: Options = {
         symmetry: 'horizontal',
         templateSymmetry: true,

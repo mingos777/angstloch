@@ -1,9 +1,9 @@
-import type { CarveCorridorsOptions } from './carve-corridors-options';
+import type { DigCorridorsOptions } from './dig-corridors-options';
 import type { CorridorSettings } from './join-rooms';
 
-/** Fills in the defaults of the options of `carveCorridors`. */
+/** Fills in the defaults of the options of `digCorridors`. */
 export function resolveCorridorSettings(
-  options: CarveCorridorsOptions,
+  options: DigCorridorsOptions,
 ): CorridorSettings {
   return {
     connection: options.connection ?? 'nearest',

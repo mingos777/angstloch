@@ -80,7 +80,7 @@ describe('generateNoiseCave', () => {
     },
   );
 
-  it('passes the cave options to carveNoiseCave', () => {
+  it('passes the cave options to digNoiseCave', () => {
     // given
     const options = { cave: { fill: 1 } };
 

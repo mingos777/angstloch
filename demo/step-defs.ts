@@ -1,27 +1,28 @@
 import {
-  addClearingPaths,
-  addExits,
-  addFootbridges,
-  addRoads,
-  addStreams,
-  carveCorridors,
-  carveMaze,
-  carveNoiseCave,
+  layClearingPaths,
+  openExits,
+  layFootbridges,
+  layRoads,
+  layStreams,
+  digCorridors,
+  digMaze,
+  digNoiseCave,
   digCaveTunnels,
   digFishbone,
   digPillarHalls,
   digRings,
+  digHallVeins,
   digVeins,
-  growCave,
-  growRooms,
+  digCellularCave,
+  placeClusteredRooms,
   openMazeRooms,
-  partitionRooms,
+  placePartitionedRooms,
   placeClearings,
   placeMazeRooms,
   placeMineRooms,
   placeTemplates,
   plantTrees,
-  scatterRooms,
+  placeScatteredRooms,
 } from '../src';
 import type {
   AnyStep,
@@ -76,7 +77,7 @@ const SYMMETRIES = [
   ['rotational', 'rotational'],
 ] as const;
 
-/** The fields that `growCave` and `carveNoiseCave` share. */
+/** The fields that `digCellularCave` and `digNoiseCave` share. */
 function caveFields(): Field[] {
   return [
     check('borderWalls', 'Border walls', true),
@@ -107,7 +108,7 @@ function caveOptions(v: Values) {
   };
 }
 
-/** The fields that `scatterRooms`, `partitionRooms` and `growRooms` share. */
+/** The fields that `placeScatteredRooms`, `placePartitionedRooms` and `placeClusteredRooms` share. */
 function roomPlacementFields(): Field[] {
   return [
     select('placement', 'Placement', 'free', [
@@ -131,7 +132,7 @@ function roomPlacementFields(): Field[] {
   ];
 }
 
-/** The options of a room placement step, from the controls of `roomPlacementFields`, but its `spacingUniformity`, which `growRooms` has not. */
+/** The options of a room placement step, from the controls of `roomPlacementFields`, but its `spacingUniformity`, which `placeClusteredRooms` has not. */
 function roomPlacementOptions(v: Values) {
   return {
     placement: v.text('placement') as Placement,
@@ -181,7 +182,7 @@ export const STEP_DEFS: StepDef[] = [
       }),
   },
   {
-    name: 'addStreams',
+    name: 'layStreams',
     summary: 'a stream or river, with tributaries',
     fields: [
       number('angle', 'Angle (blank: random)', '', { step: '5' }),
@@ -204,7 +205,7 @@ export const STEP_DEFS: StepDef[] = [
       ...vergeFields(0, 2),
     ],
     make: (v) =>
-      addStreams({
+      layStreams({
         angle: v.optional('angle') ?? 'random',
         width: v.range('width'),
         windiness: v.number('windiness'),
@@ -218,7 +219,7 @@ export const STEP_DEFS: StepDef[] = [
       }),
   },
   {
-    name: 'addRoads',
+    name: 'layRoads',
     summary: 'roads, crossings and branches; bends to cross streams',
     fields: [
       number('angle', 'Angle (blank: random)', '', { step: '5' }),
@@ -243,7 +244,7 @@ export const STEP_DEFS: StepDef[] = [
       json('specs', 'Exact roads (JSON, blank: generated)'),
     ],
     make: (v) =>
-      addRoads({
+      layRoads({
         angle: v.optional('angle') ?? 'random',
         width: v.range('width'),
         windiness: v.number('windiness'),
@@ -339,16 +340,16 @@ export const STEP_DEFS: StepDef[] = [
       }),
   },
   {
-    name: 'addClearingPaths',
+    name: 'layClearingPaths',
     summary: 'the paths that clearings asked for',
     fields: vergeFields(1, 2),
-    make: (v) => addClearingPaths(v.verge()),
+    make: (v) => layClearingPaths(v.verge()),
   },
   {
-    name: 'addFootbridges',
+    name: 'layFootbridges',
     summary: 'footbridges that join land the water cuts apart',
     fields: [number('minimum', 'At least this many bridges', 0, { min: '0' })],
-    make: (v) => addFootbridges({ minimum: v.number('minimum') }),
+    make: (v) => layFootbridges({ minimum: v.number('minimum') }),
   },
   {
     name: 'digFishbone',
@@ -407,15 +408,10 @@ export const STEP_DEFS: StepDef[] = [
   {
     name: 'digPillarHalls',
     summary:
-      'large halls with pillars left standing, joined by veins (needs a wall map)',
+      'large halls with pillars left standing (needs a wall map); join them with digHallVeins',
     fields: [
       number('density', 'Density', 0.35, FRACTION),
       ...pair('halls', 'Halls', 2, 4, POSITIVE),
-      ...pair('hallVeins', 'Hall veins', 2, 4, POSITIVE),
-      select('hallEntrances', 'Hall entrances', 'facing', [
-        ['facing', 'facing'],
-        ['edge', 'edge'],
-      ]),
       number('hallSizeMin', 'Hall size min (blank: density)', '', POSITIVE),
       number('hallSizeMax', 'Hall size max (blank: density)', '', POSITIVE),
       number('hallRagged', 'Hall ragged', 0.5, FRACTION),
@@ -423,26 +419,41 @@ export const STEP_DEFS: StepDef[] = [
       ...pair('pillarSpacing', 'Pillar spacing', 2, 4, POSITIVE),
       number('pillarRagged', 'Pillar ragged', 0.5, FRACTION),
       number('pillarJitter', 'Pillar jitter', 0.5, FRACTION),
-      ...pair('veinWidth', 'Vein width', 1, 2, POSITIVE),
-      number('veinWindiness', 'Vein windiness', 0.5, FRACTION),
       ...areaFields(),
     ],
     make: (v) =>
       digPillarHalls({
         density: v.number('density'),
         halls: v.range('halls'),
-        hallVeins: v.range('hallVeins'),
-        hallEntrances: v.text('hallEntrances') as MineHallEntrances,
         hallSize: v.optionalRange('hallSize'),
         hallRagged: v.number('hallRagged'),
         pillarSize: v.range('pillarSize'),
         pillarSpacing: v.range('pillarSpacing'),
         pillarRagged: v.number('pillarRagged'),
         pillarJitter: v.number('pillarJitter'),
-        veinWidth: v.range('veinWidth'),
-        veinWindiness: v.number('veinWindiness'),
         area: v.area(),
         count: v.range('count'),
+      }),
+  },
+  {
+    name: 'digHallVeins',
+    summary:
+      'veins that join the pillar halls into one network (needs digPillarHalls before it)',
+    fields: [
+      ...pair('hallVeins', 'Hall veins', 2, 4, POSITIVE),
+      select('hallEntrances', 'Hall entrances', 'facing', [
+        ['facing', 'facing'],
+        ['edge', 'edge'],
+      ]),
+      ...pair('veinWidth', 'Vein width', 1, 2, POSITIVE),
+      number('veinWindiness', 'Vein windiness', 0.5, FRACTION),
+    ],
+    make: (v) =>
+      digHallVeins({
+        hallVeins: v.range('hallVeins'),
+        hallEntrances: v.text('hallEntrances') as MineHallEntrances,
+        veinWidth: v.range('veinWidth'),
+        veinWindiness: v.number('veinWindiness'),
       }),
   },
   {
@@ -509,7 +520,7 @@ export const STEP_DEFS: StepDef[] = [
       }),
   },
   {
-    name: 'growCave',
+    name: 'digCellularCave',
     summary:
       'caverns grown from random noise by a cellular automaton (needs a wall map)',
     fields: [
@@ -526,7 +537,7 @@ export const STEP_DEFS: StepDef[] = [
       ...caveFields(),
     ],
     make: (v) =>
-      growCave({
+      digCellularCave({
         fillChance: v.number('fillChance'),
         iterations: v.number('iterations'),
         neighborhood: v.text('neighborhood') as CaveNeighborhood,
@@ -536,7 +547,7 @@ export const STEP_DEFS: StepDef[] = [
       }),
   },
   {
-    name: 'carveNoiseCave',
+    name: 'digNoiseCave',
     summary: 'caverns where the noise is high (needs a wall map)',
     fields: [
       select('shape', 'Shape', 'blobs', [
@@ -555,7 +566,7 @@ export const STEP_DEFS: StepDef[] = [
       ...caveFields(),
     ],
     make: (v) =>
-      carveNoiseCave({
+      digNoiseCave({
         shape: v.text('shape') as NoiseCaveShape,
         fill: v.number('fill'),
         cornerBias: v.number('cornerBias'),
@@ -630,7 +641,7 @@ export const STEP_DEFS: StepDef[] = [
     },
   },
   {
-    name: 'carveMaze',
+    name: 'digMaze',
     summary:
       'a maze carved round what is there, by the recursive backtracker (needs a wall map)',
     fields: [
@@ -652,7 +663,7 @@ export const STEP_DEFS: StepDef[] = [
     make: (v) => {
       const x = v.optional('startX');
       const y = v.optional('startY');
-      return carveMaze({
+      return digMaze({
         horizontalBias: v.number('horizontalBias'),
         verticalBias: v.number('verticalBias'),
         loopChance: v.number('loopChance'),
@@ -680,29 +691,29 @@ export const STEP_DEFS: StepDef[] = [
       }),
   },
   {
-    name: 'scatterRooms',
+    name: 'placeScatteredRooms',
     summary:
       'dungeon rooms tried at random spots, not opened yet (needs a wall map)',
     fields: roomPlacementFields(),
     make: (v) =>
-      scatterRooms({
+      placeScatteredRooms({
         ...roomPlacementOptions(v),
         spacingUniformity: v.number('spacingUniformity'),
       }),
   },
   {
-    name: 'partitionRooms',
+    name: 'placePartitionedRooms',
     summary:
       'dungeon rooms, one in each part of a binary space partition, not opened yet (needs a wall map)',
     fields: roomPlacementFields(),
     make: (v) =>
-      partitionRooms({
+      placePartitionedRooms({
         ...roomPlacementOptions(v),
         spacingUniformity: v.number('spacingUniformity'),
       }),
   },
   {
-    name: 'growRooms',
+    name: 'placeClusteredRooms',
     summary:
       'dungeon rooms grown from a seed, each beyond the wall of another, not opened yet (needs a wall map)',
     fields: [
@@ -712,7 +723,7 @@ export const STEP_DEFS: StepDef[] = [
       ...roomPlacementFields().filter(({ key }) => key !== 'spacingUniformity'),
     ],
     make: (v) =>
-      growRooms({
+      placeClusteredRooms({
         ...roomPlacementOptions(v),
         gap: v.range('gap'),
         horizontalBias: v.number('horizontalBias'),
@@ -720,7 +731,7 @@ export const STEP_DEFS: StepDef[] = [
       }),
   },
   {
-    name: 'carveCorridors',
+    name: 'digCorridors',
     summary:
       'corridors and doors that join the rooms, dropping rooms that cannot be joined',
     fields: [
@@ -750,7 +761,7 @@ export const STEP_DEFS: StepDef[] = [
       number('corridorSymmetryChance', 'Corridor symmetry chance', 1, FRACTION),
     ],
     make: (v) =>
-      carveCorridors({
+      digCorridors({
         connection: v.text('connection') as RoomConnection,
         exitsPerRoom: v.range('exitsPerRoom'),
         loopChance: v.number('loopChance'),
@@ -767,7 +778,7 @@ export const STEP_DEFS: StepDef[] = [
       }),
   },
   {
-    name: 'addExits',
+    name: 'openExits',
     summary: 'doors on the border, with tunnels to the nearest floor',
     fields: [
       ...pair('count', 'Exits', 1, 2, { min: '0' }),
@@ -780,7 +791,7 @@ export const STEP_DEFS: StepDef[] = [
       ]),
     ],
     make: (v) =>
-      addExits({
+      openExits({
         count: v.range('count'),
         lattice: v.flag('lattice'),
         symmetry: v.text('symmetry') as LayoutSymmetry,

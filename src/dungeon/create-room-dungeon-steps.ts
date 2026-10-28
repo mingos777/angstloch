@@ -1,12 +1,12 @@
 import type { AnyStep } from '../pipeline/pipeline-chain';
-import { carveCorridors } from './carve-corridors';
-import { partitionRooms } from './partition-rooms';
+import { digCorridors } from './dig-corridors';
+import { placePartitionedRooms } from './place-partitioned-rooms';
 import type { RoomDungeonStepOptions } from './room-dungeon-options';
-import { scatterRooms } from './scatter-rooms';
+import { placeScatteredRooms } from './place-scattered-rooms';
 
 /**
- * The steps of a room-first dungeon, in order: `scatterRooms`, or
- * `partitionRooms` when `partition` is given, then `carveCorridors`. Each step
+ * The steps of a room-first dungeon, in order: `placeScatteredRooms`, or
+ * `placePartitionedRooms` when `partition` is given, then `digCorridors`. Each step
  * takes only its own options. Every option is checked here, and a bad one, or
  * both `scatter` and `partition`, throws a `RangeError`.
  */
@@ -20,7 +20,7 @@ export function createRoomDungeonSteps(
     );
   }
   return [
-    partition ? partitionRooms(partition) : scatterRooms(scatter),
-    carveCorridors(corridors),
+    partition ? placePartitionedRooms(partition) : placeScatteredRooms(scatter),
+    digCorridors(corridors),
   ];
 }

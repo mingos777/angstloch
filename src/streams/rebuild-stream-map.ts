@@ -4,11 +4,11 @@ import { stampRoad } from '../roads/stamp-road';
 import type { StreamLayout } from './stream-layout';
 
 /**
- * Works out the streams as `layStreams` laid them from the `streams` extra
- * that `addStreams` reports: the tributaries run again from where they join,
+ * Works out the streams as `buildStreams` laid them from the `streams` extra
+ * that `layStreams` reports: the tributaries run again from where they join,
  * the way they were grown, and every stream is stamped on a road map of its
  * own, brush and the stretch past the border included, so that `water` is
- * the same. The `deep` water is left out, since only `addStreams` needs it.
+ * the same. The `deep` water is left out, since only `layStreams` needs it.
  * The map's noise is flat, since nothing that works with streams bends roads
  * by it.
  */

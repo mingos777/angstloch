@@ -9,22 +9,22 @@
  * - `--placement lattice`: rooms and corridors on the lattice.
  *
  * Every dungeon is 61 by 41 with the defaults of the steps, built room-first
- * (`scatterRooms` or `partitionRooms`, then `carveCorridors`, as
- * `generateRoomDungeon` does) and grown (`growRooms`, then `carveCorridors`,
+ * (`placeScatteredRooms` or `placePartitionedRooms`, then `digCorridors`, as
+ * `generateRoomDungeon` does) and grown (`placeClusteredRooms`, then `digCorridors`,
  * as `generateDigDungeon` does), with 0, 2 and 5 templated rooms. The
  * templates are the two examples of the playground's template editor, which
  * both have a fixed exit. Two in five of the templated rooms are halls,
  * rounded, and the rest closets: 2 is a closet and a hall, 5 is three closets
  * and two halls. A last run scatters the rooms round two features made
  * first, a pillar hall of 16 by 12 (`digPillarHalls`) and a noise cavern of
- * 14 to 18 by 10 to 14 (`carveNoiseCave`, its largest piece only), which
- * `carveCorridors` joins as stand-ins; a map fails there also when a feature
+ * 14 to 18 by 10 to 14 (`digNoiseCave`, its largest piece only), which
+ * `digCorridors` joins as stand-ins; a map fails there also when a feature
  * finds no spot or is cut off.
  *
  * Failure figures, per dungeon and number of templates:
  *
  * - tries: how many times a map was built round its templates (3 routings
- *   of `carveCorridors` at most), the mean and the
+ *   of `digCorridors` at most), the mean and the
  *   most for one map,
  * - maps: how many maps were built for one seed (3 at most), the mean and
  *   the number of seeds that needed more than one,
@@ -48,13 +48,13 @@ import {
   Tile,
   TemplateCell,
   TemplatePlacementError,
-  carveNoiseCave,
+  digNoiseCave,
   digPillarHalls,
   emptyMap,
-  growRooms,
-  partitionRooms,
+  placeClusteredRooms,
+  placePartitionedRooms,
   pipeline,
-  scatterRooms,
+  placeScatteredRooms,
   step,
 } from '../src';
 import type {
@@ -148,7 +148,7 @@ type Build = (
   onTry: () => void,
 ) => DungeonResult;
 
-/** Builds one map with a placement step and `carveCorridors`, after the features if any, counting the routing tries; `run` does the maps, as the pipeline would. */
+/** Builds one map with a placement step and `digCorridors`, after the features if any, counting the routing tries; `run` does the maps, as the pipeline would. */
 function buildSteps(
   place: MapStep<Partial<PlacedRooms>, PlacedRooms>,
   random: () => number,
@@ -156,7 +156,7 @@ function buildSteps(
   features: AnyStep[] = [],
 ): DungeonResult {
   const corridors = step<PlacedRooms & Partial<JoinedRooms>, JoinedRooms>(
-    'carveCorridors',
+    'digCorridors',
     {
       needs: ['rooms', 'roomShapes'],
       adds: ['rooms', 'roomShapes', 'roomExits'],
@@ -184,7 +184,7 @@ const features = (): AnyStep[] => [
   digPillarHalls({
     area: { width: { min: 16, max: 16 }, height: { min: 12, max: 12 } },
   }),
-  carveNoiseCave({
+  digNoiseCave({
     area: { width: { min: 14, max: 18 }, height: { min: 10, max: 14 } },
     largestOnly: true,
   }),
@@ -194,23 +194,27 @@ const DUNGEONS: { name: string; build: Build; features?: boolean }[] = [
   {
     name: 'room-first scatter',
     build: (random, templates, onTry) =>
-      buildSteps(scatterRooms({ templates, placement }), random, onTry),
+      buildSteps(placeScatteredRooms({ templates, placement }), random, onTry),
   },
   {
     name: 'room-first bsp',
     build: (random, templates, onTry) =>
-      buildSteps(partitionRooms({ templates, placement }), random, onTry),
+      buildSteps(
+        placePartitionedRooms({ templates, placement }),
+        random,
+        onTry,
+      ),
   },
   {
     name: 'grown',
     build: (random, templates, onTry) =>
-      buildSteps(growRooms({ templates, placement }), random, onTry),
+      buildSteps(placeClusteredRooms({ templates, placement }), random, onTry),
   },
   {
     name: 'scatter, hall, cavern',
     build: (random, templates, onTry) =>
       buildSteps(
-        scatterRooms({ templates, placement }),
+        placeScatteredRooms({ templates, placement }),
         random,
         onTry,
         features(),

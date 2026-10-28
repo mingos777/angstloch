@@ -139,8 +139,8 @@ function placeInArea(
 }
 
 /**
- * Makes a step that places dungeon rooms, the shared core of `scatterRooms`,
- * `partitionRooms` and `growRooms`, which differ only in the `placer` that
+ * Makes a step that places dungeon rooms, the shared core of `placeScatteredRooms`,
+ * `placePartitionedRooms` and `placeClusteredRooms`, which differ only in the `placer` that
  * picks the spots of the ordinary rooms, and in whether it `grows` them from
  * the rooms there are. In each area it places the templates, then the
  * ordinary rooms, carves them and reserves their shapes; it appends them to

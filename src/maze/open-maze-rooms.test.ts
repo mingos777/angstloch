@@ -12,8 +12,8 @@ import type { RoomTemplate } from '../rooms/templates/room-template';
 import { TemplateCell } from '../rooms/templates/template-cell';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
 import { mulberry32 } from '../test-helpers/mulberry32';
-import type { CarveMazeOptions } from './carve-maze-options';
-import { carveMaze } from './carve-maze';
+import type { DigMazeOptions } from './dig-maze-options';
+import { digMaze } from './dig-maze';
 import { openMazeRooms } from './open-maze-rooms';
 import type { OpenMazeRoomsOptions } from './open-maze-rooms-options';
 import { placeMazeRooms } from './place-maze-rooms';
@@ -56,7 +56,7 @@ const noRooms = { min: 0, max: 0 };
 
 interface Setup {
   rooms?: PlaceMazeRoomsOptions;
-  maze?: CarveMazeOptions;
+  maze?: DigMazeOptions;
   open?: OpenMazeRoomsOptions;
   width?: number;
   height?: number;
@@ -74,7 +74,7 @@ function open({
 }: Setup = {}) {
   return pipeline(
     emptyMap({ width, height, tile: Tile.Wall }),
-    [placeMazeRooms(rooms), carveMaze(maze), openMazeRooms(options)],
+    [placeMazeRooms(rooms), digMaze(maze), openMazeRooms(options)],
     { random: mulberry32(seed), attempts: 1 },
   );
 }
@@ -374,7 +374,7 @@ describe('openMazeRooms', () => {
       emptyMap({ width: 31, height: 21, tile: Tile.Wall }),
       [
         placeMazeRooms({ roomCount: { min: 3, max: 3 } }),
-        carveMaze(),
+        digMaze(),
         openMazeRooms(),
         openMazeRooms(),
       ],
@@ -399,7 +399,7 @@ describe('openMazeRooms', () => {
     // when
     const result = pipeline(
       emptyMap({ width: 31, height: 21, tile: Tile.Wall }),
-      [placeMazeRooms(), carveMaze(), exits, openMazeRooms()],
+      [placeMazeRooms(), digMaze(), exits, openMazeRooms()],
       { random: mulberry32(1), attempts: 1 },
     );
 
@@ -421,7 +421,7 @@ describe('openMazeRooms', () => {
     // when
     pipeline(
       emptyMap({ width: 31, height: 21, tile: Tile.Wall }),
-      [placeMazeRooms(), keep, carveMaze(), openMazeRooms()],
+      [placeMazeRooms(), keep, digMaze(), openMazeRooms()],
       { random: mulberry32(1), attempts: 1 },
     );
 
@@ -435,7 +435,7 @@ describe('openMazeRooms', () => {
     const map = emptyMap({ width: 31, height: 21, tile: Tile.Wall });
 
     // when
-    const act = () => pipeline(map, [carveMaze(), openMazeRooms() as never]);
+    const act = () => pipeline(map, [digMaze(), openMazeRooms() as never]);
 
     // then
     expect(act).toThrow(/rooms/);

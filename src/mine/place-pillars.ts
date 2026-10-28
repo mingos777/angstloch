@@ -19,15 +19,14 @@ export interface PillarStyle {
  * pattern that is jittered, with ragged edges. The pattern has cells as large as the
  * largest pillar plus the gap between pillars, which is picked once for the
  * hall, and every pillar sits in its own cell. A pillar is left out where it
- * would touch the walls of the hall or another pillar, or where it would cover
- * a tile of `keep`, so the floor around the pillars stays in one piece.
+ * would touch the walls of the hall or another pillar, so the floor around the
+ * pillars stays in one piece.
  * Changes `grid` in place and returns how many tiles became wall.
  */
 export function placePillars(
   grid: Grid,
   random: Random,
   hall: Area,
-  keep: ReadonlySet<number>,
   style: PillarStyle,
 ): number {
   const { size, spacing, ragged, jitter } = style;
@@ -70,7 +69,7 @@ export function placePillars(
       }
       const own = new Set(tiles.map((tile) => tile.y * grid.width + tile.x));
       const stands = tiles.every(({ x, y }) => {
-        if (keep.has(y * grid.width + x) || grid.get(x, y) !== Tile.Floor) {
+        if (grid.get(x, y) !== Tile.Floor) {
           return false;
         }
         for (let dy = -1; dy <= 1; ++dy) {

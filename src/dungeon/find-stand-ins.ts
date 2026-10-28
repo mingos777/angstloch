@@ -7,7 +7,7 @@ import { TemplateCell } from '../rooms/templates/template-cell';
 import type { TemplateExit } from '../rooms/templates/template-exit';
 import type { TemplatePlacement } from '../rooms/templates/template-placement';
 
-/** The pieces of floor that no room holds, which `carveCorridors` joins as if they were rooms. */
+/** The pieces of floor that no room holds, which `digCorridors` joins as if they were rooms. */
 export interface StandIns {
   /**
    * One shape per piece, in the order of their first tile, row by row: the

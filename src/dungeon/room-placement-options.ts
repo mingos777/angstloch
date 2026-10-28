@@ -4,7 +4,7 @@ import type { AreaSize } from '../pipeline/area-size';
 import type { Placement } from '../rooms/dungeon-options';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 
-/** The options that `scatterRooms` and `partitionRooms` share: how big the rooms are, how many, how far apart, and where they go. */
+/** The options that `placeScatteredRooms` and `placePartitionedRooms` share: how big the rooms are, how many, how far apart, and where they go. */
 export interface RoomPlacementOptions {
   /** Alignment of rooms: `free` rooms start on any tile, `lattice` rooms start on odd coordinates and have odd dimensions, like a maze. Defaults to `free`. */
   placement?: Placement;

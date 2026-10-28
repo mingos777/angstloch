@@ -1,7 +1,7 @@
 import type { Range } from '../core/range';
 
 /**
- * The gaps of the range that `growRooms` can leave between two rooms, one
+ * The gaps of the range that `placeClusteredRooms` can leave between two rooms, one
  * entry per value of the range, so they are drawn as evenly as the range is.
  * On the lattice a gap is rounded to an odd length, which keeps the walls on
  * even coordinates. A gap of 0, a shared wall,

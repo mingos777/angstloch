@@ -28,7 +28,7 @@ interface OpenedRooms {
 
 /**
  * A step that opens the rooms onto the maze round them, the rooms of
- * `placeMazeRooms` after `carveMaze`. Only rooms that have no exits yet are
+ * `placeMazeRooms` after `digMaze`. Only rooms that have no exits yet are
  * opened. A room's openings come from its shape in `roomShapes`: the potential
  * exits that face a maze cell (odd coordinates, not reserved), and are still
  * `Openable`. The fixed exits of templates come first: the maze is carved up

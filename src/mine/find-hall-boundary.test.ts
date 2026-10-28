@@ -3,6 +3,7 @@ import { Grid } from '../core/grid';
 import type { Point } from '../core/point';
 import { Tile } from '../core/tile';
 import { findHallBoundary } from './find-hall-boundary';
+import { findOutsideRock } from './find-outside-rock';
 
 /** Carves a rectangle of floor and returns its tiles. */
 function carve(
@@ -61,5 +62,20 @@ describe('findHallBoundary', () => {
     // then
     expect(boundary).not.toContainEqual({ x: 10, y: 7 });
     expect(boundary).toContainEqual({ x: 9, y: 5 });
+  });
+
+  it('leaves out a tile that only a pillar is next to, when told which wall is outside', () => {
+    // given
+    const grid = new Grid(30, 30);
+    const floor = carve(grid, 5, 5, 12, 12);
+    grid.set(10, 10, Tile.Wall);
+    const outside = findOutsideRock(grid);
+
+    // when
+    const boundary = findHallBoundary(grid, floor, outside);
+
+    // then
+    expect(boundary.some(({ x, y }) => x === 10 && y === 11)).toBe(false);
+    expect(boundary.some(({ x, y }) => x === 5 && y === 10)).toBe(true);
   });
 });

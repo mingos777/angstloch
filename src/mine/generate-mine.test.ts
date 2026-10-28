@@ -136,6 +136,35 @@ describe('generateMine', () => {
     expect(halls).toHaveLength(3);
   });
 
+  it('joins the pillar halls with the veins of the hall veins key', () => {
+    // given
+    const options = {
+      width: 100,
+      height: 60,
+      pillars: { halls: { min: 3, max: 3 } },
+      hallVeins: { hallVeins: { min: 2, max: 2 } },
+      random: mulberry32(1),
+    };
+
+    // when
+    const { passages } = generateMine(options);
+
+    // then
+    expect(passages).toHaveLength(2);
+  });
+
+  it('throws a RangeError for hall veins without pillars', () => {
+    // given
+    const options = { ...base, hallVeins: {}, random: mulberry32(1) };
+
+    // when
+    const generate = () => generateMine(options);
+
+    // then
+    expect(generate).toThrow(RangeError);
+    expect(generate).toThrow('hallVeins');
+  });
+
   it('digs rings with the rings key', () => {
     // given
     const options = { ...base, rings: {}, random: mulberry32(1) };
@@ -265,6 +294,7 @@ describe('generateMine', () => {
     ['angle', { fishbone: { angle: Number.NaN } }],
     ['veinSpacing', { veins: { veinSpacing: 2 } }],
     ['hallRagged', { pillars: { hallRagged: 1.5 } }],
+    ['veinWindiness', { pillars: {}, hallVeins: { veinWindiness: 2 } }],
     ['ringWobble', { rings: { ringWobble: 1.5 } }],
     ['windiness', { caverns: {}, tunnels: { windiness: 2 } }],
     ['count', { exits: { count: { min: -1, max: 1 } } }],

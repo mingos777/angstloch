@@ -12,7 +12,7 @@ import { createTransforms } from '../rooms/templates/create-transforms';
 import type { Transform } from '../rooms/templates/create-transforms';
 import { TemplateCell } from '../rooms/templates/template-cell';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
-import type { CarveCorridorsOptions } from './carve-corridors-options';
+import type { DigCorridorsOptions } from './dig-corridors-options';
 import { connectRooms } from './connect-rooms';
 import { createSteering } from './create-steering';
 import { findStandIns } from './find-stand-ins';
@@ -26,10 +26,10 @@ import type { PlacedRooms } from './placed-rooms';
  */
 const MAX_ROUTINGS = 3;
 
-/** The options of `carveCorridors` with every default filled in. */
-export type CorridorSettings = Required<CarveCorridorsOptions>;
+/** The options of `digCorridors` with every default filled in. */
+export type CorridorSettings = Required<DigCorridorsOptions>;
 
-/** The extras that `carveCorridors` adds. */
+/** The extras that `digCorridors` adds. */
 export interface JoinedRooms extends PlacedRooms {
   roomExits: Exit[];
 }
@@ -41,7 +41,7 @@ type Routing =
 
 /**
  * Joins the rooms that have no exits yet with corridors, the core of
- * `carveCorridors`. Each try routes on a copy of the map, so a try that fails
+ * `digCorridors`. There may be no rooms: the pieces of floor are joined alone. Each try routes on a copy of the map, so a try that fails
  * leaves nothing behind; an ordinary room that cannot be joined is dropped,
  * with its twins, and the rest are routed again. A templated room is never
  * dropped: after `MAX_ROUTINGS` tries in which one is cut off, it throws a
@@ -54,11 +54,17 @@ type Routing =
  * opens its wall into floor, which is no exit of the result.
  */
 export function joinRooms(
-  state: MapState & PlacedRooms & Partial<JoinedRooms>,
+  given: MapState & Partial<PlacedRooms> & Partial<JoinedRooms>,
   random: Random,
   settings: CorridorSettings,
   onTry?: () => void,
 ): JoinedRooms {
+  // no rooms is a map of features alone, such as halls, which are joined all the same
+  const state = {
+    ...given,
+    rooms: given.rooms ?? [],
+    roomShapes: given.roomShapes ?? [],
+  };
   const { width, height } = state.grid;
   const lattice = settings.placement === 'lattice';
   const transforms =

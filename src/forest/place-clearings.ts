@@ -15,12 +15,12 @@ import type { PlacedClearing } from './placed-clearing';
  * A step that places clearings: glades with ragged edges, free of trees. It
  * stamps nothing, since a clearing is ground, and prunes every tree inside
  * the ragged shape and across the `falloff` beyond it. It adds `clearings`,
- * each with the path that was asked to lead to it, for `addClearingPaths`.
+ * each with the path that was asked to lead to it, for `layClearingPaths`.
  *
  * It uses `roads` when the state has them: a clearing placed at random keeps
  * its `roadDistance` from them, and one `at: 'branch-end'` is centered on the
  * dead end of a branch that lies inside the map. It uses `streams` for a
- * clearing `at: 'stream'`. So run it after `addStreams` and `addRoads`, and
+ * clearing `at: 'stream'`. So run it after `layStreams` and `layRoads`, and
  * after `plantTrees`, so that there are trees to clear. A clearing that finds
  * no room is left out. Throws a `RangeError` at once for a bad option, and
  * when a clearing's center lies outside the map, which `pipeline` finds out

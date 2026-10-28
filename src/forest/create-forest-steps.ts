@@ -1,8 +1,8 @@
 import type { AnyStep } from '../pipeline/pipeline-chain';
-import { addFootbridges } from '../streams/add-footbridges';
-import { addRoads } from '../streams/add-roads';
-import { addStreams } from '../streams/add-streams';
-import { addClearingPaths } from './add-clearing-paths';
+import { layFootbridges } from '../streams/lay-footbridges';
+import { layRoads } from '../streams/lay-roads';
+import { layStreams } from '../streams/lay-streams';
+import { layClearingPaths } from './lay-clearing-paths';
 import type { ForestStepOptions } from './forest-options';
 import { placeClearings } from './place-clearings';
 import { placeTemplates } from './place-templates';
@@ -10,8 +10,8 @@ import { plantTrees } from './plant-trees';
 
 /**
  * The steps of a forest, in the order that they need: `plantTrees`, then
- * `addStreams`, `addRoads`, `placeClearings`, `placeTemplates`,
- * `addClearingPaths` (when a clearing asks for a path) and `addFootbridges`
+ * `layStreams`, `layRoads`, `placeClearings`, `placeTemplates`,
+ * `layClearingPaths` (when a clearing asks for a path) and `layFootbridges`
  * (when there are streams, unless `footbridges` is `false`). A step whose
  * options are missing is left out, and each step takes only its own options.
  * Every option is checked here, and a bad one throws a `RangeError`. The
@@ -22,10 +22,10 @@ export function createForestSteps(options: ForestStepOptions): AnyStep[] {
     options;
   const steps: AnyStep[] = [plantTrees(trees)];
   if (streams) {
-    steps.push(addStreams(streams));
+    steps.push(layStreams(streams));
   }
   if (roads) {
-    steps.push(addRoads(roads));
+    steps.push(layRoads(roads));
   }
   if (clearings) {
     steps.push(placeClearings(clearings));
@@ -34,10 +34,10 @@ export function createForestSteps(options: ForestStepOptions): AnyStep[] {
     steps.push(placeTemplates(templates));
   }
   if (clearings?.clearings.some(({ path }) => path)) {
-    steps.push(addClearingPaths(paths));
+    steps.push(layClearingPaths(paths));
   }
   if (streams && footbridges !== false) {
-    steps.push(addFootbridges(footbridges));
+    steps.push(layFootbridges(footbridges));
   }
   return steps;
 }

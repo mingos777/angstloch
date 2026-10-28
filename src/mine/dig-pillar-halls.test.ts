@@ -9,6 +9,8 @@ import { Reserve } from '../pipeline/reserve';
 import { step } from '../pipeline/step';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import type { Random } from '../core/random';
+import { digHallVeins } from './dig-hall-veins';
+import type { DigHallVeinsOptions } from './dig-hall-veins-options';
 import { digPillarHalls } from './dig-pillar-halls';
 import type { DigPillarHallsOptions } from './dig-pillar-halls-options';
 import type { MinePassage } from './mine-passage';
@@ -50,7 +52,7 @@ const earlier = step<object, { passages: MinePassage[]; halls: Area[] }>(
 );
 
 describe('digPillarHalls', () => {
-  it('digs the same mine from the same seed', () => {
+  it('digs the same halls from the same seed', () => {
     // given
     const make = () =>
       pipeline(base, [digPillarHalls()], { random: mulberry32(5) });
@@ -64,19 +66,27 @@ describe('digPillarHalls', () => {
     expect(first.halls).toEqual(second.halls);
   });
 
-  it('lists the halls and the veins that join them', () => {
+  it('lists the halls and digs no veins', () => {
     // given
     const steps = [digPillarHalls({ halls: { min: 3, max: 3 } })] as const;
 
     // when
-    const { halls, passages } = pipeline(base, steps, {
-      random: mulberry32(1),
-    });
+    const result = pipeline(base, steps, { random: mulberry32(1) });
 
     // then
-    expect(halls).toHaveLength(3);
-    expect(passages.length).toBeGreaterThanOrEqual(2);
-    expect(passages.every(({ kind }) => kind === 'vein')).toBe(true);
+    expect(result.halls).toHaveLength(3);
+    expect('passages' in result).toBe(false);
+  });
+
+  it('leaves the halls apart, one piece of floor for each', () => {
+    // given
+    const steps = [digPillarHalls({ halls: { min: 3, max: 3 } })] as const;
+
+    // when
+    const { grid } = pipeline(base, steps, { random: mulberry32(1) });
+
+    // then
+    expect(findCaveRegions(grid)).toHaveLength(3);
   });
 
   it('keeps the ring around the map as wall', () => {
@@ -90,22 +100,6 @@ describe('digPillarHalls', () => {
     for (const { x, y } of floorTiles(grid)) {
       expect(x > 0 && y > 0 && x < 99 && y < 59).toBe(true);
     }
-  });
-
-  it('digs one connected piece, whatever the seed', () => {
-    // given
-    const seeds = [1, 2, 3, 4, 5, 6];
-
-    // when
-    const pieces = seeds.map(
-      (seed) =>
-        findCaveRegions(
-          pipeline(base, [digPillarHalls()], { random: mulberry32(seed) }).grid,
-        ).length,
-    );
-
-    // then
-    expect(pieces).toEqual(seeds.map(() => 1));
   });
 
   it('keeps the halls apart and inside the border', () => {
@@ -163,14 +157,11 @@ describe('digPillarHalls', () => {
     ] as const;
 
     // when
-    const { grid, halls, passages } = pipeline(base, steps, {
-      random: mulberry32(3),
-    });
+    const { grid, halls } = pipeline(base, steps, { random: mulberry32(3) });
 
     // then
     const [hall] = halls;
     expect(halls).toHaveLength(1);
-    expect(passages).toEqual([]);
     const tiles = floorTiles(grid);
     expect(tiles.length).toBeGreaterThan(0);
     for (const tile of tiles) {
@@ -189,10 +180,9 @@ describe('digPillarHalls', () => {
     ] as const;
 
     // when
-    const { grid, halls } = pipeline(base, steps, { random: mulberry32(4) });
+    const { halls } = pipeline(base, steps, { random: mulberry32(4) });
 
     // then
-    expect(findCaveRegions(grid)).toHaveLength(2);
     expect(halls).toHaveLength(4);
   });
 
@@ -208,22 +198,19 @@ describe('digPillarHalls', () => {
     expect(halls).toEqual([]);
   });
 
-  it('appends to the passages and halls of an earlier step', () => {
+  it('appends to the halls of an earlier step', () => {
     // given
     const steps = [earlier, digPillarHalls()] as const;
 
     // when
-    const { passages, halls } = pipeline(base, steps, {
-      random: mulberry32(1),
-    });
+    const { halls } = pipeline(base, steps, { random: mulberry32(1) });
 
     // then
-    expect(passages[0]?.tiles).toEqual([{ x: 0, y: 0 }]);
     expect(halls[0]).toEqual({ x: 0, y: 0, width: 1, height: 1 });
     expect(halls.length).toBeGreaterThan(1);
   });
 
-  it('never digs a hall or a vein through a reserved tile', () => {
+  it('never digs a hall through a reserved tile', () => {
     // given
     const wall = step('reserve', {}, (state) => {
       for (let y = 0; y < 60; ++y) {
@@ -264,7 +251,6 @@ describe('digPillarHalls', () => {
     // given
     const bad = [
       { density: 2 },
-      { hallEntrances: 'middle' as 'edge' },
       { halls: { min: 0, max: 2 } },
       { pillarJitter: -1 },
       { count: { min: -1, max: 1 } },
@@ -272,6 +258,130 @@ describe('digPillarHalls', () => {
 
     // when
     const makers = bad.map((options) => () => digPillarHalls(options));
+
+    // then
+    for (const make of makers) {
+      expect(make).toThrow(RangeError);
+    }
+  });
+});
+
+describe('digPillarHalls with digHallVeins', () => {
+  it('digs the same mine from the same seed', () => {
+    // given
+    const make = () => dig({ random: mulberry32(5) });
+
+    // when
+    const first = make();
+    const second = make();
+
+    // then
+    expect(first.grid.toString()).toBe(second.grid.toString());
+    expect(first.halls).toEqual(second.halls);
+  });
+
+  it('lists the halls and the veins that join them', () => {
+    // given
+    const options = { halls: { min: 3, max: 3 }, random: mulberry32(1) };
+
+    // when
+    const { halls, passages } = dig(options);
+
+    // then
+    expect(halls).toHaveLength(3);
+    expect(passages.length).toBeGreaterThanOrEqual(2);
+    expect(passages.every(({ kind }) => kind === 'vein')).toBe(true);
+  });
+
+  it('digs one connected piece, whatever the seed', () => {
+    // given
+    const seeds = [1, 2, 3, 4, 5, 6];
+
+    // when
+    const pieces = seeds.map(
+      (seed) => findCaveRegions(dig({ random: mulberry32(seed) }).grid).length,
+    );
+
+    // then
+    expect(pieces).toEqual(seeds.map(() => 1));
+  });
+
+  it('joins the halls of every area into one network', () => {
+    // given
+    const options = {
+      halls: { min: 2, max: 2 },
+      area: { width: { min: 40, max: 40 }, height: { min: 25, max: 25 } },
+      count: { min: 2, max: 2 },
+      random: mulberry32(4),
+    };
+
+    // when
+    const { grid, halls } = dig(options);
+
+    // then
+    expect(halls).toHaveLength(4);
+    expect(findCaveRegions(grid)).toHaveLength(1);
+  });
+
+  it('appends to the passages of an earlier step', () => {
+    // given
+    const steps = [earlier, digPillarHalls(), digHallVeins()] as const;
+
+    // when
+    const { passages } = pipeline(base, steps, { random: mulberry32(1) });
+
+    // then
+    expect(passages[0]?.tiles).toEqual([{ x: 0, y: 0 }]);
+    expect(passages.length).toBeGreaterThan(1);
+  });
+
+  it('never digs a vein through a reserved tile', () => {
+    // given
+    const wall = step('reserve', {}, (state) => {
+      for (let y = 0; y < 60; ++y) {
+        state.reserved[y * 100 + 50] = Reserve.Solid;
+      }
+      return {};
+    });
+    const seeds = [1, 2, 3, 4];
+
+    // when
+    const grids = seeds.map(
+      (seed) =>
+        pipeline(
+          base,
+          [wall, digPillarHalls({ density: 0.5 }), digHallVeins()],
+          { random: mulberry32(seed) },
+        ).grid,
+    );
+
+    // then
+    for (const grid of grids) {
+      for (let y = 0; y < 60; ++y) {
+        expect(grid.get(50, y)).toBe(Tile.Wall);
+      }
+    }
+  });
+
+  it('refuses to run before the halls are dug', () => {
+    // given
+    const run = () => pipeline(base, [digHallVeins()] as never);
+
+    // then
+    expect(run).toThrow(/halls/);
+  });
+
+  it('throws a RangeError for a bad option at once', () => {
+    // given
+    const bad = [
+      { hallEntrances: 'middle' as 'edge' },
+      { hallVeins: { min: 0, max: 2 } },
+      { veinWindiness: 2 },
+      { veinWidth: { min: 0, max: 1 } },
+    ];
+
+    // when
+    const makers = bad.map((options) => () => digHallVeins(options));
 
     // then
     for (const make of makers) {
@@ -377,23 +487,29 @@ function findPillars(result: {
   });
 }
 
-/** Digs with `digPillarHalls` alone, on a map of rock 100 by 60 unless told otherwise. */
+/** Digs with `digPillarHalls` and `digHallVeins`, on a map of rock 100 by 60 unless told otherwise. */
 function dig({
   width = 100,
   height = 60,
   random,
+  hallVeins,
+  hallEntrances,
+  veinWidth,
+  veinWindiness,
   ...options
-}: DigPillarHallsOptions & {
-  width?: number;
-  height?: number;
-  random?: Random;
-} = {}) {
+}: DigPillarHallsOptions &
+  DigHallVeinsOptions & {
+    width?: number;
+    height?: number;
+    random?: Random;
+  } = {}) {
   return pipeline(
     emptyMap({ width, height, tile: Tile.Wall }),
-    [digPillarHalls(options)],
-    {
-      random,
-    },
+    [
+      digPillarHalls(options),
+      digHallVeins({ hallVeins, hallEntrances, veinWidth, veinWindiness }),
+    ],
+    { random },
   );
 }
 

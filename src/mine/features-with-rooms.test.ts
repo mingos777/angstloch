@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { carveNoiseCave } from '../cave/carve-noise-cave';
+import { digNoiseCave } from '../cave/dig-noise-cave';
 import { digCaveTunnels } from '../cave/dig-cave-tunnels';
 import { findCaveRegions } from '../cave/find-cave-regions';
-import { growCave } from '../cave/grow-cave';
+import { digCellularCave } from '../cave/dig-cellular-cave';
 import type { Grid } from '../core/grid';
 import { Tile } from '../core/tile';
-import { carveCorridors } from '../dungeon/carve-corridors';
-import { growRooms } from '../dungeon/grow-rooms';
-import { scatterRooms } from '../dungeon/scatter-rooms';
+import { digCorridors } from '../dungeon/dig-corridors';
+import { placeClusteredRooms } from '../dungeon/place-clustered-rooms';
+import { placeScatteredRooms } from '../dungeon/place-scattered-rooms';
 import { emptyMap } from '../pipeline/empty-map';
 import { pipeline } from '../pipeline/pipeline';
 import type { AnyStep } from '../pipeline/pipeline-chain';
@@ -43,37 +43,37 @@ describe('features with rooms', () => {
         digPillarHalls({
           area: { width: { min: 16, max: 16 }, height: { min: 12, max: 12 } },
         }),
-        scatterRooms(),
-        carveCorridors(),
+        placeScatteredRooms(),
+        digCorridors(),
       ],
     ],
     [
       'a noise cavern in an area and grown rooms',
       () => [
-        carveNoiseCave({
+        digNoiseCave({
           largestOnly: true,
           area: { width: { min: 16, max: 16 }, height: { min: 12, max: 12 } },
         }),
-        growRooms(),
-        carveCorridors(),
+        placeClusteredRooms(),
+        digCorridors(),
       ],
     ],
     [
       'a whole mine and scattered rooms',
       () => [
         digFishbone(),
-        scatterRooms({ roomCount: { min: 4, max: 6 } }),
-        carveCorridors(),
+        placeScatteredRooms({ roomCount: { min: 4, max: 6 } }),
+        digCorridors(),
       ],
     ],
     [
       'a cavern in an area and scattered rooms, joined by cave tunnels',
       () => [
-        growCave({
+        digCellularCave({
           fillChance: 0.5,
           area: { width: { min: 24, max: 24 }, height: { min: 16, max: 16 } },
         }),
-        scatterRooms({ roomCount: { min: 4, max: 6 } }),
+        placeScatteredRooms({ roomCount: { min: 4, max: 6 } }),
         digCaveTunnels(),
       ],
     ],
@@ -97,7 +97,10 @@ describe('features with rooms', () => {
     // when
     const results = SEEDS.map(
       (seed) =>
-        build([digFishbone(), scatterRooms(rooms), carveCorridors()], seed) as {
+        build(
+          [digFishbone(), placeScatteredRooms(rooms), digCorridors()],
+          seed,
+        ) as {
           rooms?: unknown[];
           roomShapes?: unknown[];
         },
@@ -108,5 +111,19 @@ describe('features with rooms', () => {
       expect(listed).toHaveLength(5);
       expect(roomShapes).toHaveLength(5);
     }
+  });
+
+  it.each(SEEDS)('joins pillar halls with no rooms at all, seed %i', (seed) => {
+    // given
+    const steps = [digPillarHalls(), digCorridors()] as const;
+
+    // when
+    const { grid, rooms } = pipeline(base, steps, {
+      random: mulberry32(seed),
+    });
+
+    // then
+    expect(rooms).toEqual([]);
+    expect(pieces(grid)).toBe(1);
   });
 });

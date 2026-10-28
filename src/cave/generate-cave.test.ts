@@ -110,7 +110,7 @@ describe('generateCave', () => {
     );
   });
 
-  it('passes the cave options to growCave', () => {
+  it('passes the cave options to digCellularCave', () => {
     // given
     const options = { cave: { fillChance: 1, iterations: 0 } };
 

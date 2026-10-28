@@ -13,8 +13,8 @@ import { mulberry32 } from '../test-helpers/mulberry32';
 import { digCaveTunnels } from './dig-cave-tunnels';
 import type { DigCaveTunnelsOptions } from './dig-cave-tunnels-options';
 import { findCaveRegions } from './find-cave-regions';
-import { growCave } from './grow-cave';
-import type { GrowCaveOptions } from './grow-cave-options';
+import { digCellularCave } from './dig-cellular-cave';
+import type { DigCellularCaveOptions } from './dig-cellular-cave-options';
 
 const base = emptyMap({ width: 60, height: 40, tile: Tile.Wall });
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -22,11 +22,11 @@ const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 function cave(
   tunnels: DigCaveTunnelsOptions | undefined,
   seed: number,
-  grow: GrowCaveOptions = {},
+  grow: DigCellularCaveOptions = {},
 ) {
   const steps = tunnels
-    ? [growCave({ fillChance: 0.5, ...grow }), digCaveTunnels(tunnels)]
-    : [growCave({ fillChance: 0.5, ...grow })];
+    ? [digCellularCave({ fillChance: 0.5, ...grow }), digCaveTunnels(tunnels)]
+    : [digCellularCave({ fillChance: 0.5, ...grow })];
   return pipeline(base, steps, { random: mulberry32(seed) });
 }
 
@@ -429,7 +429,7 @@ describe('digCaveTunnels', () => {
     it('joins rooms and caverns into one with a symmetry', () => {
       // given
       const steps = [
-        growCave({
+        digCellularCave({
           fillChance: 0.5,
           symmetry: 'horizontal',
           area: { width: { min: 20, max: 20 }, height: { min: 30, max: 30 } },

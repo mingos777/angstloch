@@ -33,7 +33,7 @@ export interface RoomPlan {
 /**
  * Picks the spots of the ordinary rooms. `seeds` are the boxes, walls
  * included, of rooms there are already that new rooms may be built off, which
- * only `growRooms` uses.
+ * only `placeClusteredRooms` uses.
  */
 export type RoomPlacer = (
   random: Random,

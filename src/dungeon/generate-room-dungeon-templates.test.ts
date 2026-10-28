@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateRoomDungeon } from './generate-room-dungeon';
 import type { RoomDungeonOptions } from './room-dungeon-options';
-import type { ScatterRoomsOptions } from './scatter-rooms-options';
+import type { PlaceScatteredRoomsOptions } from './place-scattered-rooms-options';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 import { TemplateCell } from '../rooms/templates/template-cell';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
@@ -49,7 +49,7 @@ const hall: RoomTemplate = {
 
 /** The preset with these options for `scatter`, and any other options of the preset on top. */
 function dungeon(
-  scatter: ScatterRoomsOptions = {},
+  scatter: PlaceScatteredRoomsOptions = {},
   seed = 1,
   options: Partial<RoomDungeonOptions> = {},
 ) {

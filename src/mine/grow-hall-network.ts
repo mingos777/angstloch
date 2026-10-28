@@ -31,6 +31,8 @@ export interface HallNetworkSettings {
   lane?: number;
   /** Tiles that are never dug, a byte for each tile of the grid, row by row: anything but 0 protects it. Defaults to none. */
   protect?: Uint8Array;
+  /** The wall that a vein can reach, from `findOutsideRock`: a tile beside any other wall, such as a pillar, is not on the boundary of a hall. Defaults to all wall. */
+  outside?: Uint8Array;
 }
 
 /** A tile on the boundary of a hall or a vein, where a new vein may end, and which of them it is. */
@@ -87,7 +89,11 @@ export function growHallNetwork(
   const targetsOf = (nodes: readonly number[]): Target[] => {
     const targets: Target[] = [];
     for (const node of nodes) {
-      for (const { x, y } of findHallBoundary(grid, floorOf(node))) {
+      for (const { x, y } of findHallBoundary(
+        grid,
+        floorOf(node),
+        settings.outside,
+      )) {
         targets.push({ x, y, node });
       }
     }
@@ -108,7 +114,11 @@ export function growHallNetwork(
     relaxed: boolean,
   ): boolean => {
     const middle = middles[hall];
-    const boundary = findHallBoundary(grid, floors[hall] ?? []);
+    const boundary = findHallBoundary(
+      grid,
+      floors[hall] ?? [],
+      settings.outside,
+    );
     const nearest = findNearestPair(boundary, targets);
     if (!middle || !nearest) {
       return false;
@@ -169,8 +179,8 @@ export function growHallNetwork(
     for (let from = 0; from < halls.length; ++from) {
       for (let to = from + 1; to < halls.length; ++to) {
         const nearest = findNearestPair(
-          findHallBoundary(grid, floors[from] ?? []),
-          findHallBoundary(grid, floors[to] ?? []),
+          findHallBoundary(grid, floors[from] ?? [], settings.outside),
+          findHallBoundary(grid, floors[to] ?? [], settings.outside),
         );
         pairs.push({ from, to, distance: nearest?.distance ?? Infinity });
       }
@@ -199,7 +209,7 @@ export function growHallNetwork(
             hall,
             distance:
               findNearestPair(
-                findHallBoundary(grid, floors[hall] ?? []),
+                findHallBoundary(grid, floors[hall] ?? [], settings.outside),
                 targets,
               )?.distance ?? Infinity,
           }))

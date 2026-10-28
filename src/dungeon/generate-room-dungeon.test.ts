@@ -7,12 +7,12 @@ import { TemplateCell } from '../rooms/templates/template-cell';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
 import { SEEDS, asymmetry, isConnected } from '../test-helpers/dungeon-checks';
 import { mulberry32 } from '../test-helpers/mulberry32';
-import { carveCorridors } from './carve-corridors';
+import { digCorridors } from './dig-corridors';
 import { generateRoomDungeon } from './generate-room-dungeon';
 import type { JoinedRooms } from './join-rooms';
-import { partitionRooms } from './partition-rooms';
+import { placePartitionedRooms } from './place-partitioned-rooms';
 import type { RoomDungeonOptions } from './room-dungeon-options';
-import { scatterRooms } from './scatter-rooms';
+import { placeScatteredRooms } from './place-scattered-rooms';
 
 const { Floor: F, Wall: W, Exit: E } = TemplateCell;
 
@@ -84,7 +84,7 @@ describe('generateRoomDungeon', () => {
   describe('steps', () => {
     it('scatters the rooms and joins them by default', () => {
       // given
-      const steps = [scatterRooms(), carveCorridors()];
+      const steps = [placeScatteredRooms(), digCorridors()];
 
       // when
       const result = dungeon({}, 3);
@@ -93,7 +93,7 @@ describe('generateRoomDungeon', () => {
       expect(seen(result)).toEqual(byHand(steps, 3));
     });
 
-    it('gives scatter to scatterRooms', () => {
+    it('gives scatter to placeScatteredRooms', () => {
       // given
       const scatter = { fill: 0.2, spacingUniformity: 1 };
 
@@ -102,7 +102,7 @@ describe('generateRoomDungeon', () => {
 
       // then
       expect(seen(result)).toEqual(
-        byHand([scatterRooms(scatter), carveCorridors()], 3),
+        byHand([placeScatteredRooms(scatter), digCorridors()], 3),
       );
     });
 
@@ -115,11 +115,11 @@ describe('generateRoomDungeon', () => {
 
       // then
       expect(seen(result)).toEqual(
-        byHand([partitionRooms(partition), carveCorridors()], 3),
+        byHand([placePartitionedRooms(partition), digCorridors()], 3),
       );
     });
 
-    it('gives corridors to carveCorridors', () => {
+    it('gives corridors to digCorridors', () => {
       // given
       const corridors = {
         connection: 'bsp',
@@ -132,7 +132,7 @@ describe('generateRoomDungeon', () => {
 
       // then
       expect(seen(result)).toEqual(
-        byHand([scatterRooms(), carveCorridors(corridors)], 3),
+        byHand([placeScatteredRooms(), digCorridors(corridors)], 3),
       );
     });
 
@@ -149,7 +149,7 @@ describe('generateRoomDungeon', () => {
 
       // then
       expect(seen(result)).toEqual(
-        byHand([scatterRooms(scatter), carveCorridors()], 3),
+        byHand([placeScatteredRooms(scatter), digCorridors()], 3),
       );
     });
 
@@ -249,7 +249,7 @@ describe('generateRoomDungeon', () => {
       // then
       expect(attempts).toBe(2);
       expect(failures).toHaveLength(1);
-      expect(failures[0]?.step).toBe('carveCorridors');
+      expect(failures[0]?.step).toBe('digCorridors');
       expect(failures[0]?.error).toBeInstanceOf(TemplatePlacementError);
     });
   });

@@ -10,7 +10,7 @@ import type { RoomDungeonResult } from './room-dungeon-result';
 
 /**
  * Runs the steps of a dungeon preset, which place rooms and then join them
- * with `carveCorridors`, on a map of rock, and reports what they built.
+ * with `digCorridors`, on a map of rock, and reports what they built.
  */
 export function runDungeonSteps(
   options: BaseOptions,

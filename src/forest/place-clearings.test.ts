@@ -3,10 +3,10 @@ import { Tile } from '../core/tile';
 import { emptyMap } from '../pipeline/empty-map';
 import { pipeline } from '../pipeline/pipeline';
 import { step } from '../pipeline/step';
-import { addRoads } from '../streams/add-roads';
-import type { AddRoadsOptions } from '../streams/add-roads-options';
-import { addStreams } from '../streams/add-streams';
-import type { AddStreamsOptions } from '../streams/add-streams-options';
+import { layRoads } from '../streams/lay-roads';
+import type { LayRoadsOptions } from '../streams/lay-roads-options';
+import { layStreams } from '../streams/lay-streams';
+import type { LayStreamsOptions } from '../streams/lay-streams-options';
 import type { Road } from '../roads/road';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import type { ClearingSpec } from './clearing-spec';
@@ -17,7 +17,7 @@ import { plantTrees } from './plant-trees';
 const base = emptyMap({ width: 80, height: 60, tile: Tile.Grass });
 const solid = plantTrees({ density: { min: 1, max: 1 } });
 const CIRCLE = { x: 40, y: 30, radiusX: { min: 6, max: 6 }, irregularity: 0 };
-const LEVEL: AddStreamsOptions = { angle: 0, windiness: 0 };
+const LEVEL: LayStreamsOptions = { angle: 0, windiness: 0 };
 
 /** Dense trees, then streams, roads and clearings as a forest lays them. */
 function build(
@@ -27,8 +27,8 @@ function build(
     streams,
     seed = 1,
   }: {
-    roads?: AddRoadsOptions;
-    streams?: AddStreamsOptions;
+    roads?: LayRoadsOptions;
+    streams?: LayStreamsOptions;
     seed?: number;
   } = {},
 ) {
@@ -38,13 +38,13 @@ function build(
     roads && streams
       ? pipeline(
           base,
-          [solid, addStreams(streams), addRoads(roads), place],
+          [solid, layStreams(streams), layRoads(roads), place],
           options,
         )
       : roads
-        ? pipeline(base, [solid, addRoads(roads), place], options)
+        ? pipeline(base, [solid, layRoads(roads), place], options)
         : streams
-          ? pipeline(base, [solid, addStreams(streams), place], options)
+          ? pipeline(base, [solid, layStreams(streams), place], options)
           : pipeline(base, [solid, place], options);
   // what was not laid is empty
   const laid = result as { roads?: Road[]; streams?: Road[] };
@@ -263,7 +263,7 @@ describe('placeClearings', () => {
   });
 
   describe('clearings at branch ends', () => {
-    const DEAD_ENDS: AddRoadsOptions = {
+    const DEAD_ENDS: LayRoadsOptions = {
       specs: [
         { kind: 'road', origin: { x: 10, y: 30 }, angle: 0 },
         { parent: 0, at: 0.3, kind: 'branch', to: { x: 30, y: 10 } },
@@ -330,7 +330,7 @@ describe('placeClearings', () => {
 
     it('skips a branch that runs to the border of the map', () => {
       // given
-      const roads: AddRoadsOptions = {
+      const roads: LayRoadsOptions = {
         specs: [
           { kind: 'road', origin: { x: 10, y: 30 }, angle: 0 },
           { parent: 0, at: 0.5, kind: 'branch', angle: 90 },
@@ -358,7 +358,7 @@ describe('placeClearings', () => {
 
     it('keeps clearings that overlap and merges them', () => {
       // given
-      const roads: AddRoadsOptions = {
+      const roads: LayRoadsOptions = {
         specs: [
           { kind: 'road', origin: { x: 10, y: 30 }, angle: 0 },
           { parent: 0, at: 0.4, kind: 'branch', to: { x: 40, y: 10 } },

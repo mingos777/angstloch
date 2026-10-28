@@ -3,9 +3,9 @@ import { Tile } from '../core/tile';
 import { emptyMap } from '../pipeline/empty-map';
 import { pipeline } from '../pipeline/pipeline';
 import { Reserve } from '../pipeline/reserve';
-import { addRoads } from '../streams/add-roads';
-import type { AddRoadsOptions } from '../streams/add-roads-options';
-import { addStreams } from '../streams/add-streams';
+import { layRoads } from '../streams/lay-roads';
+import type { LayRoadsOptions } from '../streams/lay-roads-options';
+import { layStreams } from '../streams/lay-streams';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 import { TemplateCell } from '../rooms/templates/template-cell';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
@@ -44,7 +44,7 @@ const GLADE: ClearingSpec = {
 };
 
 /** A road along the row through the middle of the map. */
-const ROAD: AddRoadsOptions = {
+const ROAD: LayRoadsOptions = {
   windiness: 0,
   width: { min: 3, max: 3 },
   specs: [{ origin: { x: 40, y: 30 }, angle: 0 }],
@@ -263,7 +263,7 @@ describe('placeTemplates', () => {
     const results = seeds.map((seed) => {
       const steps = [
         solid,
-        addRoads(ROAD),
+        layRoads(ROAD),
         placeTemplates({ templates }),
       ] as const;
       return pipeline(base, steps, { random: mulberry32(seed) });
@@ -285,7 +285,7 @@ describe('placeTemplates', () => {
     const results = seeds.map((seed) => {
       const steps = [
         solid,
-        addStreams({ angle: 0, windiness: 0, width: { min: 3, max: 3 } }),
+        layStreams({ angle: 0, windiness: 0, width: { min: 3, max: 3 } }),
         placeTemplates({ templates }),
       ] as const;
       return pipeline(base, steps, { random: mulberry32(seed) });
@@ -303,7 +303,7 @@ describe('placeTemplates', () => {
     // given
     const steps = [
       solid,
-      addRoads(ROAD),
+      layRoads(ROAD),
       placeClearings({ clearings: [GLADE] }),
       placeTemplates({ templates: [RUIN] }),
     ] as const;
@@ -465,7 +465,7 @@ describe('placeTemplates', () => {
     };
     const steps = [
       solid,
-      addRoads(roads),
+      layRoads(roads),
       placeTemplates({ templates: [wide] }),
     ] as const;
     const planted: string[] = [];

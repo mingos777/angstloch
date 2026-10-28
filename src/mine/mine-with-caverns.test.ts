@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { carveNoiseCave } from '../cave/carve-noise-cave';
+import { digNoiseCave } from '../cave/dig-noise-cave';
 import { digCaveTunnels } from '../cave/dig-cave-tunnels';
 import { findCaveRegions } from '../cave/find-cave-regions';
 import { Tile } from '../core/tile';
@@ -13,7 +13,7 @@ const steps = [
   digFishbone({
     area: { width: { min: 40, max: 40 }, height: { min: 26, max: 26 } },
   }),
-  carveNoiseCave({
+  digNoiseCave({
     largestOnly: true,
     area: { width: { min: 16, max: 16 }, height: { min: 12, max: 12 } },
     count: { min: 2, max: 2 },

@@ -3,7 +3,7 @@ import type { Range } from '../core/range';
 import type { AreaSize } from '../pipeline/area-size';
 import type { CavePlacement } from './cave-placement';
 
-/** The options that `growCave` and `carveNoiseCave` share: where the cave goes, its border, its symmetry and which of its caverns it keeps. */
+/** The options that `digCellularCave` and `digNoiseCave` share: where the cave goes, its border, its symmetry and which of its caverns it keeps. */
 export interface CaveAreaOptions {
   /** Keeps the outermost ring of tiles of the area solid wall. Defaults to true. */
   borderWalls?: boolean;

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { generateMaze } from './generate-maze';
-import { addExits } from '../exits/add-exits';
+import { openExits } from '../exits/open-exits';
 import { emptyMap } from '../pipeline/empty-map';
 import { pipeline } from '../pipeline/pipeline';
-import { carveMaze } from './carve-maze';
+import { digMaze } from './dig-maze';
 import { openMazeRooms } from './open-maze-rooms';
 import { placeMazeRooms } from './place-maze-rooms';
 import type { Grid } from '../core/grid';
@@ -343,9 +343,9 @@ describe('generateMaze', () => {
       emptyMap({ width: 41, height: 31, tile: Tile.Wall }),
       [
         placeMazeRooms(rooms),
-        carveMaze(carve),
+        digMaze(carve),
         openMazeRooms(),
-        addExits(exits),
+        openExits(exits),
       ],
       { random: mulberry32(5) },
     );

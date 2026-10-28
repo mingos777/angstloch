@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../test-helpers/mulberry32';
-import { layStreams } from './lay-streams';
+import { buildStreams } from './build-streams';
 import { rebuildStreamMap } from './rebuild-stream-map';
 
 function lay(seed: number) {
-  return layStreams(80, 50, mulberry32(seed), {
+  return buildStreams(80, 50, mulberry32(seed), {
     tributaries: { min: 2, max: 2 },
     width: { min: 2, max: 3 },
   });

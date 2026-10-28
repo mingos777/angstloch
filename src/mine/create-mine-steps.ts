@@ -1,8 +1,9 @@
-import { carveNoiseCave } from '../cave/carve-noise-cave';
+import { digNoiseCave } from '../cave/dig-noise-cave';
 import { digCaveTunnels } from '../cave/dig-cave-tunnels';
-import { addExits } from '../exits/add-exits';
+import { openExits } from '../exits/open-exits';
 import type { AnyStep } from '../pipeline/pipeline-chain';
 import { digFishbone } from './dig-fishbone';
+import { digHallVeins } from './dig-hall-veins';
 import { digPillarHalls } from './dig-pillar-halls';
 import { digRings } from './dig-rings';
 import { digVeins } from './dig-veins';
@@ -27,31 +28,37 @@ const CAVERN_SCALE = 7;
 /** The layout steps, by the key of their options. */
 const LAYOUTS = ['fishbone', 'veins', 'pillars', 'rings'] as const;
 
-/** The layout step that the options ask for, `digFishbone` when they name none. */
-function createLayoutStep(options: MineStepOptions): AnyStep {
+/** The layout steps that the options ask for, `digFishbone` when they name none. The pillars are two steps, the halls and the veins that join them. */
+function createLayoutSteps(options: MineStepOptions): AnyStep[] {
   const given = LAYOUTS.filter((key) => options[key] !== undefined);
   if (given.length > 1) {
     throw new RangeError(
       `give at most one of fishbone, veins, pillars and rings, got ${given.join(' and ')}; for two layouts in one map, run their steps with pipeline`,
     );
   }
+  if (options.hallVeins && !options.pillars) {
+    throw new RangeError(
+      'hallVeins joins the halls of pillars, so give pillars',
+    );
+  }
   if (options.veins) {
-    return digVeins(options.veins);
+    return [digVeins(options.veins)];
   }
   if (options.pillars) {
-    return digPillarHalls(options.pillars);
+    return [digPillarHalls(options.pillars), digHallVeins(options.hallVeins)];
   }
   if (options.rings) {
-    return digRings(options.rings);
+    return [digRings(options.rings)];
   }
-  return digFishbone(options.fishbone);
+  return [digFishbone(options.fishbone)];
 }
 
 /**
  * The steps of a mine, in order: the layout step (`digFishbone` unless
- * `veins`, `pillars` or `rings` is given), then `carveNoiseCave` and
+ * `veins`, `pillars` or `rings` is given; `pillars` is `digPillarHalls` and
+ * `digHallVeins`), then `digNoiseCave` and
  * `digCaveTunnels` when `caverns` is given, then `placeMineRooms` when `rooms`
- * is, and `addExits` when `exits` is. The default area of a cavern is cut
+ * is, and `openExits` when `exits` is. The default area of a cavern is cut
  * down to the `width` and `height` of the map, when they are given. Every
  * option is checked here, and a bad one, or more than one layout, throws a
  * `RangeError`.
@@ -60,10 +67,10 @@ export function createMineSteps(
   options: MineStepOptions & { width?: number; height?: number },
 ): AnyStep[] {
   const { caverns, tunnels, rooms, exits } = options;
-  const steps = [createLayoutStep(options)];
+  const steps = createLayoutSteps(options);
   if (caverns) {
     steps.push(
-      carveNoiseCave({
+      digNoiseCave({
         placement: 'beside',
         largestOnly: true,
         scaleX: CAVERN_SCALE,
@@ -84,7 +91,7 @@ export function createMineSteps(
     steps.push(placeMineRooms(rooms));
   }
   if (exits) {
-    steps.push(addExits(exits));
+    steps.push(openExits(exits));
   }
   return steps;
 }

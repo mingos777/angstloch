@@ -11,8 +11,8 @@ import type { MazeResult } from './maze-result';
 /**
  * Generates a maze, a ready-made composition of steps on a map of rock:
  * `placeMazeRooms` places the rooms and templates when `rooms` is given,
- * `carveMaze` carves the maze round them with the recursive backtracker,
- * `openMazeRooms` opens the rooms onto it, and `addExits` carves the exits on
+ * `digMaze` carves the maze round them with the recursive backtracker,
+ * `openMazeRooms` opens the rooms onto it, and `openExits` carves the exits on
  * the border when `exits` is given. Corridors run along odd coordinates, so
  * odd map dimensions leave a single wall frame. The map is built again, up to
  * 3 times in all, when a step throws, which is what happens to a template that
@@ -27,7 +27,7 @@ export function generateMaze(options: MazeOptions): MazeResult {
     createMazeSteps(options),
     { random },
   );
-  // a step that was left out added nothing; carveMaze on the whole map always
+  // a step that was left out added nothing; digMaze on the whole map always
   // reports its start
   const extras: Partial<{
     start: Point;

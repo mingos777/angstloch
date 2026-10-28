@@ -5,10 +5,10 @@ import { mulberry32 } from '../test-helpers/mulberry32';
 import { createSimplexNoise } from '../noise/create-simplex-noise';
 import { createSteerAcrossStreams } from './create-steer-across-streams';
 import type { CrossingPlan } from './crossing-plan';
-import { layStreams } from './lay-streams';
+import { buildStreams } from './build-streams';
 
 /** A straight stream that runs top to bottom on a map of 100 by 70 tiles. */
-const laid = layStreams(100, 70, mulberry32(3), {
+const laid = buildStreams(100, 70, mulberry32(3), {
   angle: 90,
   windiness: 0,
   width: { min: 1, max: 1 },

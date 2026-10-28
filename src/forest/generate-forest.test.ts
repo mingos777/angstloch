@@ -289,12 +289,12 @@ describe('generateForest', () => {
     // then
     expect(names).toEqual([
       'plantTrees',
-      'addStreams',
-      'addRoads',
+      'layStreams',
+      'layRoads',
       'placeClearings',
       'placeTemplates',
-      'addClearingPaths',
-      'addFootbridges',
+      'layClearingPaths',
+      'layFootbridges',
     ]);
   });
 

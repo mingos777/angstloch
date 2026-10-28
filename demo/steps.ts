@@ -70,7 +70,7 @@ let cards: Card[] = [];
 /** The maps after each step of the last run, in order, starting with the base. */
 let snapshots: Snapshot[] = [];
 
-/** What `addRoads` traced in the last attempt: the roads as grown and how they cross the streams. */
+/** What `layRoads` traced in the last attempt: the roads as grown and how they cross the streams. */
 let traced: { grown: Point[][]; plans: CrossingPlan[] } | undefined;
 
 function newCard(
@@ -95,10 +95,10 @@ type CardSpec = string | readonly [string, Record<string, FieldValue>];
 /** The steps of a forest, to start from. */
 const FOREST = [
   'plantTrees',
-  'addStreams',
-  'addRoads',
+  'layStreams',
+  'layRoads',
   'placeClearings',
-  'addFootbridges',
+  'layFootbridges',
 ];
 
 /** The steps of `generateMine`, with its defaults. It is dug out of wall, so the base tile is set to wall. */
@@ -108,7 +108,7 @@ const MINE: CardSpec[] = ['digFishbone'];
 const MINE_WITH_CAVERNS: CardSpec[] = [
   'digFishbone',
   [
-    'carveNoiseCave',
+    'digNoiseCave',
     {
       scaleX: '7',
       scaleY: '7',
@@ -124,29 +124,29 @@ const MINE_WITH_CAVERNS: CardSpec[] = [
 ];
 
 /** The steps of `generateCave`, with its defaults. It is dug out of wall too. */
-const CAVE = ['growCave', 'digCaveTunnels'];
+const CAVE = ['digCellularCave', 'digCaveTunnels'];
 
 /** The steps of `generateNoiseCave`, with its defaults. */
-const NOISE_CAVE = ['carveNoiseCave', 'digCaveTunnels'];
+const NOISE_CAVE = ['digNoiseCave', 'digCaveTunnels'];
 
 /** The steps of `generateMaze`, with its defaults. It is carved out of wall too. */
-const MAZE: CardSpec[] = ['carveMaze'];
+const MAZE: CardSpec[] = ['digMaze'];
 
 /** The steps of `generateMaze` with rooms and exits, the exits on the lattice so their doors face the cells of the maze. */
 const MAZE_WITH_ROOMS: CardSpec[] = [
   ['placeMazeRooms', { roomCountMin: '3', roomCountMax: '5' }],
-  'carveMaze',
+  'digMaze',
   'openMazeRooms',
-  ['addExits', { lattice: true }],
+  ['openExits', { lattice: true }],
 ];
 
 /** The steps of `generateRoomDungeon`, with its defaults. It is carved out of wall too. */
-const DUNGEON: CardSpec[] = ['scatterRooms', 'carveCorridors'];
+const DUNGEON: CardSpec[] = ['placeScatteredRooms', 'digCorridors'];
 
 /** The steps of `generateDigDungeon`, with its defaults. It is carved out of wall too. */
-const GROWN_DUNGEON: CardSpec[] = ['growRooms', 'carveCorridors'];
+const GROWN_DUNGEON: CardSpec[] = ['placeClusteredRooms', 'digCorridors'];
 
-/** Rooms scattered round a pillar hall and a noise cavern, which `carveCorridors` joins as stand-ins: the features run of check:dungeon. */
+/** Rooms scattered round a pillar hall and a noise cavern, which `digCorridors` joins as stand-ins: the features run of check:dungeon. */
 const DUNGEON_WITH_FEATURES: CardSpec[] = [
   [
     'digPillarHalls',
@@ -158,7 +158,7 @@ const DUNGEON_WITH_FEATURES: CardSpec[] = [
     },
   ],
   [
-    'carveNoiseCave',
+    'digNoiseCave',
     {
       largestOnly: true,
       areaWidthMin: '14',
@@ -167,14 +167,14 @@ const DUNGEON_WITH_FEATURES: CardSpec[] = [
       areaHeightMax: '14',
     },
   ],
-  'scatterRooms',
-  'carveCorridors',
+  'placeScatteredRooms',
+  'digCorridors',
 ];
 
 /** A cavern in part of the map and a few rooms, joined by cave tunnels that enter the rooms through their potential exits. */
 const CAVE_WITH_ROOMS: CardSpec[] = [
   [
-    'growCave',
+    'digCellularCave',
     {
       areaWidthMin: '24',
       areaWidthMax: '24',
@@ -182,7 +182,7 @@ const CAVE_WITH_ROOMS: CardSpec[] = [
       areaHeightMax: '16',
     },
   ],
-  ['scatterRooms', { roomCountMin: '4', roomCountMax: '6' }],
+  ['placeScatteredRooms', { roomCountMin: '4', roomCountMax: '6' }],
   'digCaveTunnels',
 ];
 
@@ -352,8 +352,8 @@ function paint(): void {
       );
     }
   }
-  // what addRoads traced belongs to the map from that step on
-  const roadsAt = snapshots.findIndex(({ name }) => name === 'addRoads');
+  // what layRoads traced belongs to the map from that step on
+  const roadsAt = snapshots.findIndex(({ name }) => name === 'layRoads');
   if (traced && roadsAt !== -1 && at >= roadsAt) {
     if (show.has('showGrown')) {
       // a small dot on every tile of a road as it was grown
@@ -391,6 +391,8 @@ function render(): void {
   const data = new FormData(form);
   const value = (name: string): number => Number(data.get(name));
   const kept = after.value;
+  // a view of the last step follows the last step, as steps are added or moved
+  const followsLast = kept === '' || Number(kept) === after.options.length - 1;
 
   let summary = '';
   let failed: { attempt: number; step: string; error: unknown }[] = [];
@@ -484,7 +486,10 @@ function render(): void {
       return option;
     }),
   );
-  after.value = snapshots[Number(kept)] ? kept : String(snapshots.length - 1);
+  after.value =
+    !followsLast && snapshots[Number(kept)]
+      ? kept
+      : String(snapshots.length - 1);
   stats.textContent = summary;
   failures.textContent = failed
     .map(

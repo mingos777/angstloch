@@ -8,10 +8,10 @@ import { TemplateCell } from '../rooms/templates/template-cell';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
 import { SEEDS, asymmetry, isConnected } from '../test-helpers/dungeon-checks';
 import { mulberry32 } from '../test-helpers/mulberry32';
-import { carveCorridors } from './carve-corridors';
+import { digCorridors } from './dig-corridors';
 import type { DigDungeonOptions } from './dig-dungeon-options';
 import { generateDigDungeon } from './generate-dig-dungeon';
-import { growRooms } from './grow-rooms';
+import { placeClusteredRooms } from './place-clustered-rooms';
 import type { JoinedRooms } from './join-rooms';
 
 const { Floor: F, Wall: W, Exit: E } = TemplateCell;
@@ -101,7 +101,7 @@ describe('generateDigDungeon', () => {
   describe('steps', () => {
     it('grows the rooms and joins them by default', () => {
       // given
-      const steps = [growRooms(), carveCorridors()];
+      const steps = [placeClusteredRooms(), digCorridors()];
 
       // when
       const result = dungeon({}, 3);
@@ -110,7 +110,7 @@ describe('generateDigDungeon', () => {
       expect(seen(result)).toEqual(byHand(steps, 3));
     });
 
-    it('gives grow to growRooms', () => {
+    it('gives grow to placeClusteredRooms', () => {
       // given
       const grow = { gap: { min: 0, max: 2 }, fill: 0.2, horizontalBias: 1 };
 
@@ -119,11 +119,11 @@ describe('generateDigDungeon', () => {
 
       // then
       expect(seen(result)).toEqual(
-        byHand([growRooms(grow), carveCorridors()], 3),
+        byHand([placeClusteredRooms(grow), digCorridors()], 3),
       );
     });
 
-    it('gives corridors to carveCorridors', () => {
+    it('gives corridors to digCorridors', () => {
       // given
       const corridors = { deadEndChance: 0.5, doorChance: 0.3 };
 
@@ -132,7 +132,7 @@ describe('generateDigDungeon', () => {
 
       // then
       expect(seen(result)).toEqual(
-        byHand([growRooms(), carveCorridors(corridors)], 3),
+        byHand([placeClusteredRooms(), digCorridors(corridors)], 3),
       );
     });
 
@@ -149,7 +149,7 @@ describe('generateDigDungeon', () => {
 
       // then
       expect(seen(result)).toEqual(
-        byHand([growRooms(grow), carveCorridors()], 3),
+        byHand([placeClusteredRooms(grow), digCorridors()], 3),
       );
     });
 
@@ -259,7 +259,7 @@ describe('generateDigDungeon', () => {
       // then
       expect(attempts).toBe(2);
       expect(failures).toHaveLength(1);
-      expect(failures[0]?.step).toBe('carveCorridors');
+      expect(failures[0]?.step).toBe('digCorridors');
       expect(failures[0]?.error).toBeInstanceOf(TemplatePlacementError);
     });
   });
