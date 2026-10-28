@@ -12,8 +12,11 @@ export type {
 export type { CaveRegion } from './cave/cave-region';
 export type { CaveResult } from './cave/cave-result';
 export type { CorridorSymmetry } from './rooms/corridor-symmetry';
-export type { DigDungeonOptions } from './dungeon/dig-dungeon-options';
-export type { DungeonOptions, Placement } from './rooms/dungeon-options';
+export type {
+  DigDungeonOptions,
+  DigDungeonStepOptions,
+} from './dungeon/dig-dungeon-options';
+export type { Placement } from './rooms/dungeon-options';
 export type { DungeonResult } from './dungeon/dungeon-result';
 export type { Exit } from './rooms/exit';
 export { generateCave } from './cave/generate-cave';
@@ -45,6 +48,15 @@ export { generateDigDungeon } from './dungeon/generate-dig-dungeon';
 export { generateMaze } from './maze/generate-maze';
 export { placeMazeRooms } from './maze/place-maze-rooms';
 export type { PlaceMazeRoomsOptions } from './maze/place-maze-rooms-options';
+export { scatterRooms } from './dungeon/scatter-rooms';
+export type { ScatterRoomsOptions } from './dungeon/scatter-rooms-options';
+export { partitionRooms } from './dungeon/partition-rooms';
+export { growRooms } from './dungeon/grow-rooms';
+export type { GrowRoomsOptions } from './dungeon/grow-rooms-options';
+export type { PartitionRoomsOptions } from './dungeon/partition-rooms-options';
+export type { RoomPlacementOptions } from './dungeon/room-placement-options';
+export { carveCorridors } from './dungeon/carve-corridors';
+export type { CarveCorridorsOptions } from './dungeon/carve-corridors-options';
 export { carveMaze } from './maze/carve-maze';
 export type { CarveMazeOptions } from './maze/carve-maze-options';
 export { openMazeRooms } from './maze/open-maze-rooms';
@@ -80,14 +92,14 @@ export type { Random } from './core/random';
 export type { Range } from './core/range';
 export type { Room } from './rooms/room';
 export type { RoomShape } from './rooms/room-shape';
+export type { RoomConnection } from './dungeon/room-connection';
 export type {
-  RoomConnection,
   RoomDungeonOptions,
-  RoomPartition,
-} from './rooms/room-dungeon-options';
+  RoomDungeonStepOptions,
+} from './dungeon/room-dungeon-options';
+export type { RoomDungeonResult } from './dungeon/room-dungeon-result';
 export type { RoomTemplate } from './rooms/templates/room-template';
 export type { Rotation } from './core/rotation';
-export type { SymmetryOptions } from './rooms/symmetry-options';
 export { TemplateCell } from './rooms/templates/template-cell';
 export { TemplatePlacementError } from './rooms/templates/template-placement-error';
 export type { TemplatePlacement } from './rooms/templates/template-placement';
@@ -107,6 +119,8 @@ export type { EmptyMapOptions } from './pipeline/empty-map-options';
 export type { MapBase } from './pipeline/map-base';
 export type { MapState } from './pipeline/map-state';
 export type { MapStep } from './pipeline/map-step';
+export { findNearestOpenable } from './pipeline/find-nearest-openable';
+export type { NearestOpenable } from './pipeline/find-nearest-openable';
 export { isFree } from './pipeline/is-free';
 export { openReserved } from './pipeline/open-reserved';
 export { pipeline } from './pipeline/pipeline';

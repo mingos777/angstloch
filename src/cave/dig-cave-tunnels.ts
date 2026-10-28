@@ -9,6 +9,7 @@ import { Reserve } from '../pipeline/reserve';
 import { stampTile } from '../pipeline/stamp-tile';
 import { step } from '../pipeline/step';
 import { connectCaves } from './connect-caves';
+import { joinCaveRooms } from './join-cave-rooms';
 import type { DigCaveTunnelsOptions } from './dig-cave-tunnels-options';
 
 /**
@@ -19,8 +20,12 @@ import type { DigCaveTunnelsOptions } from './dig-cave-tunnels-options';
  * `loops` adds shortcuts on top.
  *
  * Tunnels dig only through free tiles and pass along existing floor. They
- * never touch a reserved tile, so a room's floor is not a piece they join, and
- * a piece that only a reserved tile could reach is left as it is. The map has
+ * never dig a reserved tile, so a piece that only a reserved tile could
+ * reach is left as it is, with one exception: once the floor is joined,
+ * rooms that nothing reaches yet are joined too, each through its nearest
+ * potential exit (an `Openable` tile), which becomes floor and is opened with
+ * `openReserved` (see `joinCaveRooms`). A room with no potential exit left is
+ * not joined. The map has
  * to start as wall, which `pipeline` checks before the first attempt. Throws a
  * `RangeError` at once for a bad option.
  */
@@ -74,15 +79,21 @@ export function digCaveTunnels(options: DigCaveTunnelsOptions = {}): MapStep {
               : 0;
         }
       }
-      connectCaves(view, random, {
-        tunnel: { style, width, windiness, borderWalls, blocked },
-        loops,
-        symmetry,
-        symmetryChance,
-      });
+      const tunnel = { style, width, windiness, borderWalls, blocked };
+      connectCaves(view, random, { tunnel, loops, symmetry, symmetryChance });
+      // then the rooms, on the map with their floor and the tunnels dug so far
+      const full = grid.clone();
       for (let y = 0; y < grid.height; ++y) {
         for (let x = 0; x < grid.width; ++x) {
-          if (view.get(x, y) === Tile.Floor && grid.get(x, y) !== Tile.Floor) {
+          if (view.get(x, y) === Tile.Floor) {
+            full.set(x, y, Tile.Floor);
+          }
+        }
+      }
+      joinCaveRooms(state, full, random, { tunnel, symmetry, symmetryChance });
+      for (let y = 0; y < grid.height; ++y) {
+        for (let x = 0; x < grid.width; ++x) {
+          if (full.get(x, y) === Tile.Floor && grid.get(x, y) !== Tile.Floor) {
             stampTile(state, x, y, Tile.Floor);
           }
         }

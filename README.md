@@ -11,7 +11,7 @@ Currently available:
 - [`generateForest`](#forests): forests of scattered trees with clearings and denser stands, from noise, with roads, crossroads and paths through them, and streams and rivers that the roads bridge.
 - [`generateMine`](#mines): mines, as a main shaft with side tunnels branching off it, a web of winding veins, halls with pillars left standing, or concentric rings, dug until the map is as full as you want.
 - [`generateRoomDungeon`](#dungeons): room-first dungeons: rooms are placed first and joined by corridors afterwards.
-- [`generateDigDungeon`](#the-digger): dungeons that are dug: corridors and rooms grow out of a first room.
+- [`generateDigDungeon`](#grown-dungeons): dungeons that grow out of a first room: each room is built beyond a wall of one there is, and corridors join them.
 - [`pipeline`](#composing-maps): builds a map from an empty base and a list of steps, with retries. The generators are being rebuilt on it, one at a time.
 
 ## Concepts
@@ -81,7 +81,7 @@ const { grid, start, exits } = generateMaze({
   width: 41,
   height: 21,
   maze: { loopChance: 0.1 },
-  exits: { count: { min: 2, max: 2 } },
+  exits: { count: { min: 2, max: 2 }, lattice: true },
 });
 console.log(grid.toString());
 ```
@@ -90,10 +90,12 @@ A maze is carved with a recursive backtracker. Corridors run along odd coordinat
 
 `generateMaze` is a preset: a ready-made composition of [steps](#composing-maps) on a map of `Tile.Wall`, with one key of its options per step, each holding the options of that step. A maze is made in this order:
 
-1. **[Rooms and templates](#rooms-in-mazes)** when `rooms` is given: [`placeMazeRooms`](#placemazerooms). Its `keepClear` defaults to the `start` of `maze` here, so no room covers the start.
+1. **[Rooms and templates](#rooms-in-mazes)** when `rooms` is given: [`placeMazeRooms`](#placemazerooms), with its options under `rooms`.
 2. **The maze** itself: [`carveMaze`](#carvemaze), with its options under `maze`, on the whole map. It goes round the rooms.
 3. **The openings** of the rooms when there are `rooms`: [`openMazeRooms`](#openmazerooms), with its options under `openings`.
-4. **Exits** on the border when `exits` is given: [`addExits`](#addexits). Its `lattice` defaults to `true` here, so the doors face the cells of the maze.
+4. **Exits** on the border when `exits` is given: [`addExits`](#addexits), with its options under `exits`.
+
+Each step takes only its own options, with the defaults of that step; nothing passes from one key to another. So a maze with a given `start` and rooms gives the same point to `rooms.keepClear`, or a room may cover the start and the attempt fails, and exits whose doors face the cells of the maze want `exits: { lattice: true }`.
 
 When a step throws, as a template that finds no place or covers the start does, the map is built again, up to 3 times in all, before the error is thrown; `attempts` and `failures` in the result say how it went. A maze in part of a map, several mazes, or any other order are compositions of your own: run the steps with [`pipeline`](#pipeline). Every option is checked before the first map is built, and a bad one throws a `RangeError` named after the option of its step.
 
@@ -106,7 +108,7 @@ When a step throws, as a template that finds no place or covers the start does, 
 | `maze`            | `{}`          | The options of [`carveMaze`](#carvemaze) but its `area` and `count`: the biases, `loopChance`, `fill`, `straight`, `pattern`, `patternChance` and `start`.                    |
 | `rooms`           | none          | The options of [`placeMazeRooms`](#placemazerooms): ordinary rooms (`roomCount`, `roomWidth`, `roomHeight`, `sizeUniformity`), `templates` and their `doorChance`. See below. |
 | `openings`        | `{}`          | The options of [`openMazeRooms`](#openmazerooms): `exitsPerRoom` and `doorChance`. Only used with `rooms`.                                                                    |
-| `exits`           | none          | The options of [`addExits`](#addexits), with `lattice` defaulting to `true`: `count` (how many exits), `symmetry`, `symmetryChance` and `tile`.                               |
+| `exits`           | none          | The options of [`addExits`](#addexits): `count` (how many exits), `lattice`, `symmetry`, `symmetryChance` and `tile`.                                                         |
 
 ### `MazeResult`
 
@@ -171,7 +173,7 @@ A maze is a lattice, so templates are placed [on the lattice](#placement): a tem
 - The exit cells of a template open straight onto a maze cell. `Door` cells are always doors and `Exit` cells are doors with the chance `rooms.doorChance`. Every `Exit` and `Door` is opened, and if `fill` left the cell in front of it uncarved, a passage is carved from the nearest carved cell.
 - `OptionalExit` cells are opened as far as `openings.exitsPerRoom` asks, counting the fixed exits. More are opened where they join parts of the map that would be cut off.
 - The maze never digs through a template's walls or floors. `Unused` cells are free space like any other, so the maze may wind into a notch of a template's bounding box that is open to the outside.
-- **Failures.** A template that finds no place, covers the `start` of `maze`, or has an exit that cannot be joined to the maze fails the attempt, and a new map is built, up to three in all, before a [`TemplatePlacementError`](#room-templates) is thrown. A template is never left out.
+- **Failures.** A template that finds no place, covers `rooms.keepClear`, or has an exit that cannot be joined to the maze fails the attempt, and a new map is built, up to three in all, before a [`TemplatePlacementError`](#room-templates) is thrown. A template is never left out.
 
 Templated rooms are in `rooms`, listed before the ordinary ones, with `template`, `rotation` and `mirrored` set, and their openings are in `roomExits`. `roomCount` counts only ordinary rooms.
 
@@ -395,8 +397,10 @@ A forest is made from a [noise](#noise) map that says how dense the trees are: d
 2. `addStreams`, laid first, since a natural feature has priority.
 3. `addRoads`, which bend to cross the streams.
 4. `placeClearings` and 5. `placeTemplates`.
-5. `addClearingPaths`, when a clearing asks for a path. It takes its tiles and its verge from `roads` (`roadTile`, `bridgeTile`, `clearance`, `falloff`, `distance`), so that paths and roads look alike.
+5. `addClearingPaths`, when a clearing asks for a path, with its options under `paths`.
 6. `addFootbridges`, when there are `streams`, unless `footbridges` is `false`.
+
+Each step takes only its own options, with the defaults of that step; nothing passes from one key to another. So paths that should look like the roads get the same `roadTile`, `bridgeTile`, `clearance`, `falloff` and `distance` under `paths` as under `roads`.
 
 Every step that lays something clears the trees from its own [verge](#verges-and-pruneverge), so the trees fill in around roads, water and clearings. When a step throws, which happens to a template that finds no room, the forest is built again from the start, up to 3 times in all, and only then is the error thrown; see [`pipeline`](#pipeline). The result reports `attempts` and `failures`. For a forest that is not this composition, run the steps yourself with `pipeline`, in any order they allow: that is what this function does.
 
@@ -426,7 +430,7 @@ An invalid angle, width or windiness throws a `RangeError`.
 
 #### Clearance, falloff and distance
 
-By default the trees grow right up to the road, which can look like a hedge. The [verge](#verges-and-pruneverge) of `roads` keeps a strip beside every road free of trees: the main road, the crossings, the branches and the paths to clearings alike. It has three fields, `clearance`, `falloff` and `distance`, which sit among the options of `roads`:
+By default the trees grow right up to the road, which can look like a hedge. The [verge](#verges-and-pruneverge) of `roads` keeps a strip beside every road free of trees: the main road, the crossings and the branches. The paths to clearings have a verge of their own, under `paths`. It has three fields, `clearance`, `falloff` and `distance`, which sit among the options of `roads`:
 
 ```ts
 generateForest({
@@ -540,7 +544,7 @@ A clearing can have a path: set `path` to `true`, or to `{ width, windiness }`. 
 | `width`     | 1       | Width of the path in tiles, a whole number, 1 or more. |
 | `windiness` | 0.3     | How much the path winds, from 0 (straight) to 1.       |
 
-The path is a road of kind `'branch'` in `roads`, after the roads of the `roads` option and in the order of the clearings, so it shows up in `junctions` (where it meets a road) and in `exits` (where it reaches the border) like any branch. The paths are laid by [`addClearingPaths`](#addclearingpaths) after the templates, with the `roadTile`, `bridgeTile` and verge of `roads` (the defaults when there are no `roads`), so the verge of the roads applies to them. This works with or without the `roads` option, and with clearings that have a center of their own as well as random ones. A later path may start at an earlier path if that is the nearest road. A path that stops at the template on its clearing, and a path that runs through another template, are described under [`addClearingPaths`](#addclearingpaths). A clearing whose center is on a road already gets no path. A clearing that was left out gets none either. The default is no path, since a glade can just as well be in the middle of the forest with no way in.
+The path is a road of kind `'branch'` in `roads`, after the roads of the `roads` option and in the order of the clearings, so it shows up in `junctions` (where it meets a road) and in `exits` (where it reaches the border) like any branch. The paths are laid by [`addClearingPaths`](#addclearingpaths) after the templates, with the `roadTile`, `bridgeTile` and verge of `paths`; give them the same values as `roads` for paths that look like the roads. This works with or without the `roads` option, and with clearings that have a center of their own as well as random ones. A later path may start at an earlier path if that is the nearest road. A path that stops at the template on its clearing, and a path that runs through another template, are described under [`addClearingPaths`](#addclearingpaths). A clearing whose center is on a road already gets no path. A clearing that was left out gets none either. The default is no path, since a glade can just as well be in the middle of the forest with no way in.
 
 A clearing with a center outside the map, an `x` or `y` that is not a whole number, only one of the two given, a radius that is not a `Range` of whole numbers of at least 1, an angle that is not finite, an `irregularity` outside 0 to 1, an invalid `roadDistance` range, or a path with a `width` that is not a whole number of at least 1 or a `windiness` outside 0 to 1 throws a `RangeError`.
 
@@ -727,9 +731,10 @@ The `templates` result lists the templates that were placed, in the order of the
 | `random`      | `Math.random`   | Source of randomness, shared by all the steps.                                                                                                                                                                                                                        |
 | `trees`       | the defaults    | The options of [`plantTrees`](#planttrees): `scaleX`, `scaleY`, `rotation`, `octaves`, `persistence`, `lacunarity`, `noise`, `density` (a `Range` of fractions, default `{ min: 0, max: 0.25 }`) and `tile` (default `Tile.Tree`). The ground is always `Tile.Grass`. |
 | `streams`     | no streams      | The options of [`addStreams`](#addstreams), a stream or a river: see [Streams and rivers](#streams-and-rivers). Includes the tiles of the water and the verge beside it.                                                                                              |
-| `roads`       | no roads        | The options of [`addRoads`](#addroads): see [Roads](#roads). Includes `roadTile`, `bridgeTile`, `bridgeAngle` and the verge (`clearance`, `falloff`, `distance`), which the paths to clearings use too.                                                               |
+| `roads`       | no roads        | The options of [`addRoads`](#addroads): see [Roads](#roads). Includes `roadTile`, `bridgeTile`, `bridgeAngle` and the verge (`clearance`, `falloff`, `distance`).                                                                                                     |
 | `clearings`   | no clearings    | The options of [`placeClearings`](#placeclearings): `{ clearings, spacing, falloff, distance }`, where `clearings` is the list of `ClearingSpec`: see [Clearings](#clearings).                                                                                        |
 | `templates`   | no templates    | The options of [`placeTemplates`](#placetemplates): `{ templates, distance }`, where `templates` is the list of [`RoomTemplate`](#room-templates)s: see [Templates in forests](#templates-in-forests).                                                                |
+| `paths`       | the defaults    | The options of [`addClearingPaths`](#addclearingpaths): `roadTile`, `bridgeTile` and the verge (`clearance`, `falloff`, `distance`) of the paths to clearings. Used only when a clearing asks for a path. Nothing is taken from `roads`.                              |
 | `footbridges` | on with streams | The options of [`addFootbridges`](#addfootbridges): `{ minimum, bridgeTile }`. Used only when there are `streams`, and then on by default; `false` leaves the footbridges out.                                                                                        |
 
 Anything the steps check throws a `RangeError` before the forest is made, as does a width or height that is not a positive whole number. A template that is bigger than the map throws a `TemplatePlacementError` just as early.
@@ -992,45 +997,89 @@ import { generateRoomDungeon } from 'angstloch';
 const { grid, rooms, exits, fill } = generateRoomDungeon({
   width: 61,
   height: 41,
-  placement: 'lattice',
-  roomCount: { min: 6, max: 12 },
+  scatter: { placement: 'lattice', roomCount: { min: 6, max: 12 } },
+  corridors: { placement: 'lattice', loopChance: 0.3 },
 });
 console.log(grid.toString());
 console.log(`${rooms.length} rooms covering ${fill * 100}% of the map`);
 ```
 
-Prefabricated rooms are supported by both generators (see [Room templates](#room-templates)). Existing options and result fields will keep working as documented here.
+Prefabricated rooms are supported by both generators (see [Room templates](#room-templates)).
 
-There are two dungeon generators. They take the same [`DungeonOptions`](#dungeonoptions), return the same [`DungeonResult`](#dungeonresult), and differ in how rooms and corridors come about:
+There are two dungeon generators, both ready-made compositions of [steps](#composing-maps) that take the options of each step under a key of its own. They differ in where the rooms go:
 
-- `generateRoomDungeon` places the rooms first and joins them with corridors afterwards. Its rooms are spread over the whole map, in a scattered or a regular way.
-- [`generateDigDungeon`](#the-digger) digs corridors out of a first room and puts a room at the end of each, so the dungeon grows in a tree-like way, as in a roguelike of old.
+- `generateRoomDungeon` spreads its rooms over the whole map, in a scattered or a regular way (see [`RoomDungeonOptions`](#roomdungeonoptions)).
+- [`generateDigDungeon`](#grown-dungeons) grows its rooms out of a first room in the middle, each beyond a wall of one there is, so they cluster and most corridors are short, as in a roguelike of old (see [`DigDungeonOptions`](#digdungeonoptions)).
 
-`generateRoomDungeon` builds a dungeon room-first:
+`generateRoomDungeon` builds a dungeon room-first, on a map of rock:
 
-1. Rooms are placed on the map without overlapping, either scattered at random or by binary space partitioning.
-2. Rooms are joined with corridors. Every room can be reached from every other one (see [Connections](#connections)).
-3. Rooms get the number of exits they ask for, and loops and dead ends are added if requested.
-4. Every opening in a room's wall becomes an _exit_, and each exit gets a door or stays a plain opening.
+1. [`scatterRooms`](#scatterrooms), or [`partitionRooms`](#partitionrooms) with `partition`, places the templated rooms and then the ordinary rooms, without overlapping, either scattered at random or by binary space partitioning.
+2. [`carveCorridors`](#carvecorridors) joins the rooms with corridors. Every room can be reached from every other one (see [Connections](#connections)). Rooms get the number of exits they ask for, and loops and dead ends are added if requested. Every opening in a room's wall becomes an _exit_, and each exit gets a door or stays a plain opening.
+
+In both generators, when a step throws, which is what happens to a template that finds no place or cannot be joined, the map is built again from the start, up to 3 times in all; the result reports the `attempts` and the `failures`. For other compositions, such as rooms of both kinds in one map, rooms in part of a map, or rooms next to a cave, run the steps with [`pipeline`](#pipeline).
+
+### `RoomDungeonOptions`
+
+| Option            | Default       | Description                                                                                                                                                                                                                 |
+| ----------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `width`, `height` | required      | Map size in tiles.                                                                                                                                                                                                          |
+| `random`          | `Math.random` | Source of randomness.                                                                                                                                                                                                       |
+| `scatter`         | the defaults  | The rooms, tried at random spots: the options of [`scatterRooms`](#scatterrooms). Used when `partition` is not given.                                                                                                       |
+| `partition`       | none          | The rooms, one in each part of a binary space partition: the options of [`partitionRooms`](#partitionrooms), in place of `scatter`. Giving both throws a `RangeError`.                                                      |
+| `corridors`       | the defaults  | The corridors and exits: the options of [`carveCorridors`](#carvecorridors). It takes nothing from the options of the rooms, so lattice or symmetric rooms want the same `placement`, `symmetry` and `symmetryChance` here. |
+
+Every option is checked before anything is generated, and a bad one throws a `RangeError` that names it. The rooms take `area` and `count` too, but those leave most of the map empty in a dungeon of its own; they are meant for compositions.
+
+### `DigDungeonOptions`
+
+| Option            | Default       | Description                                                                                                                                                                                                                 |
+| ----------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `width`, `height` | required      | Map size in tiles.                                                                                                                                                                                                          |
+| `random`          | `Math.random` | Source of randomness.                                                                                                                                                                                                       |
+| `grow`            | the defaults  | The rooms, grown from a first room in the middle: the options of [`growRooms`](#growrooms).                                                                                                                                 |
+| `corridors`       | the defaults  | The corridors and exits: the options of [`carveCorridors`](#carvecorridors). It takes nothing from the options of the rooms, so lattice or symmetric rooms want the same `placement`, `symmetry` and `symmetryChance` here. |
+
+Every option is checked before anything is generated, and a bad one throws a `RangeError` that names it.
+
+### `RoomDungeonResult`
+
+The result of both generators: the fields of a [`DungeonResult`](#dungeonresult), plus:
+
+| Field      | Description                                                                                                                             |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `attempts` | How many times the map was built, 1 or more.                                                                                            |
+| `failures` | One entry per failed attempt, also when a later attempt succeeded: `{ attempt, step, error }`, as [`pipeline`](#pipeline) reports them. |
+
+`exits` are the `roomExits` of [`carveCorridors`](#carvecorridors), and `fill` is worked out from the shapes of the rooms: the floor of every room, the doorways of templates included, over the map.
 
 ### Placement of rooms
 
-Which rooms go where is decided by `partition`:
+Which rooms go where is decided by the step that places them: `scatter` or `partition` in the options of `generateRoomDungeon`, and `grow` in those of [`generateDigDungeon`](#grown-dungeons):
 
-- `'scatter'` (default): random rooms are tried one after another, and any that would come too close to the map edge or to another room is discarded. Generation stops when the first of these happens:
+- `scatter` ([`scatterRooms`](#scatterrooms), the default): random rooms are tried one after another, and any that would come too close to the map edge or to another room is discarded. Generation stops when the first of these happens:
   - `roomCount.max` rooms have been placed.
   - The `fill` target has been reached and at least `roomCount.min` rooms are placed.
   - The map is full: 100 rooms in a row failed to fit. In that case you can get fewer rooms than `roomCount.min` or a lower fill than requested.
-- `'bsp'`: the map is cut in two again and again (binary space partitioning), and every area that results holds one room. The number of areas is estimated from `fill` and the typical room size, and kept within `roomCount`. If the rooms fall short of the target, the map is cut into more areas, a few times over. Rooms are placed inside their areas and separated by `roomSpacing`, so a `bsp` dungeon looks more regular than a scattered one.
+- `partition` ([`partitionRooms`](#partitionrooms)): the map is cut in two again and again (binary space partitioning), and every area that results holds one room. The number of areas is estimated from `fill` and the typical room size, and kept within `roomCount`. If the rooms fall short of the target, the map is cut into more areas, a few times over. Rooms are placed inside their areas and separated by `roomSpacing`, so a partitioned dungeon looks more regular than a scattered one.
 
-`spacingUniformity` sets how evenly rooms are spread, from 0 to 1:
+`spacingUniformity`, an option of both steps, sets how evenly rooms are spread, from 0 to 1:
 
 - With `scatter`, several candidate rooms are compared at once and the one farthest from the other rooms is kept. At 0 there is a single candidate, so rooms can land anywhere; at 1 there are ten.
-- With `bsp`, at 0 the cuts and the rooms inside their areas are placed at random, and the area to cut next is picked at random too. At 1 the biggest area is always cut next, cuts go through the middle and rooms sit in the middle of their areas, which gives an almost regular grid.
+- With `partition`, at 0 the cuts and the rooms inside their areas are placed at random, and the area to cut next is picked at random too. At 1 the biggest area is always cut next, cuts go through the middle and rooms sit in the middle of their areas, which gives an almost regular grid.
+
+```ts
+const regular = generateRoomDungeon({
+  width: 61,
+  height: 41,
+  partition: { roomSpacing: 3, spacingUniformity: 1 },
+});
+```
+
+- `grow` ([`growRooms`](#growrooms)): each room is built beyond a wall of a room there is, a `gap` of corridor away, starting from a room in the middle. See [Grown dungeons](#grown-dungeons).
 
 Rooms that turn out to be unreachable are dropped afterwards, see [Connections](#connections).
 
-A room is always separated from the map edge by at least one wall tile. The minimum number of wall tiles between two rooms is set with `roomSpacing`.
+A room is always separated from the map edge by at least one wall tile. The minimum number of wall tiles between two rooms is set with `roomSpacing`. If a size range does not fit between the map edges, it is clamped to what fits. If not even the smallest room fits, no rooms are placed, and no error is thrown.
 
 ### `placement`
 
@@ -1039,12 +1088,14 @@ A room is always separated from the map edge by at least one wall tile. The mini
 
 In `lattice` mode the size ranges are narrowed to odd numbers: `{ min: 4, max: 10 }` becomes 5 to 9. A range that holds no odd number, such as `{ min: 4, max: 4 }`, is rounded up to the next odd size (5). Likewise `roomSpacing` is rounded up to an odd number.
 
+`placement` is an option of each step: lattice rooms (`scatter.placement`, `partition.placement` or `grow.placement`) want lattice corridors (`corridors.placement`) too.
+
 ### Connections
 
-Rooms are joined in a tree, which means one link fewer than there are rooms. Extra links for exits and loops come on top of it. `connection` decides which links make the tree:
+Rooms are joined in a tree, which means one link fewer than there are rooms. Extra links for exits and loops come on top of it. `connection` (`corridors.connection` in the generators) decides which links make the tree:
 
 - `'nearest'` (the default) links the closest rooms first, between rooms that are not connected yet.
-- `'bsp'` joins rooms the way a BSP dungeon does. The rooms are cut in two, by a vertical or a horizontal cut, and each half is cut again, until single rooms are left. A cut runs across the axis where the centers of the rooms are more spread out, and it splits the rooms in half by their order along that axis. Every cut then gets one link, between the closest pair of rooms on its two sides. The smallest cuts are joined first, so rooms are joined into small clusters, and the clusters are then joined into larger ones. The cuts are worked out from where the rooms are, so `bsp` connections work with any `partition` and placement, with templated rooms and with symmetry, and not only with `partition: 'bsp'`. The result has long, straight links between clusters, where `nearest` has many short ones.
+- `'bsp'` joins rooms the way a BSP dungeon does. The rooms are cut in two, by a vertical or a horizontal cut, and each half is cut again, until single rooms are left. A cut runs across the axis where the centers of the rooms are more spread out, and it splits the rooms in half by their order along that axis. Every cut then gets one link, between the closest pair of rooms on its two sides. The smallest cuts are joined first, so rooms are joined into small clusters, and the clusters are then joined into larger ones. The cuts are worked out from where the rooms are, so `bsp` connections work with either placement step and either `placement`, with templated rooms and with symmetry, and not only with `partition`. The result has long, straight links between clusters, where `nearest` has many short ones.
 - `'bsp-random'` cuts the rooms in the same way, but joins a random room on one side of a cut to a random room on the other, as the textbook BSP algorithm does. The links are often long and cross the map, which makes a more tangled dungeon with more corridor crossings, where far-apart rooms are joined directly.
 
 With the BSP connections, if the corridor between the chosen pair of a cut cannot be built, the next pair is tried (the next closest for `'bsp'`, another random one for `'bsp-random'`). When no pair can be joined, the rooms are left for the nearest-first rule, and then for the recovery described at the end of this section. The rooms themselves are the same with every connection: only the corridors differ.
@@ -1064,7 +1115,7 @@ As a result every room can always be reached from every other room, but a crowde
 
 ### Exits per room
 
-Both generators honor `exitsPerRoom`. It is a `Range`. Every room draws its own wanted number of exits from it, so `{ min: 1, max: 1 }` means one exit each, `{ min: 2, max: 4 }` means several and `{ min: 1, max: 3 }` (the default) is random with at least one.
+Both generators honor `exitsPerRoom` (`corridors.exitsPerRoom`, like `loopChance` and `deadEndChance` below). It is a `Range`. Every room draws its own wanted number of exits from it, so `{ min: 1, max: 1 }` means one exit each, `{ min: 2, max: 4 }` means several and `{ min: 1, max: 3 }` (the default) is random with at least one.
 
 - A room with fewer links than it wants gets extra links to its nearest neighbors, which makes loops.
 - A room with more links than it wants uses its exits for several corridors: the extra corridors branch off the ones leaving through its exits, outside the wall.
@@ -1079,7 +1130,7 @@ In both generators, after the rooms are connected, `loopChance` adds extra corri
 
 In both generators, `deadEndChance` is the chance that a corridor sprouts a branch that leads nowhere, roughly 3 to 8 tiles long, from a random tile of the corridor. At 0, the default, there are no dead ends at all.
 
-### The digger
+### Grown dungeons
 
 ```ts
 import { generateDigDungeon } from 'angstloch';
@@ -1087,69 +1138,64 @@ import { generateDigDungeon } from 'angstloch';
 const { grid, rooms, exits } = generateDigDungeon({
   width: 61,
   height: 41,
-  corridorLength: { min: 2, max: 10 },
+  grow: { gap: { min: 2, max: 6 } },
+  corridors: { loopChance: 0.2 },
 });
 ```
 
-`generateDigDungeon` takes all the [`DungeonOptions`](#dungeonoptions) except that there is no partitioning, and returns a [`DungeonResult`](#dungeonresult). It digs the dungeon like this:
+`generateDigDungeon` builds a dungeon out of a first room, on a map of rock:
 
-1. It starts with one room in the middle of the map.
-2. It repeats the following until `fill` and `roomCount` are met, or the map is full (300 attempts in a row fail):
-   - Pick where to dig from. Usually that is a new exit on the wall of a room that has fewer exits than it wanted (see [Exits per room](#exits-per-room)), but with a `branchChance` it is a tile of an existing corridor. The direction is random, tipped by `horizontalBias` and `verticalBias`, and by [corridor symmetry](#symmetry) if set.
-   - Dig a corridor of `corridorLength` tiles. It mostly goes straight, as set by `straight`, and turns at most every other step. It follows the same rules as the [corridors of the room-first generator](#connections): it never runs alongside another corridor or passes diagonally beside one.
-   - Put a room of a size within `roomWidth` and `roomHeight` at the end, with a gap in its wall where the corridor arrives. If the corridor or the room does not fit, because it hits something or comes within `roomSpacing` of another room, the attempt is dropped and nothing is dug.
-3. It gives rooms the exits they want, and adds loops and dead ends, the way the room-first generator does.
+1. [`growRooms`](#growrooms) places the templated rooms, the first of them in the middle of the map unless it has `positions` or `areas` of its own, and then grows the ordinary rooms off it, or off an ordinary room in the middle when there are no templates. Each new room goes beyond a wall of a room there is, a `gap` of corridor away (1 to 4 tiles by default) and facing it, until `fill` and `roomCount` are met or 300 tries in a row fail.
+2. [`carveCorridors`](#carvecorridors) joins the rooms with corridors, nearest first, so most rooms are joined to the room they were built off by a short corridor, or by a door in the wall they share for a `gap` of 0.
 
-Every room is connected to the first one by the corridor it was dug from, so all rooms can be reached. Digging stalls when every room has all its exits and there are no corridors to branch off. In that case rooms are given more exits than they wanted, so that digging can go on.
-
-With [templates](#room-templates), the digger starts with the first template instead of a room of its own, placed in the middle of the map unless it has `positions` of its own. Digging then goes on from it and from its corridors as usual, and every other templated room is placed before digging starts and is an obstacle that new rooms and corridors keep away from. Once digging is done, those rooms are joined to the rest by corridors, before the extra exits, loops and dead ends are added. Templated rooms count towards `roomCount` and `fill`. With a symmetric layout, digging is mirrored only where the room it starts from has a twin, which takes `templateSymmetry`; without it, the steps that grow from a templated room are not mirrored. Templates work best with `generateRoomDungeon`, which has more freedom in where it puts them.
-
-A `corridorLength` with a minimum of 0 sometimes skips the corridor and builds the new room right against the wall of its parent, with a single door in the wall between them, which needs `roomSpacing: 1`. With `lattice` placement, corridor lengths are rounded to what fits the lattice.
-
-`DigDungeonOptions` add two options to `DungeonOptions`:
-
-| Option           | Default              | Description                                                                                                                                |
-| ---------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `corridorLength` | `{ min: 1, max: 8 }` | Length of the corridor dug to the next room, in tiles, a `Range` of at least 0. 0 builds the room straight against the room it grows from. |
-| `branchChance`   | `0.3`                | Chance that a new corridor is dug from an existing corridor instead of from a room, from 0 to 1.                                           |
-
-The other options work as described in [`DungeonOptions`](#dungeonoptions). `roomSpacing` is the least number of wall tiles between the floors of two rooms, `fill` and `roomCount` decide when digging stops, and `placement: 'lattice'` puts rooms and corridors on the lattice of a maze. `sizeUniformity` applies, too. `partition`, `spacingUniformity` and `connection` belong to `generateRoomDungeon` only.
+It takes the options of each step under a key of its own (see [`DigDungeonOptions`](#digdungeonoptions)) and returns a [`RoomDungeonResult`](#roomdungeonresult), as `generateRoomDungeon` does. The templates other than the first are placed before growing starts, wherever they fit, and are joined by the corridors afterwards. Templated rooms count towards `roomCount` and `fill`.
 
 ### Symmetry
 
-Both generators take the same symmetry options, which are part of [`DungeonOptions`](#dungeonoptions).
+Both generators can be symmetric. The layout symmetry is the `symmetry` and `symmetryChance` of each step, the rooms and `corridors`, and the corridor symmetry is under `corridors`.
 
 ```ts
-import { generateDigDungeon } from 'angstloch';
+import { generateDigDungeon, generateRoomDungeon } from 'angstloch';
 
-const { grid } = generateDigDungeon({
+const grown = generateDigDungeon({
   width: 61,
   height: 41,
-  layoutSymmetry: 'both', // generateRoomDungeon takes the same options
+  grow: { symmetry: 'both' },
+  corridors: { symmetry: 'both' },
+});
+const roomFirst = generateRoomDungeon({
+  width: 61,
+  height: 41,
+  scatter: { symmetry: 'both' },
+  corridors: { symmetry: 'both' },
 });
 ```
 
 There are two independent kinds of symmetry, each with a chance. They can be used together. At a chance of 1 the symmetry is applied everywhere. At 0 it is ignored completely, and the result is the same as with `none`. In between, it is applied to that share of the dungeon: the more, the closer to symmetric.
 
-| Option                   | Default | Description                                                                                                                         |
-| ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `layoutSymmetry`         | `none`  | Mirrors or rotates the layout of the dungeon about the center of the map: `none`, `horizontal`, `vertical`, `both` or `rotational`. |
-| `layoutSymmetryChance`   | `1`     | How often the layout is symmetric, from 0 to 1.                                                                                     |
-| `corridorSymmetry`       | `none`  | Makes corridors follow the pattern of a maze: `none`, `whirlpool` or `snowflake`.                                                   |
-| `corridorSymmetryChance` | `1`     | How strongly corridors follow `corridorSymmetry`, from 0 to 1.                                                                      |
+| Option                             | Default | Description                                                                                                                         |
+| ---------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `symmetry` of the rooms            | `none`  | Mirrors or rotates the layout of the dungeon about the center of the map: `none`, `horizontal`, `vertical`, `both` or `rotational`. |
+| `symmetryChance` of the rooms      | `1`     | How often the layout is symmetric, from 0 to 1.                                                                                     |
+| `corridors.symmetry`               | `none`  | Mirrors the corridors, exits and doors the same way.                                                                                |
+| `corridors.symmetryChance`         | `1`     | How often a corridor gets its twins, from 0 to 1.                                                                                   |
+| `corridors.corridorSymmetry`       | `none`  | Makes corridors follow the pattern of a maze: `none`, `whirlpool` or `snowflake`.                                                   |
+| `corridors.corridorSymmetryChance` | `1`     | How strongly corridors follow `corridorSymmetry`, from 0 to 1.                                                                      |
+
+The rooms and the corridors are mirrored by their own steps, each with its own `symmetry` and `symmetryChance`, and neither takes the other's. A symmetric dungeon gives the same settings to both; symmetric rooms with free corridors leave them out of `corridors`.
 
 #### Layout symmetry
 
-`layoutSymmetry` makes the dungeon look the same when mirrored or turned:
+The layout symmetry, `symmetry`, makes the dungeon look the same when mirrored or turned:
 
 - `horizontal` mirrors it from left to right: the left half is the mirror image of the right half.
 - `vertical` mirrors it from top to bottom.
 - `both` does both at once, so that the dungeon is made of four mirrored quarters.
 - `rotational` turns it by 180° about the center. The result looks the same upside down.
 
-Rooms, corridors, exits and doors are all mirrored. A room and its _twins_ get the same exits (as far as the usual [exit counts](#exits-per-room) allow), and an exit and its twins are all open or all have a door, whatever `doorChance` is. Loops and dead ends are mirrored, too. Rooms that lie on an axis are their own twins. Both generators put a room in the middle of the map that is its own twin: the digger starts with it, and the room-first generator places it before all others. Every room is still reachable, and all the rules of corridors apply as usual.
+Rooms, corridors, exits and doors are all mirrored. A room and its _twins_ get the same exits (as far as the usual [exit counts](#exits-per-room) allow), and an exit and its twins are all open or all have a door, whatever `doorChance` is. Loops and dead ends are mirrored, too. Rooms that lie on an axis are their own twins. Both generators put a room in the middle of the map that is its own twin: `growRooms` grows from it, and `scatterRooms` and `partitionRooms` place it before all others. Every room is still reachable, and all the rules of corridors apply as usual.
 
-`layoutSymmetryChance` is rolled for every room and corridor that is dug (or placed), and for every extra exit, loop and dead end. When the roll fails, the room or corridor gets no twins. Rooms without twins cannot take twins to anything they grow, so the unsymmetric parts stay unsymmetric. Where a mirrored room, corridor or exit would not fit, because it would collide with something, the whole step is skipped, which keeps a dungeon at chance 1 perfectly symmetric.
+`symmetryChance` is rolled for every room and corridor that is placed, and for every extra exit, loop and dead end. When the roll fails, the room or corridor gets no twins. A corridor gets twins only where the rooms it joins have theirs, so the unsymmetric parts stay unsymmetric. Where a mirrored room, corridor or exit would not fit, because it would collide with something, the whole step is skipped, which keeps a dungeon at chance 1 perfectly symmetric.
 
 Things to know:
 
@@ -1160,9 +1206,9 @@ Things to know:
 
 How each generator applies the layout symmetry:
 
-- The digger mirrors every step of digging (corridor, room, exits) as a whole. A step is only taken if all its mirror images fit.
-- `generateRoomDungeon` mirrors the rooms and every link between them. With `scatter`, each room that is placed is mirrored together with its twins at the given chance, and rooms may lie on an axis. With `bsp`, only one half (or quarter) of the map is partitioned and its areas are mirrored; rooms never straddle an axis, apart from the middle room. With a chance below 1, a mirrored area gets a room of its own instead of a twin. A corridor that crosses an axis cannot be mirrored, as it would meet its own image, so the two halves are joined through the room in the middle. A room that cannot be linked symmetrically is dropped together with its twins, so the layout stays symmetric.
-- For `generateRoomDungeon`, a `roomCount.max` below the size of a set of twins can leave few rooms; with `bsp`, `fill` is met roughly, as without symmetry, but less closely.
+- The rooms. With `grow`, each room that is grown is mirrored together with its twins at the given chance, and it is only built if all of them fit. With `scatter`, each room that is placed is mirrored together with its twins at the given chance, and rooms may lie on an axis. With `partition`, only one half (or quarter) of the map is partitioned and its areas are mirrored; rooms never straddle an axis, apart from the middle room. With a chance below 1, a mirrored area gets a room of its own instead of a twin.
+- The corridors. `carveCorridors` mirrors every link between the rooms. A corridor that crosses an axis cannot be mirrored, as it would meet its own image, so the two halves are joined through the room in the middle. A room that cannot be linked symmetrically is dropped together with its twins, so the layout stays symmetric.
+- A `roomCount.max` below the size of a set of twins can leave few rooms; with `partition`, `fill` is met roughly, as without symmetry, but less closely.
 
 #### Corridor symmetry
 
@@ -1171,58 +1217,16 @@ How each generator applies the layout symmetry:
 - `snowflake` makes corridors radiate from the center. Where a tile is further from the center horizontally than vertically, corridors there run horizontally, and the other way round.
 - `whirlpool` makes them twirl around the center, with the same rule turned by 90°.
 
-`corridorSymmetryChance` is how often the pattern applies, instead of `horizontalBias` and `verticalBias`. `straight` limits the effect:
-
-- The digger picks the direction of a corridor at its start and whenever it turns, so corridors that never turn keep the direction they started in. Routed corridors of the extra links (exits, loops, dead ends) are steered, too.
-- `generateRoomDungeon` routes corridors on a map where each tile has a preferred axis, chosen by the chance. Corridors prefer to follow it, as moving along the other axis costs more, but they still go wherever they have to.
+`corridorSymmetryChance` is how often the pattern applies, instead of `horizontalBias` and `verticalBias`. `straight` limits the effect. Corridors are routed on a map where each tile has a preferred axis, chosen by the chance. Corridors prefer to follow it, as moving along the other axis costs more, but they still go wherever they have to.
 
 Corridor symmetry does not make the layout symmetric.
-
-### `DungeonOptions`
-
-`DungeonOptions` are the options shared by all dungeon generators. `RoomDungeonOptions`, the options of `generateRoomDungeon`, add `partition`, `spacingUniformity` and `connection`. [`DigDungeonOptions`](#the-digger), the options of `generateDigDungeon`, add `corridorLength` and `branchChance`.
-
-| Option                   | Default                      | Description                                                                                                                                                                                                                               |
-| ------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `width`, `height`        | required                     | Map size in tiles.                                                                                                                                                                                                                        |
-| `random`                 | `Math.random`                | Source of randomness.                                                                                                                                                                                                                     |
-| `placement`              | `'free'`                     | `'free'` or `'lattice'`, see above.                                                                                                                                                                                                       |
-| `roomWidth`              | `{ min: 3, max: 7 }`         | Room width in tiles, a `Range` of at least 1.                                                                                                                                                                                             |
-| `roomHeight`             | `{ min: 3, max: 7 }`         | Room height in tiles, a `Range` of at least 1.                                                                                                                                                                                            |
-| `sizeUniformity`         | `0`                          | How alike room sizes are, from 0 to 1. At 0 every size in the ranges is equally likely. Higher values pull sizes towards the middle of the ranges, and at 1 all rooms are the same size.                                                  |
-| `roomCount`              | `{ min: 1, max: unbounded }` | Number of rooms, a `Range` of at least 0. Generation never exceeds `max`, and `fill` is only honored once `min` is reached.                                                                                                               |
-| `roomSpacing`            | `1`                          | Fewest wall tiles between the floors of two rooms, a whole number of at least 1. With 1, rooms can sit right next to each other and share a door. With 3 or more a corridor fits between rooms.                                           |
-| `fill`                   | `0.12`                       | Target share of the map covered by room floors, from 0 to 1. Corridors do not count. The last room may overshoot the target. Above roughly 0.15 the map gets cramped; below 0.1 it is sparse.                                             |
-| `exitsPerRoom`           | `{ min: 1, max: 3 }`         | Number of exits per room, a `Range` of at least 1. See [Exits per room](#exits-per-room).                                                                                                                                                 |
-| `loopChance`             | `0.1`                        | Chance of an extra corridor between each pair of nearby rooms that is not linked yet, from 0 to 1. See [Loops](#loops).                                                                                                                   |
-| `deadEndChance`          | `0`                          | Chance that a corridor sprouts a dead end, from 0 to 1. See [Dead ends](#dead-ends).                                                                                                                                                      |
-| `doorChance`             | `1`                          | Chance that an exit gets a door, from 0 to 1. Exits without a door are plain openings in the wall.                                                                                                                                        |
-| `straight`               | `0.5`                        | Preference of corridors for going straight, from 0 to 1. At 0 corridors wander; at 1 they turn as little as possible.                                                                                                                     |
-| `horizontalBias`         | `0`                          | Weight of horizontal corridor sections against `verticalBias`. Only the ratio matters, so set both; a lone value against 0 means always. The bias makes corridors prefer to leave rooms sideways (or up and down) and to detour that way. |
-| `verticalBias`           | `0`                          | Weight of vertical corridor sections against `horizontalBias`.                                                                                                                                                                            |
-| `layoutSymmetry`         | `none`                       | Mirrors or rotates the layout about the center of the map: `none`, `horizontal`, `vertical`, `both` or `rotational`. See [Symmetry](#symmetry).                                                                                           |
-| `layoutSymmetryChance`   | `1`                          | How often the layout is symmetric, from 0 to 1.                                                                                                                                                                                           |
-| `corridorSymmetry`       | `none`                       | Makes corridors follow a maze pattern: `none`, `whirlpool` or `snowflake`.                                                                                                                                                                |
-| `corridorSymmetryChance` | `1`                          | How strongly corridors follow `corridorSymmetry`, from 0 to 1.                                                                                                                                                                            |
-| `templates`              | none                         | Prefabricated rooms, see [Room templates](#room-templates).                                                                                                                                                                               |
-| `templateSymmetry`       | `false`                      | Whether templated rooms get mirror images, see [Room templates](#room-templates).                                                                                                                                                         |
-
-`RoomDungeonOptions` adds:
-
-| Option              | Default     | Description                                                                                                 |
-| ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
-| `partition`         | `'scatter'` | How rooms are placed, `'scatter'` or `'bsp'`, see [Placement of rooms](#placement-of-rooms).                |
-| `connection`        | `'nearest'` | How rooms are joined by corridors, `'nearest'`, `'bsp'` or `'bsp-random'`, see [Connections](#connections). |
-| `spacingUniformity` | `0`         | How evenly rooms are spread over the map, from 0 to 1.                                                      |
-
-If a size range does not fit between the map edges, it is clamped to what fits. If not even the smallest room fits, no rooms are placed, and no error is thrown.
 
 ### Doors
 
 The generator never decides what a door looks like, it only tells you where doors can go.
 
 - Every opening in a room's wall is an exit and is listed in `exits`, whether it has a door or not.
-- `doorChance` decides which exits get a door. In the grid an exit with a door is `Tile.Door` and one without is `Tile.Floor`.
+- `doorChance` decides which exits get a door. In the grid an exit with a door is `Tile.Door` and one without is `Tile.Floor`. `corridors.doorChance` decides for the exits that the corridors open, and the `doorChance` of the rooms for the `Exit` cells of templates.
 - `Exit#door` tells which is which. To turn an exit without a door into a door, for example because a themed room requires one, use `Exit#position`; that tile is already open floor.
 - `Room#exits` lists the exits of one room, and `Room#exitCount` and `Room#doorCount` give the totals.
 
@@ -1230,7 +1234,7 @@ The generator never decides what a door looks like, it only tells you where door
 const { rooms, exits } = generateRoomDungeon({
   width: 61,
   height: 41,
-  doorChance: 0.5,
+  corridors: { doorChance: 0.5 },
 });
 
 for (const room of rooms) {
@@ -1243,6 +1247,8 @@ for (const room of rooms) {
 ```
 
 ### `DungeonResult`
+
+The fields that every dungeon reports; the generators return a [`RoomDungeonResult`](#roomdungeonresult), which has them too.
 
 | Field   | Description                                                                                                |
 | ------- | ---------------------------------------------------------------------------------------------------------- |
@@ -1277,7 +1283,7 @@ For a templated room, `x`, `y`, `width` and `height` describe the template's bou
 
 ### Room templates
 
-Pass templates to either generator in the `templates` option. A `RoomTemplate` is a player-made room: a rectangular design that is placed in a dungeon as it is, with the corridors dug around it. The design is a grid of `TemplateCell` values, written as rows:
+Pass templates to either generator in the `templates` option of its rooms (`scatter.templates` or `partition.templates` in `generateRoomDungeon`, `grow.templates` in `generateDigDungeon`). A `RoomTemplate` is a player-made room: a rectangular design that is placed in a dungeon as it is, with the corridors dug around it. The design is a grid of `TemplateCell` values, written as rows:
 
 ```ts
 import { TemplateCell, type RoomTemplate } from 'angstloch';
@@ -1344,7 +1350,7 @@ Placement is best effort, but never silent. For each copy of a template:
 2. The target is the position's `coords`, with the anchor of the room's bounding box on it (an even box has its center rounded down). Below an accuracy of 1 the target is moved by up to `(1 - positionAccuracy)` times half the shorter map side in each direction.
 3. If the target is not valid, the nearest valid spot is used instead. Every allowed variant is considered, so a variant that fits better than the first one can win.
 
-`areas` say where copies without a position go, when you care about the region and not the exact spot, for example near the sides of the map: give a strip on each side. A copy picks one of the areas at random and is placed at a random valid spot inside it, in any allowed variant. The copy's whole bounding box must lie inside the area. If the picked area has no room for it, the other areas are tried, and if none has, placing throws a `TemplatePlacementError`: a template with areas is never placed outside them. An area must be a rectangle of whole numbers, at least 1 by 1, within the map, and at least one allowed variant must fit in at least one area, or the template is rejected with a `RangeError` before anything is generated. `positionAccuracy` only applies to positions. With `templateSymmetry`, a copy is only placed where its mirror images fit too, but they need not lie inside an area. The digger starts with the first template in the middle of the map unless it has `positions` or `areas`.
+`areas` say where copies without a position go, when you care about the region and not the exact spot, for example near the sides of the map: give a strip on each side. A copy picks one of the areas at random and is placed at a random valid spot inside it, in any allowed variant. The copy's whole bounding box must lie inside the area. If the picked area has no room for it, the other areas are tried, and if none has, placing throws a `TemplatePlacementError`: a template with areas is never placed outside them. An area must be a rectangle of whole numbers, at least 1 by 1, within the map, and at least one allowed variant must fit in at least one area, or the template is rejected with a `RangeError` before anything is generated. `positionAccuracy` only applies to positions. With `templateSymmetry`, a copy is only placed where its mirror images fit too, but they need not lie inside an area. [`growRooms`](#growrooms) puts the first template in the middle of the map unless it has `positions` or `areas`.
 
 A spot is valid if the room's footprint, which is every cell but the `Unused` ones and so includes the template's walls, lies within the map and keeps its distance from other rooms' footprints, and if the exits have room. Distance works like this:
 
@@ -1357,7 +1363,7 @@ On the lattice (`placement: 'lattice'`) a template's bounding box sits on even c
 
 #### In a dungeon
 
-`generateRoomDungeon` places the templates before anything else, in the order of the list, and carves them as they are. ([`generateDigDungeon`](#the-digger) does the same, and starts digging from the first one.) The ordinary rooms are placed afterwards around them, at least `roomSpacing` tiles from a template's footprint and leaving the tile in front of each of its exits free, and corridors never cut through a template's walls. The templated rooms come first in `rooms`, copies of a template together, and are described by `template`, `rotation` and `mirrored`.
+`generateRoomDungeon` places the templates before anything else, in the order of the list, and carves them as they are. ([`generateDigDungeon`](#grown-dungeons) does the same, and grows the ordinary rooms from the first one.) The ordinary rooms are placed afterwards around them, at least `roomSpacing` tiles from a template's footprint and leaving the tile in front of each of its exits free, and corridors never cut through a template's walls. The templated rooms come first in `rooms`, copies of a template together, and are described by `template`, `rotation` and `mirrored`.
 
 ```ts
 import { generateRoomDungeon } from 'angstloch';
@@ -1365,19 +1371,21 @@ import { generateRoomDungeon } from 'angstloch';
 const { grid, rooms } = generateRoomDungeon({
   width: 61,
   height: 31,
-  templates: [
-    { ...cross, positions: [{ coords: { x: 30, y: 15 }, anchor: 'center' }] },
-  ],
+  scatter: {
+    templates: [
+      { ...cross, positions: [{ coords: { x: 30, y: 15 }, anchor: 'center' }] },
+    ],
+  },
 });
 ```
 
 - A templated room counts towards `roomCount`, and its floor, doors included, towards `fill`. The `fill` of the result includes it.
 - Every `Exit` and `Door` cell that leads outside is opened and joined to the rest of the dungeon by a corridor, whatever `exitsPerRoom` says. Those exits count towards the room's `exitsPerRoom`, so a room with more fixed exits than the range asks for simply has more.
 - `OptionalExit` cells are opened only as far as `exitsPerRoom` asks for more exits, and only where a corridor can start. If a template has no more exits than its fixed ones, it gets no others.
-- `Exit` cells become doors by `doorChance`, and `Door` cells always do. They are listed in `exits`, and `Exit` and `Door` cells inside the template, which lead nowhere, are tiles only: they are not listed, and the same `doorChance` applies to the `Exit` ones.
+- `Exit` cells become doors by `doorChance` (that of the rooms in `generateRoomDungeon`), and `Door` cells always do. They are listed in `exits`, and `Exit` and `Door` cells inside the template, which lead nowhere, are tiles only: they are not listed, and the same `doorChance` applies to the `Exit` ones.
 - Every exit has a corridor tile in front of it and corridors keep the usual distance from one another, so a door cannot be sidestepped and corridors cannot be crossed diagonally.
-- With `templateSymmetry` set and a `layoutSymmetry` other than `none`, every copy of a template brings its mirror images along, always and whatever `layoutSymmetryChance` is. An image is the geometric image of the copy, whatever `rotate` and `mirror` allow, and `rotation` and `mirrored` describe it accordingly. A copy is only placed where its images fit too, and an image that equals the copy (a centered, symmetric template) is not added. Without `templateSymmetry`, a template is placed once per copy, even with a symmetric layout. `templateSymmetry` has no effect without a layout symmetry.
-- The corridor rules can occasionally box in the fixed exit of a template. The ordinary rooms and corridors are then built again (dug again, by the digger), up to ten times. If it still fails, the templates are placed again and the dungeon is built again, up to three times in all, before giving up with a `TemplatePlacementError`.
+- With `templateSymmetry` set and a `symmetry` of the rooms other than `none`, every copy of a template brings its mirror images along, always and whatever `symmetryChance` is. An image is the geometric image of the copy, whatever `rotate` and `mirror` allow, and `rotation` and `mirrored` describe it accordingly. A copy is only placed where its images fit too, and an image that equals the copy (a centered, symmetric template) is not added. Without `templateSymmetry`, a template is placed once per copy, even with a symmetric layout. `templateSymmetry` has no effect without a layout symmetry.
+- The corridor rules can occasionally box in the fixed exit of a template. `carveCorridors` then routes the corridors again, up to three times in all. If it still fails, the templates are placed again and the dungeon is built again, up to three times in all, before giving up with a `TemplatePlacementError`.
 
 With `placement: 'lattice'`, a template that cannot sit on the lattice is rejected before anything is generated, with a `RangeError` that names it: at least one of its variants must have an odd width and height, every `Exit` and `Door` that leads outside must face a tile with odd coordinates, which is where corridors start, and so must at least one exit candidate of any kind. Design lattice templates with their walls on even and their floors on odd rows and columns of the template, and exits on the walls at odd positions along them. An example is a 3x3 template with a floor in the middle and one exit in the top wall.
 
@@ -1385,7 +1393,7 @@ A template is never skipped silently, since a map may need it (a boss arena, a s
 
 ## Composing maps
 
-A map can be composed from an empty base and a list of steps, like middleware, instead of one generator with many options. `pipeline` runs the steps in order, merges what each reports into the map state, and builds the map again from the start when a step throws. The forest is made of ready-made steps ([`plantTrees`](#planttrees), [`addStreams`](#addstreams), [`addRoads`](#addroads), [`placeClearings`](#placeclearings), [`placeTemplates`](#placetemplates), [`addClearingPaths`](#addclearingpaths) and [`addFootbridges`](#addfootbridges)); the mine's layouts are steps too ([`digFishbone`](#digfishbone), [`digVeins`](#digveins), [`digPillarHalls`](#digpillarhalls) and [`digRings`](#digrings)), and so are its rooms ([`placeMineRooms`](#placeminerooms)); a maze is [`placeMazeRooms`](#placemazerooms), [`carveMaze`](#carvemaze) and [`openMazeRooms`](#openmazerooms); caves are the steps [`growCave`](#growcave) and [`carveNoiseCave`](#carvenoisecave), joined by [`digCaveTunnels`](#digcavetunnels); [`generateForest`](#forests), [`generateCave`](#caves), [`generateNoiseCave`](#noise-caves), [`generateMine`](#mines) and [`generateMaze`](#mazes) are compositions of them; you can write steps of your own, and the machinery is the same.
+A map can be composed from an empty base and a list of steps, like middleware, instead of one generator with many options. `pipeline` runs the steps in order, merges what each reports into the map state, and builds the map again from the start when a step throws. Every generator of this library is a preset, a ready-made composition of the steps listed under [Steps at a glance](#steps-at-a-glance): [`generateForest`](#forests), [`generateCave`](#caves), [`generateNoiseCave`](#noise-caves), [`generateMine`](#mines), [`generateMaze`](#mazes), [`generateRoomDungeon`](#dungeons) and [`generateDigDungeon`](#grown-dungeons). Each preset passes its keys straight to its steps, so whatever a preset makes, a pipeline of the same steps with the same options makes too, and steps of different generators mix in one map (rooms round a cavern, a mine with a maze in a corner). You can write steps of your own, and the machinery is the same.
 
 ```ts
 import { Tile, emptyMap, pipeline, stampTile, step } from 'angstloch';
@@ -1428,6 +1436,38 @@ const { grid, scattered, attempts, failures } = pipeline(
 );
 ```
 
+### Steps at a glance
+
+Every ready-made step, grouped by the map it was made for, though any of them may go in any pipeline. **Needs** are the extras that an earlier step must have added, which `pipeline` checks before the first attempt; **adds** are the extras it reports (an extra that is there already is appended to, or replaced, as the step's section says). **Rock** marks the steps that dig out of rock and need a map that starts as wall. **Area** marks the steps that take an [`area`](#areas), and **count** those that also take a number of copies.
+
+| Step                                    | What it does                                                                        | Needs                 | Adds                                           | Rock | Area, count |
+| --------------------------------------- | ----------------------------------------------------------------------------------- | --------------------- | ---------------------------------------------- | ---- | ----------- |
+| [`plantTrees`](#planttrees)             | plants trees by noise on the base tile                                              |                       |                                                |      |             |
+| [`addStreams`](#addstreams)             | lays streams and rivers, with banks and tributaries                                 |                       | `streams`                                      |      |             |
+| [`addRoads`](#addroads)                 | lays roads, with crossings, branches and bridges over streams                       |                       | `roads`, `junctions`, `exits`, `bridges`       |      |             |
+| [`placeClearings`](#placeclearings)     | clears ragged glades                                                                |                       | `clearings`                                    |      |             |
+| [`placeTemplates`](#placetemplates)     | stamps templates in clearings or on free spots                                      |                       | `templates`                                    |      |             |
+| [`addClearingPaths`](#addclearingpaths) | lays paths from the roads to the clearings that ask for one                         | `clearings`           | `roads`, `junctions`, `exits`, `bridges`       |      |             |
+| [`addFootbridges`](#addfootbridges)     | joins the land that streams cut apart                                               | `streams`             | `bridges`                                      |      |             |
+| [`digFishbone`](#digfishbone)           | a main shaft with adits off it                                                      |                       | `passages`                                     | yes  | area, count |
+| [`digVeins`](#digveins)                 | a web of veins between junctions                                                    |                       | `passages`                                     | yes  | area, count |
+| [`digPillarHalls`](#digpillarhalls)     | halls with pillars, joined by veins                                                 |                       | `passages`, `halls`                            | yes  | area, count |
+| [`digRings`](#digrings)                 | rings joined by spokes                                                              |                       | `passages`                                     | yes  | area, count |
+| [`placeMineRooms`](#placeminerooms)     | rooms in the rock, each joined to the nearest floor by a tunnel                     |                       | `passages`, `rooms`, `roomExits`, `roomShapes` | yes  |             |
+| [`growCave`](#growcave)                 | a cave from a cellular automaton                                                    |                       | `caverns`                                      | yes  | area, count |
+| [`carveNoiseCave`](#carvenoisecave)     | a cave from thresholded noise                                                       |                       | `caverns`                                      | yes  | area, count |
+| [`digCaveTunnels`](#digcavetunnels)     | joins every piece of floor by cave tunnels, and rooms through their potential exits |                       |                                                | yes  |             |
+| [`placeMazeRooms`](#placemazerooms)     | rooms on the maze lattice, not opened yet                                           |                       | `rooms`, `roomShapes`                          | yes  | area        |
+| [`carveMaze`](#carvemaze)               | a maze by the recursive backtracker, round whatever is there                        |                       | `start`                                        | yes  | area, count |
+| [`openMazeRooms`](#openmazerooms)       | opens the maze rooms into the maze                                                  | `rooms`, `roomShapes` | `rooms`, `roomExits`                           |      |             |
+| [`scatterRooms`](#scatterrooms)         | dungeon rooms at random spots                                                       |                       | `rooms`, `roomShapes`                          | yes  | area, count |
+| [`partitionRooms`](#partitionrooms)     | one dungeon room per area of a binary space partition                               |                       | `rooms`, `roomShapes`                          | yes  | area, count |
+| [`growRooms`](#growrooms)               | dungeon rooms grown off each other, clustered                                       |                       | `rooms`, `roomShapes`                          | yes  | area, count |
+| [`carveCorridors`](#carvecorridors)     | joins the rooms, and every other piece of floor, by corridors                       | `rooms`, `roomShapes` | `rooms`, `roomShapes`, `roomExits`             | yes  |             |
+| [`addExits`](#addexits)                 | carves exits into the border                                                        |                       | `exits`                                        |      |             |
+
+The presets are these steps in this order: a forest is `plantTrees`, then the outdoor steps it is given; a cave is `growCave` or `carveNoiseCave`, `digCaveTunnels` and `addExits`; a mine is one layout step, then `carveNoiseCave` and `digCaveTunnels` for caverns, `placeMineRooms` and `addExits`; a maze is `placeMazeRooms`, `carveMaze`, `openMazeRooms` and `addExits`; a room-first dungeon is `scatterRooms` or `partitionRooms`, then `carveCorridors`; a grown dungeon is `growRooms`, then `carveCorridors`. The building blocks for steps of your own are [`MapState`](#mapstate) and its helpers, [`pruneVerge`](#verges-and-pruneverge) and [areas](#areas).
+
 ### `emptyMap`
 
 `emptyMap({ width, height, tile })` is the start of a pipeline: a map of one tile, grass for a forest and a wall for a dungeon or a mine. The dimensions and the tile are checked at once, and a bad one throws a `RangeError`. It returns a factory (`MapBase`, a function that returns a `MapState`), so that every attempt starts from a fresh state. Any function that returns a state works in its place.
@@ -1443,6 +1483,8 @@ The map while it is built: `{ grid, base, prunable, reserved, ...extras }`.
 - The extras are what the steps return: `streams`, `roads`, and so on.
 
 `reserveTile(state, x, y, kind)` sets the byte of a tile, and throws a `RangeError` outside the grid. `openReserved(state, x, y)` records that an exit was opened on a tile: the tile and every `Openable` tile around it, diagonals included, become `Solid`, so that no two exits end up side by side.
+
+`findNearestOpenable(state, from, { blocked?, accepts? })` finds the `Openable` tile nearest to any of the points `from`, such as the potential exit of a room that a step knows nothing about, by a breadth-first search over the tiles that are `Reserve.None` and not marked by `blocked` (a byte per tile, 1 to keep out). It returns `{ openable, outside, direction, start }`: the tile, the free tile next to it that the search reached it from, the way from the tile to that one (an index into north, east, south, west), and the index into `from` of the start it came from; or `undefined` when there is none to reach. `accepts(openable, direction)` can turn a tile down, and the search goes on past it. [`digCaveTunnels`](#digcavetunnels) uses it to enter rooms.
 
 **The free rule.** `isFree(state, x, y)` says whether a step may build on a tile: it holds the base tile or is prunable (untouched ground or ground cover), and it is `Reserve.None`. A tile outside the grid is not free. `placeTemplates` and `addClearingPaths` use it, and `placeTemplates` reserves the cells it stamps as `Solid`, so that a step that comes later and digs, such as a mine or a corridor step, leaves a ruin whole.
 
@@ -2011,7 +2053,8 @@ const { grid } = pipeline(
 
 - **How it joins.** The pieces are groups of floor tiles that touch along an edge. The largest is joined to the piece nearest to it, the group to the nearest one after that, and so on, so tunnels stay short; then `loops` adds shortcuts, as described for [caves](#loops).
 - **What it digs.** Tunnels dig only through [free](#mapstate) tiles and pass along existing floor; every other tile (a door, a road) is left as it is and is in the way. They only ever turn rock into floor, so no floor is lost.
-- **Reserved tiles.** No tunnel touches a reserved tile, so tunnels go round rooms and ruins, and the floor of a room is not a piece to join: joining rooms is the job of their own steps. A piece that only a way through reserved tiles could reach is left as it is, and the rest is joined without it.
+- **Reserved tiles.** No tunnel digs a reserved tile, so tunnels go round rooms and ruins. A piece that only a way through reserved tiles could reach is left as it is, and the rest is joined without it.
+- **Rooms.** Once the floor is joined, the rooms that nothing reaches yet are joined too, so "a cave with rooms, joined by cave tunnels" is `growCave`, `scatterRooms` and `digCaveTunnels`. A room is entered through its nearest potential exit, a `Reserve.Openable` tile (see [`findNearestOpenable`](#mapstate)), which becomes floor and goes through [`openReserved`](#mapstate). The pieces here are every tile that is not wall, so a room, the rooms its doors join, or the floor with the rooms joined to it so far; the largest digs to the nearest potential exit of another piece, from its floor or out through a potential exit of its own rooms, and so on. A room that a corridor or another tunnel already reaches gets no tunnel, and a room with no potential exit left is not joined. With a `symmetry`, the twins of a tunnel open the twins of its potential exits too, where they are still `Openable`. `loops` adds no shortcuts to rooms. The rooms are not told of the exits, so they are not in `roomExits`.
 - **Twins.** With a `symmetry`, every tile a tunnel turns into floor is also turned into floor at its mirror images, with the chance `symmetryChance`, rolled once per tunnel. A twin that would land on a tile it may not dig is left out.
 - **Uses and adds** no extras.
 
@@ -2117,17 +2160,191 @@ const { grid, rooms, roomExits, exits } = pipeline(
 - **What it reserves.** Every opening goes through [`openReserved`](#mapstate), so it and the potential exits round it become `Reserve.Solid`.
 - **Needs** `rooms` and `roomShapes`, **uses** `roomExits` from the steps before it, and **adds** `rooms` and `roomExits` again, with the exits of the rooms it opened appended. The rooms of the state are copied, not changed.
 
+### `scatterRooms`
+
+`scatterRooms(options?)` is a step that places the rooms of a dungeon, the default first step of [`generateRoomDungeon`](#dungeons) (see [placement of rooms](#placement-of-rooms)): the templates first, then ordinary rooms tried at random spots, one after another, until `roomCount.max` rooms are placed, the `fill` is reached with at least `roomCount.min` rooms, or 100 rooms in a row do not fit. It carves the rooms but does not open them; joining them with corridors is a later step's job. It needs a map that starts as wall, and it checks every option and template when it is made.
+
+```ts
+import { emptyMap, pipeline, scatterRooms, Tile } from 'angstloch';
+
+const { grid, rooms, roomShapes, reserved } = pipeline(
+  emptyMap({ width: 61, height: 41, tile: Tile.Wall }),
+  [
+    scatterRooms({
+      fill: 0.2,
+      roomSpacing: 3,
+      // closet is the template of the example under room templates
+      templates: [closet],
+    }),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
+| Option              | Default         | Meaning                                                                                                                                                                                                              |
+| ------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `placement`         | `'free'`        | `'free'` or `'lattice'`, as for dungeons (see [`placement`](#placement)): lattice rooms start on odd coordinates and have odd sizes, and an even `roomSpacing` is rounded up to an odd one.                          |
+| `roomWidth`         | `{ 3, 7 }`      | Room width in tiles, without the walls, 1 or more.                                                                                                                                                                   |
+| `roomHeight`        | `{ 3, 7 }`      | Room height in tiles, without the walls, 1 or more.                                                                                                                                                                  |
+| `sizeUniformity`    | 0               | How alike room sizes are, from 0 (anything within the ranges) to 1 (every room has the middle size).                                                                                                                 |
+| `roomCount`         | `{ 1, no max }` | Number of rooms in each area, templated rooms and mirror images included, whole numbers of 0 or more. Placing stops at `max`; `fill` counts only once `min` is reached. Fewer are placed when no more fit.           |
+| `roomSpacing`       | 1               | Fewest wall tiles between the floors of two rooms, 1 or more. With 1 rooms may share a wall; with 3 or more a corridor fits between them.                                                                            |
+| `fill`              | 0.12            | Target share of each area covered by room floors, from 0 to 1. The last room may overshoot it.                                                                                                                       |
+| `spacingUniformity` | 0               | How evenly rooms are spread, from 0 to 1: several candidate rooms are tried at once and the one farthest from the other rooms is kept, one candidate at 0 and ten at 1.                                              |
+| `templates`         | none            | [`RoomTemplate`](#room-templates) objects, placed before the ordinary rooms. Their positions and areas are in the coordinates of the `area`. One that cannot be placed fails the attempt.                            |
+| `templateSymmetry`  | false           | Whether templated rooms get mirror images, which follow `symmetry` always, whatever `symmetryChance` says.                                                                                                           |
+| `doorChance`        | 1               | Chance that an `Exit` cell of a template gets a door, from 0 to 1. `Door` cells always do. The other openings are decided by the step that joins the rooms.                                                          |
+| `symmetry`          | `'none'`        | Mirrors or rotates the rooms about the middle of their area: `'horizontal'`, `'vertical'`, `'both'` or `'rotational'`, as [layout symmetry](#layout-symmetry) does for a dungeon. A room is put in the middle first. |
+| `symmetryChance`    | 1               | How often a room gets its twins, from 0 (never) to 1 (always).                                                                                                                                                       |
+| `area`              | the map         | The size of the box each set of rooms goes in, an `AreaSize` (see [Areas](#areas)), on the lattice with `'lattice'` placement.                                                                                       |
+| `count`             | `{ 1, 1 }`      | How many sets of rooms to place, each in its own box. More than one needs an `area` smaller than the map.                                                                                                            |
+
+- **What is in the way.** Ordinary rooms keep `roomSpacing` from each other, from the templates, from the tiles in front of the fixed exits of templates, and from every tile that is not free (see [`isFree`](#mapstate)), such as a mine, a cave or the rooms of an earlier step; templates keep the same distance from those tiles. So rooms of an earlier step are at least two wall tiles away, with no shared wall.
+- **Templates.** A template that cannot be placed throws a [`TemplatePlacementError`](#room-templates), which [`pipeline`](#pipeline) answers with a new map, up to its `attempts`. `Room.template` is an index into the `templates` of the step that placed the room.
+- **What it reserves.** Every room reserves its footprint, as [`placeMineRooms`](#placeminerooms) does: walls, floor and inner doorways are `Reserve.Solid`, and potential exits are `Reserve.Openable`. The whole ring of an ordinary room, but its corners, is `Openable`. Where two rooms share a wall (`roomSpacing` 1) a tile stays `Openable` when it is a side of both rooms, and is `Solid` when it is the corner of either.
+- **Uses** `rooms` and `roomShapes` from the steps before it, and **adds** both again with its own appended, with ids that follow on: in each area, templated rooms first, then ordinary ones, each with a [`RoomShape`](#placeminerooms) in `roomShapes`. Its rooms have no exits yet.
+
+### `partitionRooms`
+
+`partitionRooms(options?)` is a step that places the rooms of a dungeon by binary space partitioning, the first step of [`generateRoomDungeon`](#dungeons) with `partition` (see [placement of rooms](#placement-of-rooms)): the map, or each area, is cut in two again and again, and every part that results holds one room. The number of parts is estimated from `fill` and the typical room size and kept within `roomCount`, and grown a few times over if the rooms fall short. It takes the options of [`scatterRooms`](#scatterrooms), and works the same way in everything else: templates, what is in the way, what it reserves, and the extras.
+
+```ts
+import { emptyMap, partitionRooms, pipeline, Tile } from 'angstloch';
+
+const { grid, rooms, roomShapes } = pipeline(
+  emptyMap({ width: 61, height: 41, tile: Tile.Wall }),
+  [partitionRooms({ roomCount: { min: 12, max: 12 }, roomSpacing: 3 })],
+  { random: mulberry32(42) },
+);
+```
+
+- **`spacingUniformity`** sets how regular the partition is, from 0 to 1. At 0 the cuts, the part to cut next and the rooms inside their parts are random; at 1 the biggest part is cut next, through the middle, and rooms sit in the middle of their parts, which gives an almost regular grid.
+- **What is in the way.** An ordinary room that would come within `roomSpacing` of a template or of a tile that is not free is left out, and its part of the map stays empty.
+- **Symmetry.** With a `symmetry`, a room is put in the middle of the area, one half or quarter of the area is partitioned, and the rest gets the mirror images of its rooms, or with a `symmetryChance` below 1, rooms of their own in the mirrored parts.
+
+### `growRooms`
+
+`growRooms(options?)` is a step that grows the rooms of a dungeon from a seed, the first step of [`generateDigDungeon`](#grown-dungeons): each new room goes beyond a wall of a room there is, a `gap` of corridor away and facing it, so the rooms cluster and [`carveCorridors`](#carvecorridors) joins most of them to the room they were built off with a short corridor. It takes the options of [`scatterRooms`](#scatterrooms) but `spacingUniformity`, and works the same way in templates, what is in the way, what it reserves and the extras. It needs a map that starts as wall, and it checks every option and template when it is made.
+
+```ts
+import { carveCorridors, emptyMap, growRooms, pipeline, Tile } from 'angstloch';
+
+const { grid, rooms, roomExits } = pipeline(
+  emptyMap({ width: 61, height: 41, tile: Tile.Wall }),
+  [growRooms({ gap: { min: 1, max: 4 } }), carveCorridors()],
+  { random: mulberry32(42) },
+);
+```
+
+| Option           | Default    | Meaning                                                                                                                                                                                                                                                                                   |
+| ---------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gap`            | `{ 1, 4 }` | Tiles of corridor between the wall of a new room and the wall of the room it is built off, whole numbers of 0 or more. 0 puts the new room against the wall, sharing it, which needs a `roomSpacing` of 1. With `'lattice'` placement a gap is rounded to an odd length (2 to 1, 4 to 3). |
+| `horizontalBias` | 0          | Weight of the left and right walls, which new rooms are built beyond, against `verticalBias`. Only the ratio matters, so set both; a lone value against 0 means always.                                                                                                                   |
+| `verticalBias`   | 0          | Weight of the top and bottom walls against `horizontalBias`.                                                                                                                                                                                                                              |
+| the rest         |            | As for [`scatterRooms`](#scatterrooms): `placement`, `roomWidth`, `roomHeight`, `sizeUniformity`, `roomCount`, `roomSpacing`, `fill`, `templates`, `templateSymmetry`, `doorChance`, `symmetry`, `symmetryChance`, `area` and `count`.                                                    |
+
+- **The seed.** When the area is the whole map and earlier steps placed rooms, the new ones grow from those. Otherwise they grow from the first template, which goes in the middle unless it has `positions` or `areas` of its own, or else from an ordinary room in the middle. When something is in the way there, that room moves to the nearest spot that fits; with a `symmetry` it must be its own mirror image, so nothing grows. The other templates are placed first, wherever they fit, and are joined later by the corridors, not grown from.
+- **Growing.** Each try picks a room, a wall of it by the biases, a gap, a size and a spot along the wall, off its corners, and the new room is placed so that its floor faces that spot. A room from which 20 tries in a row failed is crowded, and is only picked again when every room is. Growing stops at `roomCount.max`, at the `fill` once `roomCount.min` is reached, or when 300 tries in a row fail.
+- **Gaps and spacing.** The floors of two rooms a gap of `n` apart are `n + 2` tiles apart (a wall, the corridor and a wall), and 1 tile for a gap of 0. A gap whose rooms would be closer than `roomSpacing` is left out of the range, and a range with nothing left throws a `RangeError` when the step is made. Rooms keep `roomSpacing` from every other room too, not only from the one they are built off, and from the rooms of an earlier step two wall tiles at least, as in `scatterRooms`, so a gap of 0 never joins them.
+- **Symmetry.** With a `symmetry`, a new room brings its mirror images along as often as `symmetryChance` says, and all of them must fit.
+
+### `carveCorridors`
+
+`carveCorridors(options?)` is a step that joins the rooms of a dungeon with corridors and doors, the second step of [`generateRoomDungeon`](#dungeons) (see [connections](#connections)): the rooms of [`scatterRooms`](#scatterrooms), [`partitionRooms`](#partitionrooms) or [`growRooms`](#growrooms), or of a step of your own that adds `rooms` and `roomShapes`. Only rooms that have no exits yet are joined, so rooms opened by another step are left alone. It needs a map that starts as wall, and it checks every option when it is made.
+
+```ts
+import {
+  carveCorridors,
+  emptyMap,
+  pipeline,
+  scatterRooms,
+  Tile,
+} from 'angstloch';
+
+const { grid, rooms, roomExits } = pipeline(
+  emptyMap({ width: 61, height: 41, tile: Tile.Wall }),
+  [
+    scatterRooms({ symmetry: 'horizontal' }),
+    carveCorridors({ symmetry: 'horizontal', loopChance: 0.3 }),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
+| Option                   | Default     | Meaning                                                                                                                                                                                                                                    |
+| ------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `connection`             | `'nearest'` | How rooms are joined: `'nearest'`, `'bsp'` or `'bsp-random'`, as for dungeons (see [connections](#connections)).                                                                                                                           |
+| `exitsPerRoom`           | `{ 1, 3 }`  | Number of exits per room, doors or not, a `Range` of 1 or more. Each room draws its own number. A room with fewer links gets more, which makes loops; a room with more shares its exits and the corridors branch off outside. Best effort. |
+| `loopChance`             | 0.1         | Chance of an extra corridor between two nearby rooms that are joined already, from 0 to 1, one roll for each pair of neighbors.                                                                                                            |
+| `deadEndChance`          | 0           | Chance that a corridor sprouts a branch that leads nowhere, from 0 to 1.                                                                                                                                                                   |
+| `doorChance`             | 1           | Chance that an exit gets a door, from 0 to 1. Exits without a door are plain openings. The doors of templates were decided by the step that placed them.                                                                                   |
+| `straight`               | 0.5         | Preference of corridors for going straight, from 0 (they wander) to 1 (they turn as little as possible).                                                                                                                                   |
+| `horizontalBias`         | 0           | Weight of horizontal corridor sections against `verticalBias`. Only the ratio matters; a lone value against 0 means always.                                                                                                                |
+| `verticalBias`           | 0           | Weight of vertical corridor sections against `horizontalBias`.                                                                                                                                                                             |
+| `placement`              | `'free'`    | `'lattice'` keeps corridors and exits on odd coordinates, like a maze, for rooms placed on the lattice.                                                                                                                                    |
+| `symmetry`               | `'none'`    | Mirrors or rotates corridors, exits and doors about the middle of the map: `'horizontal'`, `'vertical'`, `'both'` or `'rotational'`. A corridor gets its twins only where the rooms it joins have theirs.                                  |
+| `symmetryChance`         | 1           | How often a corridor gets its twins, from 0 (never) to 1 (always).                                                                                                                                                                         |
+| `corridorSymmetry`       | `'none'`    | Makes corridors follow the pattern of a maze: `'whirlpool'` twirls them around the middle of the map and `'snowflake'` makes them radiate from it (see [corridor symmetry](#corridor-symmetry)).                                           |
+| `corridorSymmetryChance` | 1           | How strongly corridors follow `corridorSymmetry`, from 0 (not at all) to 1 (every choice of direction does).                                                                                                                               |
+
+- **Symmetry is per step.** The rooms are mirrored by the step that places them, the corridors by this one, so a symmetric dungeon passes the same `symmetry`, `symmetryChance` and `placement` to both. Symmetric rooms with free corridors, or the other way round, are fine.
+- **Where a room opens.** Exits come from each room's shape in `roomShapes`, at the potential exits that are still `Reserve.Openable`. Two ordinary rooms that share a wall (`roomSpacing` 1) are joined by one door in it, which both rooms count. Every fixed exit of a template gets a corridor.
+- **What is in the way.** Corridors keep off every tile that is not free (see [`isFree`](#mapstate)): reserved tiles, and the floor, roads or water of earlier steps, so they route round them.
+- **Features join too.** Every piece of floor outside the rooms' shapes is joined as well, as a stand-in room: a cavern of [`carveNoiseCave`](#carvenoisecave) or [`growCave`](#growcave), a hall of [`digPillarHalls`](#digpillarhalls), a whole mine, a maze, or the corridors of an earlier `carveCorridors` (see [features](#features)).
+- **Rooms that cannot be joined.** An ordinary room that cannot be joined is dropped, with its mirror images: its tiles go back to the base tile and its reservation is cleared. A templated room is never dropped: the corridors are routed again with new draws, up to 3 times in all, and then the step throws a [`TemplatePlacementError`](#room-templates), which [`pipeline`](#pipeline) answers with a new map, rooms included.
+- **What it reserves.** Every exit of a room goes through [`openReserved`](#mapstate), so it and the potential exits round it become `Reserve.Solid`. Corridors reserve nothing.
+- **Needs** `rooms` and `roomShapes`, **uses** `roomExits` from the steps before it, and **adds** all three again: the dropped rooms left out, the rest renumbered with their shapes and the exits, and the new exits appended to `roomExits` (an [`Exit`](#exit) each, listed on its rooms).
+
+#### Features
+
+Any tile outside the shapes of the rooms that is not the base tile is floor of a feature, and the pieces it makes, joined along edges, are joined like rooms. A feature need not be a room or say what it is: whatever made it, `carveCorridors` finds it on the map. This makes "rooms round a cavern and a pillar hall" a list of steps:
+
+```ts
+import {
+  carveCorridors,
+  carveNoiseCave,
+  digPillarHalls,
+  emptyMap,
+  pipeline,
+  scatterRooms,
+  Tile,
+} from 'angstloch';
+
+const { grid, rooms } = pipeline(
+  emptyMap({ width: 61, height: 41, tile: Tile.Wall }),
+  [
+    digPillarHalls({
+      area: { width: { min: 16, max: 16 }, height: { min: 12, max: 12 } },
+    }),
+    carveNoiseCave({
+      largestOnly: true,
+      area: { width: { min: 14, max: 18 }, height: { min: 10, max: 14 } },
+    }),
+    // the rooms keep clear of the hall and the cavern, and the corridors join all of them
+    scatterRooms(),
+    carveCorridors(),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
+- **The shape of a feature.** Its floor, and the walls that touch it from outside, which are its potential exits: a wall of rock that is free (not reserved). Rock that the feature encloses and that nothing else reaches, such as a pillar, is no exit, and corridors stay out of it. The distance to a feature, which orders the links, is measured to its nearest wall, not to the box round it, since the box of a whole mine covers the map.
+- **How it is joined.** Like a templated room: corridors route round its floor and walls, never through it, and it gets the exits that `exitsPerRoom` draws, loops and dead ends like any room. It is never joined by a door in a shared wall.
+- **Where a corridor reaches it,** the wall turns into floor: no door, whatever `doorChance` says, and no entry in `roomExits`, which stays about rooms. Nothing is reserved there, since features reserve nothing.
+- **It is never dropped, and never a room.** A feature that cannot be joined to the largest group of rooms fails like a templated room: the corridors are routed again, up to 3 times, and then the step throws an `Error` that names a tile of its floor, which [`pipeline`](#pipeline) answers with a new map. `rooms` and `roomShapes` never hold a feature.
+- **Over 200 seeds** of the run above with 0, 2 and 5 templated rooms (`npm run check:dungeon`), no map failed; at 2 and 5 templated rooms, 3 and 5 seeds needed a second map, and a map took 5 to 20 ms on average.
+
 ## Playground
 
-A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the index page links to the steps page, where forests, caves, mines and mazes are made, and to the pages of the dungeons and the noise. The dungeon page switches between the room-first generator and the digger, and has a **Connection** select (nearest, bsp or bsp-random) next to the partition for the room-first one. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
+A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the index page links to the steps page, where forests, caves, mines, mazes and dungeons are made, and to the noise page. At the bottom of the steps page is the template editor: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Paste the exported JSON into the Templates field of a room card to use the templates.
 
 All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background, in the colors of an ANSI terminal: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500), grass `.` (#00aa00), tree `T` (#55ff55), road `.` (#aa5500), bridge `#` (#aa5500), shallow water `≈` (#5555ff), deep water `≈` (#0000aa) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
 
-The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-dungeon.png` or `angstloch-steps.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
+The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-steps.png` or `angstloch-noise.png`, handy for illustrating settings.
 
 The noise page paints a `NoiseFunction` as gray squares, black for -1 and white for 1, with controls for the size, the seed, the fractal options and the transform: `scaleX`, `scaleY` and `rotation`. The fractal controls start at the defaults of `createFractalNoise`, and the scales start at 40, which is a size that shows a few features on the default map. The stats line shows the lowest, highest and mean value.
 
-The steps page is where forests are made, and the way the playground is going: a page with no fixed generator, but a list of steps that you add, order and configure one by one. The form at the top sets the size, the seed, the base tile and the number of attempts. **Add a step** picks any of [`plantTrees`](#planttrees), [`addStreams`](#addstreams), [`addRoads`](#addroads), [`placeClearings`](#placeclearings), [`placeTemplates`](#placetemplates), [`addClearingPaths`](#addclearingpaths), [`addFootbridges`](#addfootbridges), [`digFishbone`](#digfishbone), [`digVeins`](#digveins), [`digPillarHalls`](#digpillarhalls), [`digRings`](#digrings), [`placeMineRooms`](#placeminerooms), [`growCave`](#growcave), [`carveNoiseCave`](#carvenoisecave), [`digCaveTunnels`](#digcavetunnels), [`placeMazeRooms`](#placemazerooms), [`carveMaze`](#carvemaze), [`openMazeRooms`](#openmazerooms) and [`addExits`](#addexits) and appends a card with a control for each of its options (a blank angle means a random one, ranges are a min and a max, the road and clearing cards take exact roads and clearings as JSON, the `placeMineRooms` and `placeMazeRooms` cards take templates as JSON, as the Templates panel of the dungeon page exports them). A card has buttons to move it up or down and to remove it, **Load a forest** starts from the steps of a forest, **Load a mine** sets the base tile to wall and starts from the step of [`generateMine`](#mines) with its defaults (`digFishbone`), **Load a mine with caverns** adds `carveNoiseCave` with the defaults of the preset's [caverns](#caverns) (`'beside'`, sides of 12 to 24, scales of 7, the largest cavern only) and `digCaveTunnels`, **Load a cave** and **Load a noise cave** set it to wall too and start from the steps of [`generateCave`](#caves) (`growCave` and `digCaveTunnels`) and of [`generateNoiseCave`](#noise-caves) (`carveNoiseCave` and `digCaveTunnels`) with their defaults, **Load a maze** sets it to wall and starts from the step of [`generateMaze`](#mazes) with its defaults (`carveMaze`), **Load a maze with rooms** from `placeMazeRooms` (3 to 5 rooms), `carveMaze`, `openMazeRooms` and `addExits` on the lattice, and **Remove all** starts from nothing. Every change runs the pipeline again, so a step put in the wrong order shows the error of [`pipeline`](#pipeline) under the map, and a bad option shows its `RangeError`. **Show after step** picks the map after any step of the last attempt, starting with the base, through `onStep`. The overlays, drawn from what the steps reported up to the chosen step, are **Mark clearing centers**, **Outline templates**, **Outline halls** (the box of every hall of `digPillarHalls`, in yellow), **Outline caverns** (the area of every cave of `growCave` and `carveNoiseCave`, in cyan), **Mark tunnels** (a small square on the middle line of every passage of the mine steps, red for a main shaft and blue for the rest), **Mark region centers** (the `center` of every region of floor on the shown map, as the cave presets report it, in red), **Outline rooms** (the floor of every room, in green), **Show room gaps** (the openings of rooms that got no door, as a floor with a potential exit), **Mark maze start** (a green square on the `start` of `carveMaze`), **Mark junctions**, **Show reserved** (the [reserved](#mapstate) tiles, red where `Solid` and cyan where `Openable`), **Mark road exits**, **Show grown roads** (a small magenta dot on every tile of a road as it was grown, before the streams bent it) and **Show crossing plans** (outlined squares on the planned ends of each road and on the waypoints of its crossings: cyan where the road turns onto and off the straight run, yellow at both banks), the last two fed by `trace`. The stats line gives the attempts, the failures and how many roads, streams, bridges, clearings, templates, passages, halls, caverns, rooms and room exits there are, and the regions of floor of the finished map when it has floor, and the failures are listed under the map; a template that finds no room is an easy way to see a retry. The planted tile of `plantTrees` and the base tile can be tree, wall, floor or grass, so a steppe of rocks on floor is a click away. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
+The steps page is where every map is made: a page with no fixed generator, but a list of steps that you add, order and configure one by one. The form at the top sets the size, the seed, the base tile and the number of attempts. **Add a step** picks any of [`plantTrees`](#planttrees), [`addStreams`](#addstreams), [`addRoads`](#addroads), [`placeClearings`](#placeclearings), [`placeTemplates`](#placetemplates), [`addClearingPaths`](#addclearingpaths), [`addFootbridges`](#addfootbridges), [`digFishbone`](#digfishbone), [`digVeins`](#digveins), [`digPillarHalls`](#digpillarhalls), [`digRings`](#digrings), [`placeMineRooms`](#placeminerooms), [`growCave`](#growcave), [`carveNoiseCave`](#carvenoisecave), [`digCaveTunnels`](#digcavetunnels), [`placeMazeRooms`](#placemazerooms), [`carveMaze`](#carvemaze), [`openMazeRooms`](#openmazerooms), [`scatterRooms`](#scatterrooms), [`partitionRooms`](#partitionrooms), [`growRooms`](#growrooms), [`carveCorridors`](#carvecorridors) and [`addExits`](#addexits) and appends a card with a control for each of its options (a blank angle means a random one, ranges are a min and a max, the road and clearing cards take exact roads and clearings as JSON, the `placeMineRooms`, `placeMazeRooms`, `scatterRooms`, `partitionRooms` and `growRooms` cards take templates as JSON, as the template editor exports them). A card has buttons to move it up or down and to remove it, **Load a forest** starts from the steps of a forest, **Load a mine** sets the base tile to wall and starts from the step of [`generateMine`](#mines) with its defaults (`digFishbone`), **Load a mine with caverns** adds `carveNoiseCave` with the defaults of the preset's [caverns](#caverns) (`'beside'`, sides of 12 to 24, scales of 7, the largest cavern only) and `digCaveTunnels`, **Load a cave** and **Load a noise cave** set it to wall too and start from the steps of [`generateCave`](#caves) (`growCave` and `digCaveTunnels`) and of [`generateNoiseCave`](#noise-caves) (`carveNoiseCave` and `digCaveTunnels`) with their defaults, **Load a maze** sets it to wall and starts from the step of [`generateMaze`](#mazes) with its defaults (`carveMaze`), **Load a maze with rooms** from `placeMazeRooms` (3 to 5 rooms), `carveMaze`, `openMazeRooms` and `addExits` on the lattice, **Load a dungeon** sets it to wall and starts from `scatterRooms` and `carveCorridors` with their defaults, **Load a grown dungeon** sets it to wall and the size to 61 by 41 and starts from the steps of [`generateDigDungeon`](#grown-dungeons) with their defaults (`growRooms` and `carveCorridors`), **Load a dungeon with a hall and a cavern** sets it to wall and 61 by 41 and starts from a pillar hall of 16 by 12, a noise cavern of 14 to 18 by 10 to 14 (largest piece only), `scatterRooms` and `carveCorridors`, which joins the hall and the cavern as [features](#features), **Load a cave with rooms** from a `growCave` cavern of 24 by 16, 4 to 6 rooms of `scatterRooms` and `digCaveTunnels`, which enters the rooms through their potential exits, and **Remove all** starts from nothing. Every change runs the pipeline again, so a step put in the wrong order shows the error of [`pipeline`](#pipeline) under the map, and a bad option shows its `RangeError`. **Show after step** picks the map after any step of the last attempt, starting with the base, through `onStep`. The overlays, drawn from what the steps reported up to the chosen step, are **Mark clearing centers**, **Outline templates**, **Outline halls** (the box of every hall of `digPillarHalls`, in yellow), **Outline caverns** (the area of every cave of `growCave` and `carveNoiseCave`, in cyan), **Mark tunnels** (a small square on the middle line of every passage of the mine steps, red for a main shaft and blue for the rest), **Mark region centers** (the `center` of every region of floor on the shown map, as the cave presets report it, in red), **Outline rooms** (the floor of every room, in green), **Show room gaps** (the openings of rooms that got no door, as a floor with a potential exit), **Mark maze start** (a green square on the `start` of `carveMaze`), **Mark junctions**, **Show reserved** (the [reserved](#mapstate) tiles, red where `Solid` and cyan where `Openable`), **Mark road exits**, **Show grown roads** (a small magenta dot on every tile of a road as it was grown, before the streams bent it) and **Show crossing plans** (outlined squares on the planned ends of each road and on the waypoints of its crossings: cyan where the road turns onto and off the straight run, yellow at both banks), the last two fed by `trace`. The stats line gives the attempts, the failures and how many roads, streams, bridges, clearings, templates, passages, halls, caverns, rooms and room exits there are, and the regions of floor of the finished map when it has floor, and the failures are listed under the map; a template that finds no room is an easy way to see a retry. The planted tile of `plantTrees` and the base tile can be tree, wall, floor or grass, so a steppe of rocks on floor is a click away. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
 
 ## Development
 

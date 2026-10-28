@@ -15,11 +15,11 @@ export type MazeSymmetry = CorridorSymmetry;
 export interface MazeStepOptions {
   /** The maze itself, carved on the whole map. See `carveMaze`, less its `area` and `count`: a maze in part of a map is a composition of your own. Defaults to the defaults of that step. */
   maze?: Omit<CarveMazeOptions, 'area' | 'count'>;
-  /** Rooms and templates, placed before the maze is carved round them. See `placeMazeRooms`. Here its `keepClear` defaults to the `start` of `maze`, so that no room covers it. Defaults to no rooms. */
+  /** Rooms and templates, placed before the maze is carved round them. See `placeMazeRooms`. It takes nothing from `maze`: to keep the rooms off a given `start`, give the same point as `keepClear`. Defaults to no rooms. */
   rooms?: PlaceMazeRoomsOptions;
   /** How the rooms open onto the maze. See `openMazeRooms`. Only used when there are `rooms`, and then with the defaults of that step unless given. */
   openings?: OpenMazeRoomsOptions;
-  /** Exits on the map border. See `addExits`. Here its `lattice` defaults to true, so that the doors face the cells of the maze. Defaults to no exits. */
+  /** Exits on the map border. See `addExits`, with the defaults of that step: give `lattice: true` for doors that face the cells of the maze. Defaults to no exits. */
   exits?: AddExitsOptions;
 }
 

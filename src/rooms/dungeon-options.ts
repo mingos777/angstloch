@@ -1,7 +1,6 @@
 import type { BaseOptions } from '../core/base-options';
 import type { Range } from '../core/range';
 import type { RoomTemplate } from './templates/room-template';
-import type { SymmetryOptions } from './symmetry-options';
 
 /**
  * How rooms are aligned on the map. With `free`, a room may start on any tile.
@@ -10,8 +9,8 @@ import type { SymmetryOptions } from './symmetry-options';
  */
 export type Placement = 'free' | 'lattice';
 
-/** Options shared by every dungeon generator. */
-export interface DungeonOptions extends BaseOptions, SymmetryOptions {
+/** The room options that `resolveDungeonOptions` fills in, which the rooms of a maze use. */
+export interface DungeonOptions extends BaseOptions {
   /** Alignment of rooms. Defaults to `free`. */
   placement?: Placement;
   /** Room width in tiles. Defaults to 3 to 7. With `lattice` placement only odd widths are used. */

@@ -5,6 +5,9 @@ import { emptyMap } from '../pipeline/empty-map';
 import { pipeline } from '../pipeline/pipeline';
 import { Reserve } from '../pipeline/reserve';
 import { step } from '../pipeline/step';
+import { carveRoom } from '../rooms/carve-room';
+import { createRoomShape } from '../rooms/create-room-shape';
+import { reserveRoomShape } from '../rooms/reserve-room-shape';
 import { countAsymmetry } from '../test-helpers/count-asymmetry';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { digCaveTunnels } from './dig-cave-tunnels';
@@ -25,6 +28,19 @@ function cave(
     ? [growCave({ fillChance: 0.5, ...grow }), digCaveTunnels(tunnels)]
     : [growCave({ fillChance: 0.5, ...grow })];
   return pipeline(base, steps, { random: mulberry32(seed) });
+}
+
+/** The number of pieces that the tiles that are not wall make, joined along edges. */
+function pieces(grid: Grid): number {
+  const open = grid.clone();
+  for (let y = 0; y < grid.height; ++y) {
+    for (let x = 0; x < grid.width; ++x) {
+      if (grid.get(x, y) !== Tile.Wall) {
+        open.set(x, y, Tile.Floor);
+      }
+    }
+  }
+  return findCaveRegions(open).length;
 }
 
 function floorCount(grid: Grid) {
@@ -298,7 +314,163 @@ describe('digCaveTunnels', () => {
     expect(sizes[1]).toBe(9);
   });
 
-  it('does not join the floor of a room', () => {
+  describe('rooms', () => {
+    /** A step that carves ordinary rooms with the given floors and reserves their shapes, as a placement step does. */
+    const rooms = (...floors: [number, number, number, number][]) =>
+      step('rooms', {}, (state) => {
+        for (const [x, y, width, height] of floors) {
+          const room = { x, y, width, height };
+          carveRoom(state.grid, {
+            ...room,
+            id: 0,
+            exits: [],
+            exitCount: 0,
+            doorCount: 0,
+          });
+          reserveRoomShape(state, createRoomShape(room));
+        }
+        return {};
+      });
+    /** The tiles of the wall round a floor that are not wall any more. */
+    const openedWalls = (grid: Grid, [x0, y0, w, h]: number[]) => {
+      const opened: [number, number][] = [];
+      for (let y = (y0 ?? 0) - 1; y <= (y0 ?? 0) + (h ?? 0); ++y) {
+        for (let x = (x0 ?? 0) - 1; x <= (x0 ?? 0) + (w ?? 0); ++x) {
+          const inside =
+            x >= (x0 ?? 0) &&
+            x < (x0 ?? 0) + (w ?? 0) &&
+            y >= (y0 ?? 0) &&
+            y < (y0 ?? 0) + (h ?? 0);
+          if (!inside && grid.get(x, y) !== Tile.Wall) {
+            opened.push([x, y]);
+          }
+        }
+      }
+      return opened;
+    };
+
+    it('joins a room through one of its potential exits', () => {
+      // given
+      const room: [number, number, number, number] = [40, 20, 6, 5];
+      const steps = [box(5, 5, 10, 10), rooms(room), digCaveTunnels()] as const;
+
+      // when
+      const { grid } = pipeline(base, steps, { random: mulberry32(4) });
+
+      // then
+      expect(openedWalls(grid, room)).toHaveLength(1);
+      expect(pieces(grid)).toBe(1);
+    });
+
+    it('opens the tile it enters by, which no other exit may then touch', () => {
+      // given
+      const room: [number, number, number, number] = [40, 20, 6, 5];
+      const steps = [box(5, 5, 10, 10), rooms(room), digCaveTunnels()] as const;
+
+      // when
+      const { grid, reserved } = pipeline(base, steps, {
+        random: mulberry32(4),
+      });
+
+      // then
+      const [[x, y]] = openedWalls(grid, room) as [[number, number]];
+      expect(grid.get(x, y)).toBe(Tile.Floor);
+      for (let dy = -1; dy <= 1; ++dy) {
+        for (let dx = -1; dx <= 1; ++dx) {
+          expect(reserved[(y + dy) * grid.width + x + dx]).not.toBe(
+            Reserve.Openable,
+          );
+        }
+      }
+    });
+
+    it('enters a room through its potential exit nearest the floor', () => {
+      // given
+      const room: [number, number, number, number] = [20, 20, 6, 5];
+      const steps = [
+        box(22, 5, 23, 8),
+        rooms(room),
+        digCaveTunnels({ style: 'direct' }),
+      ] as const;
+
+      // when
+      const { grid } = pipeline(base, steps, { random: mulberry32(1) });
+
+      // then
+      expect(openedWalls(grid, room)).toEqual([[22, 19]]);
+    });
+
+    it.each(['winding', 'direct'] as const)(
+      'joins rooms that nothing else reaches to each other with %s tunnels',
+      (style) => {
+        // when
+        const results = SEEDS.map(
+          (seed) =>
+            pipeline(
+              base,
+              [
+                rooms(
+                  [5, 5, 5, 4],
+                  [40, 8, 6, 6],
+                  [20, 28, 4, 4],
+                  [48, 30, 5, 5],
+                ),
+                digCaveTunnels({ style }),
+              ],
+              { random: mulberry32(seed) },
+            ).grid,
+        );
+
+        // then
+        expect(results.map(pieces)).toEqual(SEEDS.map(() => 1));
+      },
+    );
+
+    it('joins rooms and caverns into one with a symmetry', () => {
+      // given
+      const steps = [
+        growCave({
+          fillChance: 0.5,
+          symmetry: 'horizontal',
+          area: { width: { min: 20, max: 20 }, height: { min: 30, max: 30 } },
+        }),
+        rooms([5, 5, 5, 4], [50, 5, 5, 4]),
+        digCaveTunnels({ symmetry: 'horizontal' }),
+      ] as const;
+
+      // when
+      const results = SEEDS.map(
+        (seed) => pipeline(base, steps, { random: mulberry32(seed) }).grid,
+      );
+
+      // then
+      expect(results.map(pieces)).toEqual(SEEDS.map(() => 1));
+    });
+
+    it('leaves a room alone that the floor reaches already', () => {
+      // given
+      const room: [number, number, number, number] = [20, 20, 6, 5];
+      const doorway = step('doorway', {}, (state) => {
+        state.grid.set(20, 19, Tile.Floor);
+        state.grid.set(20, 18, Tile.Floor);
+        return {};
+      });
+      const steps = [
+        box(15, 5, 25, 17),
+        rooms(room),
+        doorway,
+        digCaveTunnels(),
+      ] as const;
+
+      // when
+      const { grid } = pipeline(base, steps, { random: mulberry32(1) });
+
+      // then
+      expect(openedWalls(grid, room)).toEqual([[20, 19]]);
+    });
+  });
+
+  it('does not join a room with no potential exit', () => {
     // given
     const steps = [
       box(5, 5, 9, 9),

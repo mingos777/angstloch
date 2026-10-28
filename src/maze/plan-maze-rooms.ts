@@ -8,7 +8,7 @@ import type { Random } from '../core/random';
 import { randomInt } from '../core/random-int';
 import type { Room } from '../rooms/room';
 import type { RoomPlan } from '../rooms/room-plan';
-import { scatterRooms } from '../rooms/scatter-rooms';
+import { scatterRoomPlan } from '../rooms/scatter-room-plan';
 
 /**
  * Places the ordinary rooms of a maze on its lattice, never over the `start`
@@ -52,5 +52,5 @@ export function planMazeRooms(
         start.y < room.y + room.height) ||
       isBlocked?.(room) === true,
   });
-  return plan && wanted > 0 ? scatterRooms(random, plan) : [];
+  return plan && wanted > 0 ? scatterRoomPlan(random, plan, []) : [];
 }

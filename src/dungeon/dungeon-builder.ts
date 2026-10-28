@@ -1,7 +1,7 @@
 import { distanceBetween } from './distance-between';
 import { planBspLinks } from './plan-bsp-links';
-import type { RoomConnection } from '../rooms/room-dungeon-options';
-import { carveRoom } from '../rooms/carve-room';
+import type { RoomConnection } from './room-connection';
+import { createRoomShape } from '../rooms/create-room-shape';
 import { corridorTileCost } from './corridor-tile-cost';
 import { DIRECTIONS } from '../core/directions';
 import type {
@@ -39,10 +39,21 @@ export interface DungeonBuilderOptions {
   layout?: { transforms: Transform[]; chance: number };
   /** The share of horizontal directions that corridors favor at a tile, which makes routed corridors follow a pattern. */
   steering?: (at: Point) => number;
-  /** The placements of templated rooms, by room id. Rooms without one are rectangles. */
-  templates?: readonly (TemplatePlacement | undefined)[];
+  /** The shapes of the rooms, by room id. A room without one gets the ring of `createRoomShape`. */
+  shapes?: readonly (TemplatePlacement | undefined)[];
+  /** One byte per tile, 1 where corridors must not go, besides the rooms: what earlier steps built. */
+  blocked?: Uint8Array;
+  /** One byte per tile, 1 where no exit may be opened, such as a wall that an earlier step sealed. */
+  sealed?: Uint8Array;
   /** Whether each `Exit` and `Door` cell of the templates gets a door, keyed by `y * width + x`. */
   doors?: ReadonlyMap<number, boolean>;
+  /**
+   * The id from which the rooms stand in for floor that is not a room, such
+   * as a cavern: their shapes are the floor and the walls round it. They are
+   * never joined by a door in a shared wall, their exits get no door, and the
+   * distance to them is measured to their nearest wall. Defaults to none.
+   */
+  firstStandIn?: number;
 }
 
 /** An exit of a templated room that could not be opened or joined to the rest of the dungeon. */
@@ -64,7 +75,7 @@ export interface Start {
 }
 
 /** A start that opens a new exit. */
-export type ExitSlot = Start & { exit: Point };
+type ExitSlot = Start & { exit: Point };
 
 /** Whether a corridor starts at a new exit or at one the room has already. */
 type Mode = 'new' | 'reuse';
@@ -98,39 +109,11 @@ const DEAD_END_LENGTH: Range = { min: 3, max: 8 };
 
 /**
  * Everything that is needed to build the corridors and exits of a dungeon on a
- * grid whose rooms are carved already, kept in one place so that the dungeon
- * generators share it.
+ * grid whose rooms are carved already, kept in one place for `connectRooms`.
  */
 export interface DungeonBuilder {
-  /** The map that corridors are routed on. */
-  readonly map: CorridorMap;
   /** Every exit made so far. */
   readonly exits: Exit[];
-  /** The tiles of every corridor, in the order they were carved. */
-  readonly corridors: Point[][];
-  /** Starts counting a room that is carved on the grid. */
-  registerRoom: (room: Room) => void;
-  /**
-   * Adds rooms, corridors and exits to the dungeon, together with their mirror
-   * images if the layout is symmetric and the dice say so. The new rooms must
-   * have the ids that follow the rooms made so far. Nothing is added, and
-   * `false` returned, if `accepts` turns the rooms down, given all of them and
-   * the tiles of all the corridors that are about to be carved, or if a mirror
-   * image does not fit.
-   */
-  place: (
-    operation: Operation,
-    newRooms?: Room[],
-    accepts?: (rooms: Room[], pending: ReadonlySet<number>) => boolean,
-  ) => boolean;
-  /** Whether a room has all the exits it wanted. */
-  atCapacity: (room: Room) => boolean;
-  /** Places on one wall of a room where a new exit can go. */
-  slotsOf: (room: Room, direction: number) => ExitSlot[];
-  /** Whether no other exit is next to the tile. */
-  isExitAllowed: (position: Point) => boolean;
-  /** The id of the room that the corridor on a tile belongs to. */
-  ownerOf: (tile: Point) => number;
   /** Links the rooms with corridors and doors, and returns the ids of rooms that could not be joined to the biggest group. */
   connectAll: () => number[];
   /** Adds the exits that rooms want, loops, and dead ends if asked for. */
@@ -139,10 +122,7 @@ export interface DungeonBuilder {
   connectStubs: () => UnconnectedExit[];
 }
 
-/**
- * Creates a builder for the rooms of a grid. More rooms can be registered
- * later, which is how a generator that places rooms one by one uses it.
- */
+/** Creates a builder for the rooms that are carved on a grid. */
 export function createDungeonBuilder(
   grid: Grid,
   rooms: Room[],
@@ -151,7 +131,9 @@ export function createDungeonBuilder(
 ): DungeonBuilder {
   const { width, height } = grid;
   const exits: Exit[] = [];
-  const reserved = new Uint8Array(width * height);
+  const reserved = options.blocked
+    ? Uint8Array.from(options.blocked)
+    : new Uint8Array(width * height);
 
   const horizontalShare =
     options.horizontalBias + options.verticalBias > 0
@@ -183,7 +165,9 @@ export function createDungeonBuilder(
   // for every corridor tile, the room whose link carved it
   const owner = new Int32Array(width * height).fill(-1);
   // tiles around exits, where no other exit may go
-  const exitBlocked = new Uint8Array(width * height);
+  const exitBlocked = options.sealed
+    ? Uint8Array.from(options.sealed)
+    : new Uint8Array(width * height);
   // how many exits each room would like
   const wanted: number[] = [];
   // where the corridor of each exit starts, so that more corridors can branch off it
@@ -196,6 +180,8 @@ export function createDungeonBuilder(
   const geometry = new Map<string, number>();
   const transforms = options.layout?.transforms ?? [];
   const mirrorChance = options.layout?.chance ?? 0;
+  const firstStandIn = options.firstStandIn ?? rooms.length;
+  const isStandIn = (room: Room): boolean => room.id >= firstStandIn;
 
   /** Whether a corridor can start or end on the tile, which excludes tiles beside an existing corridor, diagonally too. */
   const isFree = (x: number, y: number): boolean =>
@@ -217,7 +203,9 @@ export function createDungeonBuilder(
     start?: Start,
     forcedDoor?: boolean,
   ): void => {
-    const door = forcedDoor ?? options.doorChance > random();
+    const door =
+      !ids.some((id) => id >= firstStandIn) &&
+      (forcedDoor ?? options.doorChance > random());
     grid.set(position.x, position.y, door ? Tile.Door : Tile.Floor);
     for (let y = position.y - 1; y <= position.y + 1; ++y) {
       for (let x = position.x - 1; x <= position.x + 1; ++x) {
@@ -253,27 +241,21 @@ export function createDungeonBuilder(
   const join = (a: number, b: number): void => {
     group[groupOf(a)] = groupOf(b);
   };
-  const placementOf = (room: Room): TemplatePlacement | undefined =>
-    options.templates?.[room.id];
+  // the shape of every room, by id
+  const shapes: TemplatePlacement[] = [];
+  const shapeOf = (room: Room): TemplatePlacement =>
+    shapes[room.id] as TemplatePlacement;
   const registerRoom = (room: Room): void => {
-    const placement = placementOf(room);
-    if (placement) {
-      // a template reserves what it is made of, and leaves the unused cells to corridors
-      placement.cells.forEach((row, dy) => {
-        row.forEach((cell, dx) => {
-          if (cell !== TemplateCell.Unused) {
-            reserved[(placement.y + dy) * width + placement.x + dx] = 1;
-          }
-        });
-      });
-    }
-    for (let y = room.y - 1; y <= room.y + room.height && !placement; ++y) {
-      for (let x = room.x - 1; x <= room.x + room.width; ++x) {
-        if (grid.inBounds(x, y)) {
-          reserved[y * width + x] = 1;
+    const shape = options.shapes?.[room.id] ?? createRoomShape(room);
+    shapes[room.id] = shape;
+    // a room reserves what it is made of, and leaves the unused cells to corridors
+    shape.cells.forEach((row, dy) => {
+      row.forEach((cell, dx) => {
+        if (cell !== TemplateCell.Unused) {
+          reserved[(shape.y + dy) * width + shape.x + dx] = 1;
         }
-      }
-    }
+      });
+    });
     wanted[room.id] = randomInt(
       random,
       options.exitsPerRoom.min,
@@ -365,41 +347,9 @@ export function createDungeonBuilder(
     return true;
   };
 
-  /** The operation and rooms of a step together with its mirror images, or `undefined` if some room has no twin to take part. */
-  const mirrorPlan = (
-    operation: Operation,
-    newRooms: Room[],
-  ):
-    | {
-        rooms: Room[];
-        copies: Map<number, number>;
-        operations: Operation[];
-      }
-    | undefined => {
-    const base = rooms.length;
-    const created = [...newRooms];
-    const copies = new Map<number, number>();
-    const images = transforms.map(() => new Map<number, number>());
-    for (const [i, transform] of transforms.entries()) {
-      for (const room of newRooms) {
-        const image = transform.room(room);
-        const same = created.find(
-          (other) => geometryKey(other) === geometryKey(image),
-        );
-        if (same) {
-          images[i]?.set(room.id, same.id);
-        } else {
-          const twin = { ...image, id: base + created.length };
-          created.push(twin);
-          copies.set(twin.id, room.id);
-          images[i]?.set(room.id, twin.id);
-        }
-      }
-    }
+  /** The operation together with its mirror images, or `undefined` if some room has no twin to take part. */
+  const mirrorPlan = (operation: Operation): Operation[] | undefined => {
     const twinOf = (i: number, id: number): number | undefined => {
-      if (id >= base) {
-        return images[i]?.get(id);
-      }
       const image = (transforms[i] as Transform).room(rooms[id] as Room);
       return geometry.get(geometryKey(image));
     };
@@ -473,15 +423,15 @@ export function createDungeonBuilder(
       }
       operations.push(twin);
     }
-    return { rooms: created, copies, operations };
+    return operations;
   };
 
-  const place = (
-    operation: Operation,
-    newRooms: Room[] = [],
-    accepts: (rooms: Room[], pending: ReadonlySet<number>) => boolean = () =>
-      true,
-  ): boolean => {
+  /**
+   * Adds corridors and exits to the dungeon, together with their mirror images
+   * if the layout is symmetric and the dice say so. Nothing is added, and
+   * `false` returned, if a mirror image does not fit.
+   */
+  const place = (operation: Operation): boolean => {
     const mirrored = transforms.length > 0 && mirrorChance > random();
     const decided: Operation = mirrored
       ? {
@@ -506,15 +456,13 @@ export function createDungeonBuilder(
         }
       }
     }
-    const plan = (mirrored ? mirrorPlan(decided, newRooms) : undefined) ?? {
-      rooms: newRooms,
-      copies: new Map<number, number>(),
-      operations: [decided],
-    };
+    const operations = (mirrored ? mirrorPlan(decided) : undefined) ?? [
+      decided,
+    ];
 
     const pending = new Set<number>();
     const placedExits: Point[] = [];
-    for (const [i, { paths, exits: added }] of plan.operations.entries()) {
+    for (const [i, { paths, exits: added }] of operations.entries()) {
       for (const path of paths) {
         if (i > 0 && !isPathValid(path, pending)) {
           return false;
@@ -534,20 +482,7 @@ export function createDungeonBuilder(
         placedExits.push(position);
       }
     }
-    if (!accepts(plan.rooms, pending)) {
-      return false;
-    }
-
-    for (const room of plan.rooms) {
-      rooms.push(room);
-      carveRoom(grid, room);
-      registerRoom(room);
-      const original = plan.copies.get(room.id);
-      if (original !== undefined) {
-        wanted[room.id] = wanted[original] as number;
-      }
-    }
-    for (const committed of plan.operations) {
+    for (const committed of operations) {
       commit(committed);
     }
     return true;
@@ -572,47 +507,21 @@ export function createDungeonBuilder(
   ): ExitSlot[] => {
     const step = DIRECTIONS[direction] as Point;
     const slots: ExitSlot[] = [];
-    const placement = placementOf(room);
-    if (placement) {
-      // only optional exits are free to open: the fixed ones are open already
-      for (const candidate of placement.exits) {
-        if (
-          candidate.kind !== TemplateCell.OptionalExit ||
-          !candidate.directions.includes(direction)
-        ) {
-          continue;
-        }
-        const exit = {
-          x: placement.x + candidate.x,
-          y: placement.y + candidate.y,
-        };
-        const outside = { x: exit.x + step.x, y: exit.y + step.y };
-        if (
-          !isExitAllowed(exit) ||
-          (options.lattice && (outside.x % 2 === 0 || outside.y % 2 === 0))
-        ) {
-          continue;
-        }
-        if (isFree(outside.x, outside.y)) {
-          slots.push({ exit, outside, direction });
-        } else if (joining && isOtherGroup(outside, room)) {
-          slots.push({ exit, outside, direction, joins: true });
-        }
-      }
-      return slots;
-    }
-    const vertical = step.y !== 0;
-    const length = vertical ? room.width : room.height;
-    for (let i = 0; i < length; ++i) {
-      const exit = vertical
-        ? { x: room.x + i, y: step.y < 0 ? room.y - 1 : room.y + room.height }
-        : { x: step.x < 0 ? room.x - 1 : room.x + room.width, y: room.y + i };
-      const along = vertical ? exit.x : exit.y;
-      if (options.lattice && along % 2 === 0) {
+    const shape = shapeOf(room);
+    // only optional exits are free to open: the fixed ones are open already
+    for (const candidate of shape.exits) {
+      if (
+        candidate.kind !== TemplateCell.OptionalExit ||
+        !candidate.directions.includes(direction)
+      ) {
         continue;
       }
+      const exit = { x: shape.x + candidate.x, y: shape.y + candidate.y };
       const outside = { x: exit.x + step.x, y: exit.y + step.y };
-      if (!isExitAllowed(exit)) {
+      if (
+        !isExitAllowed(exit) ||
+        (options.lattice && (outside.x % 2 === 0 || outside.y % 2 === 0))
+      ) {
         continue;
       }
       if (isFree(outside.x, outside.y)) {
@@ -624,9 +533,14 @@ export function createDungeonBuilder(
     return slots;
   };
 
-  /** Wall tiles that open straight into the other room, when exactly one wall separates the two. */
+  /** Wall tiles that open straight into the other room, when exactly one wall separates two ordinary rooms. */
   const sharedWalls = (a: Room, b: Room): Point[] => {
-    if (placementOf(a) || placementOf(b)) {
+    if (
+      a.template !== undefined ||
+      b.template !== undefined ||
+      isStandIn(a) ||
+      isStandIn(b)
+    ) {
       return [];
     }
     const walls: Point[] = [];
@@ -696,6 +610,51 @@ export function createDungeonBuilder(
     x: room.x + room.width / 2,
     y: room.y + room.height / 2,
   });
+
+  /** The walls of a stand-in, where its exits may go, on the map. */
+  const edgeOf = (room: Room): Point[] => {
+    const shape = shapeOf(room);
+    return shape.exits.map(({ x, y }) => ({ x: shape.x + x, y: shape.y + y }));
+  };
+
+  /** The point of a room to head for from a point: its center, or a stand-in's nearest wall. */
+  const pointOf = (room: Room, from: Point): Point => {
+    const [first, ...others] = isStandIn(room) ? edgeOf(room) : [];
+    return first
+      ? others.reduce(
+          (best, tile) =>
+            squared(tile, from) < squared(best, from) ? tile : best,
+          first,
+        )
+      : centerOf(room);
+  };
+
+  /** The point of `b` that a corridor from `a` heads for. */
+  const aimOf = (a: Room, b: Room): Point =>
+    pointOf(b, pointOf(a, centerOf(b)));
+
+  const distances = new Map<string, number>();
+  /** How far apart two rooms are, squared, which orders pairs of rooms: from center to center, or to the nearest wall of a stand-in. */
+  const distance = (a: Room, b: Room): number => {
+    if (!isStandIn(a) && !isStandIn(b)) {
+      return distanceBetween(a, b);
+    }
+    const key = pairKey(a, b);
+    let known = distances.get(key);
+    if (known === undefined) {
+      const [near, far] = isStandIn(a) ? [b, a] : [a, b];
+      const from = isStandIn(near) ? edgeOf(near) : [centerOf(near)];
+      const to = edgeOf(far);
+      known = Infinity;
+      for (const p of from) {
+        for (const q of to) {
+          known = Math.min(known, squared(p, q));
+        }
+      }
+      distances.set(key, known);
+    }
+    return known;
+  };
 
   /** The exit that a corridor starts or ends with, if it opens a new one. */
   const exitOf = (room: Room, start?: Start): OperationExit[] =>
@@ -768,6 +727,14 @@ export function createDungeonBuilder(
    * each wall for a new exit, or tiles along the corridors it has already.
    */
   const startsFor = (room: Room, mode: Mode, toward: Point): Start[] => {
+    if (mode === 'new' && isStandIn(room)) {
+      // a stand-in has walls all round, so the slots nearest the target come first
+      return DIRECTIONS.flatMap((_, direction) => slotsOf(room, direction))
+        .sort(
+          (p, q) => manhattan(p.outside, toward) - manhattan(q.outside, toward),
+        )
+        .slice(0, BRANCH_TRIES);
+    }
     if (mode === 'new') {
       return wallsToward(room, toward)
         .map((direction) => slotsOf(room, direction))
@@ -844,7 +811,7 @@ export function createDungeonBuilder(
     modes: [Mode, Mode],
     crossing: boolean,
   ): boolean => {
-    for (const startA of startsFor(a, modes[0], centerOf(b))) {
+    for (const startA of startsFor(a, modes[0], aimOf(a, b))) {
       for (const { target, start: startB } of targetsFor(b, modes[1], startA)) {
         const path = findCorridor(
           map,
@@ -879,6 +846,10 @@ export function createDungeonBuilder(
     if (!atCapacity(a) && !atCapacity(b) && connectDirectly(a, b)) {
       return true;
     }
+    // a stand-in may be walled in, and the searches that fail to reach it are dear
+    if ((isStandIn(a) || isStandIn(b)) && !mayJoin(a, b)) {
+      return false;
+    }
     const [modeA, modeB] = [naturalMode(a), naturalMode(b)];
     const combinations: [Mode, Mode][] = [
       [modeA, modeB],
@@ -900,6 +871,68 @@ export function createDungeonBuilder(
   const addLink = (a: Room, b: Room): boolean =>
     (!atCapacity(a) && !atCapacity(b) && connectDirectly(a, b)) ||
     tryCorridor(a, b, [naturalMode(a), naturalMode(b)], false);
+
+  /**
+   * Whether a corridor that may cross others could get from one of the free
+   * tiles to a tile that passes the test. It floods the map with the steps
+   * that `findCorridor` takes, without their costs: which steps a corridor
+   * may take depends on the tile and the way it moves, not on the way it
+   * faced before, so the flood reaches exactly the tiles that a crossing
+   * search can, and a search that does not cross reaches fewer.
+   */
+  const canReach = (
+    starts: Point[],
+    test: (x: number, y: number) => boolean,
+  ): boolean => {
+    const stride = options.lattice ? 2 : 1;
+    const rules = { crossing: true, isTarget: test };
+    const seen = new Uint8Array(width * height);
+    const queue = starts.map(({ x, y }) => y * width + x);
+    for (const tile of queue) {
+      seen[tile] = 1;
+    }
+    for (const tile of queue) {
+      const x = tile % width;
+      const y = (tile - x) / width;
+      if (test(x, y)) {
+        return true;
+      }
+      for (const [direction, step] of DIRECTIONS.entries()) {
+        let open = true;
+        for (let i = 1; i <= stride && open; ++i) {
+          open =
+            corridorTileCost(
+              map,
+              x + step.x * i,
+              y + step.y * i,
+              direction,
+              rules,
+            ) !== undefined;
+        }
+        const next = (y + step.y * stride) * width + x + step.x * stride;
+        if (open && seen[next] === 0) {
+          seen[next] = 1;
+          queue.push(next);
+        }
+      }
+    }
+    return false;
+  };
+
+  /**
+   * Whether any corridor of `tryCorridor` could join two rooms: whether a
+   * flood from the slots and corridors of one reaches those of the other.
+   */
+  const mayJoin = (a: Room, b: Room): boolean => {
+    const ends = (room: Room): Point[] => [
+      ...DIRECTIONS.flatMap((_, direction) =>
+        slotsOf(room, direction).map(({ outside }) => outside),
+      ),
+      ...corridorsOf(room),
+    ];
+    const targets = new Set(ends(b).map(({ x, y }) => y * width + x));
+    return canReach(ends(a), (x, y) => targets.has(y * width + x));
+  };
 
   /** Joins a room to the nearest corridor of any other group, whichever way it can be reached. */
   const joinCorridor = (room: Room): boolean => {
@@ -924,6 +957,15 @@ export function createDungeonBuilder(
       aim: nearest,
       unbounded: true,
     };
+    // an unbounded search that cannot reach the target covers the whole map
+    // before it gives up, once for every slot and both ways of crossing, so
+    // one flood rules that out first
+    const starts = DIRECTIONS.flatMap((_, direction) =>
+      slotsOf(room, direction, true).map(({ outside }) => outside),
+    );
+    if (!canReach(starts, target.test)) {
+      return false;
+    }
     for (const crossing of [false, true]) {
       for (const direction of wallsToward(room, nearest)) {
         const slots = slotsOf(room, direction, true).sort(
@@ -956,7 +998,7 @@ export function createDungeonBuilder(
 
   const byDistance = (from: Room, others: Room[]): Room[] =>
     others
-      .map((room) => ({ room, distance: distanceBetween(from, room) }))
+      .map((room) => ({ room, distance: distance(from, room) }))
       .sort((p, q) => p.distance - q.distance)
       .map(({ room }) => room);
 
@@ -1019,11 +1061,10 @@ export function createDungeonBuilder(
   const fixedAt = new Map<number, number[]>();
   const sharedDoorways = new Set<number>();
   for (const room of rooms) {
-    for (const candidate of options.templates?.[room.id]?.exits ?? []) {
-      if (candidate.kind !== TemplateCell.OptionalExit) {
-        const placement = options.templates?.[room.id] as TemplatePlacement;
-        const key =
-          (placement.y + candidate.y) * width + placement.x + candidate.x;
+    const shape = options.shapes?.[room.id];
+    for (const candidate of shape?.exits ?? []) {
+      if (shape && candidate.kind !== TemplateCell.OptionalExit) {
+        const key = (shape.y + candidate.y) * width + shape.x + candidate.x;
         fixedAt.set(key, [...(fixedAt.get(key) ?? []), room.id]);
       }
     }
@@ -1195,7 +1236,7 @@ export function createDungeonBuilder(
     if (options.connection === 'bsp' || options.connection === 'bsp-random') {
       // every cut gets one corridor, between the first pair of rooms that can be joined
       const plan = planBspLinks(
-        rooms,
+        rooms.filter((room) => !isStandIn(room)),
         options.connection === 'bsp-random' ? random : undefined,
       );
       for (const cut of plan) {
@@ -1213,9 +1254,7 @@ export function createDungeonBuilder(
     }
     // joins what is not joined yet, which is everything without a plan and is the fallback with one
     const edges: Edge[] = rooms.flatMap((a, i) =>
-      rooms
-        .slice(i + 1)
-        .map((b) => ({ a, b, distance: distanceBetween(a, b) })),
+      rooms.slice(i + 1).map((b) => ({ a, b, distance: distance(a, b) })),
     );
     edges.sort((p, q) => p.distance - q.distance);
     for (const { a, b } of edges) {
@@ -1273,7 +1312,7 @@ export function createDungeonBuilder(
         neighbors.set(pairKey(room, other), {
           a: room,
           b: other,
-          distance: distanceBetween(room, other),
+          distance: distance(room, other),
         });
       }
     }
@@ -1306,9 +1345,8 @@ export function createDungeonBuilder(
     registerRoom(room);
   }
   for (const room of rooms) {
-    const placement = placementOf(room);
-    if (placement) {
-      openFixedExits(room, placement);
+    if (room.template !== undefined) {
+      openFixedExits(room, shapeOf(room));
     }
   }
   // twins want the same number of exits, so that they can be linked alike
@@ -1322,15 +1360,7 @@ export function createDungeonBuilder(
   }
 
   return {
-    map,
     exits,
-    corridors,
-    registerRoom,
-    place,
-    atCapacity,
-    slotsOf,
-    isExitAllowed,
-    ownerOf: ({ x, y }) => owner[y * width + x] as number,
     connectAll,
     addExtras,
     connectStubs,
@@ -1338,8 +1368,12 @@ export function createDungeonBuilder(
 }
 
 /** Whether two tiles are the same or next to each other, diagonally too. */
-export function touching(a: Point, b: Point): boolean {
+function touching(a: Point, b: Point): boolean {
   return Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1;
+}
+
+function squared(a: Point, b: Point): number {
+  return (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 }
 
 function manhattan(a: Point, b: Point): number {

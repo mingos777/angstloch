@@ -1,8 +1,6 @@
 /**
- * Measures today's dungeons over many seeds: how often they fail and what it
- * costs, and how they look. It is the baseline that the dungeon steps are
- * checked against, the retry rule of `carveCorridors` and `growRooms` next to
- * the digger. Run with `npm run check:dungeon`, and add flags after `--`:
+ * Measures the dungeons over many seeds: how often they fail and what it
+ * costs, and how they look. Run with `npm run check:dungeon`, and add flags after `--`:
  *
  * - `--from 1 --to 200`: the seeds to check (1 to 200 by default),
  * - `--seeds 6,9,14`: these seeds instead,
@@ -10,23 +8,31 @@
  *   by default),
  * - `--placement lattice`: rooms and corridors on the lattice.
  *
- * Every dungeon is 61 by 41 with the defaults of the dungeon page, built
- * room-first (scatter and bsp) and by the digger, with 0, 2 and 5 templated
- * rooms. The templates are the two of the playground's template editor,
- * which both have a fixed exit. Two in five of the templated rooms are halls,
+ * Every dungeon is 61 by 41 with the defaults of the steps, built room-first
+ * (`scatterRooms` or `partitionRooms`, then `carveCorridors`, as
+ * `generateRoomDungeon` does) and grown (`growRooms`, then `carveCorridors`,
+ * as `generateDigDungeon` does), with 0, 2 and 5 templated rooms. The
+ * templates are the two examples of the playground's template editor, which
+ * both have a fixed exit. Two in five of the templated rooms are halls,
  * rounded, and the rest closets: 2 is a closet and a hall, 5 is three closets
- * and two halls.
+ * and two halls. A last run scatters the rooms round two features made
+ * first, a pillar hall of 16 by 12 (`digPillarHalls`) and a noise cavern of
+ * 14 to 18 by 10 to 14 (`carveNoiseCave`, its largest piece only), which
+ * `carveCorridors` joins as stand-ins; a map fails there also when a feature
+ * finds no spot or is cut off.
  *
  * Failure figures, per dungeon and number of templates:
  *
- * - tries: how many times a map was built round its templates (10 at most),
- *   the mean and the most for one map,
+ * - tries: how many times a map was built round its templates (3 routings
+ *   of `carveCorridors` at most), the mean and the
+ *   most for one map,
  * - maps: how many maps were built for one seed (3 at most), the mean and
  *   the number of seeds that needed more than one,
  * - failed: the seeds that threw after the last map,
  * - time: per seed, retries included, the mean and the most.
  *
- * Look figures, over the seeds that did not fail:
+ * Look figures, over the seeds that did not fail (only rooms and exits for
+ * the run with features, whose floor would count as corridor):
  *
  * - rooms: the room count,
  * - corridor: the pieces of corridor, the open tiles outside every room and
@@ -38,10 +44,30 @@
  * - exits: the exits of a room, a shared door counting for both rooms,
  * - dead ends: corridor tiles with one open neighbor.
  */
-import { TemplateCell, TemplatePlacementError } from '../src';
-import type { DungeonResult, Placement, RoomTemplate } from '../src';
-import { buildDigDungeon } from '../src/dungeon/build-dig-dungeon';
-import { buildRoomDungeon } from '../src/dungeon/build-room-dungeon';
+import {
+  Tile,
+  TemplateCell,
+  TemplatePlacementError,
+  carveNoiseCave,
+  digPillarHalls,
+  emptyMap,
+  growRooms,
+  partitionRooms,
+  pipeline,
+  scatterRooms,
+  step,
+} from '../src';
+import type {
+  AnyStep,
+  DungeonResult,
+  MapStep,
+  Placement,
+  RoomTemplate,
+} from '../src';
+import { joinRooms } from '../src/dungeon/join-rooms';
+import type { JoinedRooms } from '../src/dungeon/join-rooms';
+import type { PlacedRooms } from '../src/dungeon/placed-rooms';
+import { resolveCorridorSettings } from '../src/dungeon/resolve-corridor-settings';
 import { corridorTiles, deadEnds } from '../src/test-helpers/dungeon-checks';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 
@@ -49,7 +75,7 @@ declare const process: { argv: string[] };
 
 const WIDTH = 61;
 const HEIGHT = 41;
-/** Maps built for one seed before it fails, as `retryPlacement` does. */
+/** Maps built for one seed before it fails, as `pipeline` does. */
 const MAP_ATTEMPTS = 3;
 
 function flag(name: string): string | undefined {
@@ -122,37 +148,74 @@ type Build = (
   onTry: () => void,
 ) => DungeonResult;
 
-const DUNGEONS: { name: string; build: Build }[] = [
+/** Builds one map with a placement step and `carveCorridors`, after the features if any, counting the routing tries; `run` does the maps, as the pipeline would. */
+function buildSteps(
+  place: MapStep<Partial<PlacedRooms>, PlacedRooms>,
+  random: () => number,
+  onTry: () => void,
+  features: AnyStep[] = [],
+): DungeonResult {
+  const corridors = step<PlacedRooms & Partial<JoinedRooms>, JoinedRooms>(
+    'carveCorridors',
+    {
+      needs: ['rooms', 'roomShapes'],
+      adds: ['rooms', 'roomShapes', 'roomExits'],
+    },
+    (state, context) =>
+      joinRooms(
+        state,
+        context.random,
+        resolveCorridorSettings({ placement }),
+        onTry,
+      ),
+  );
+  const steps: AnyStep[] = [...features, place, corridors];
+  const result = pipeline(
+    emptyMap({ width: WIDTH, height: HEIGHT, tile: Tile.Wall }),
+    steps,
+    { random, attempts: 1 },
+  );
+  const { rooms, roomExits } = result as unknown as JoinedRooms;
+  return { grid: result.grid, rooms, exits: roomExits, fill: 0 };
+}
+
+/** A pillar hall and a noise cavern, each in an area of its own. */
+const features = (): AnyStep[] => [
+  digPillarHalls({
+    area: { width: { min: 16, max: 16 }, height: { min: 12, max: 12 } },
+  }),
+  carveNoiseCave({
+    area: { width: { min: 14, max: 18 }, height: { min: 10, max: 14 } },
+    largestOnly: true,
+  }),
+];
+
+const DUNGEONS: { name: string; build: Build; features?: boolean }[] = [
   {
     name: 'room-first scatter',
     build: (random, templates, onTry) =>
-      buildRoomDungeon(
-        { width: WIDTH, height: HEIGHT, random, templates, placement },
-        onTry,
-      ),
+      buildSteps(scatterRooms({ templates, placement }), random, onTry),
   },
   {
     name: 'room-first bsp',
     build: (random, templates, onTry) =>
-      buildRoomDungeon(
-        {
-          width: WIDTH,
-          height: HEIGHT,
-          random,
-          templates,
-          placement,
-          partition: 'bsp',
-        },
-        onTry,
-      ),
+      buildSteps(partitionRooms({ templates, placement }), random, onTry),
   },
   {
-    name: 'digger',
+    name: 'grown',
     build: (random, templates, onTry) =>
-      buildDigDungeon(
-        { width: WIDTH, height: HEIGHT, random, templates, placement },
+      buildSteps(growRooms({ templates, placement }), random, onTry),
+  },
+  {
+    name: 'scatter, hall, cavern',
+    build: (random, templates, onTry) =>
+      buildSteps(
+        scatterRooms({ templates, placement }),
+        random,
         onTry,
+        features(),
       ),
+    features: true,
   },
 ];
 
@@ -226,7 +289,7 @@ function lookOf(result: DungeonResult): Look {
   };
 }
 
-/** Builds the dungeon of a seed as `retryPlacement` does, counting the tries and the maps. */
+/** Builds the dungeon of a seed as `pipeline` does, counting the tries and the maps. */
 function run(build: Build, templates: RoomTemplate[], seed: number): Run {
   const random = mulberry32(seed);
   const tries: number[] = [];
@@ -244,7 +307,12 @@ function run(build: Build, templates: RoomTemplate[], seed: number): Run {
         look: lookOf(result),
       };
     } catch (error) {
-      if (!(error instanceof TemplatePlacementError) || error.permanent) {
+      // the pipeline retries every error but a permanent one, and so does this
+      if (
+        !(error instanceof Error) ||
+        error instanceof TypeError ||
+        (error instanceof TemplatePlacementError && error.permanent)
+      ) {
         throw error;
       }
       if (map === MAP_ATTEMPTS) {
@@ -282,7 +350,7 @@ for (const { build } of DUNGEONS) {
 
 const failureRows: string[][] = [];
 const lookRows: string[][] = [];
-for (const { name, build } of DUNGEONS) {
+for (const { name, build, features: featured } of DUNGEONS) {
   for (const { count, templates } of TEMPLATE_SETS) {
     const runs = seeds.map((seed) => run(build, templates, seed));
     const tries = runs.flatMap((one) => one.tries);
@@ -300,16 +368,19 @@ for (const { name, build } of DUNGEONS) {
       mean(runs.map(({ ms }) => ms)).toFixed(1),
       Math.max(...runs.map(({ ms }) => ms)).toFixed(1),
     ]);
+    const unless = (figure: string) => (featured ? '-' : figure);
     lookRows.push([
       label,
       mean(looks.map(({ rooms }) => rooms)).toFixed(1),
-      mean(corridors).toFixed(1),
-      mean(
-        looks.map(({ corridors: pieces }) => Math.max(0, ...pieces)),
-      ).toFixed(1),
-      mean(looks.map(({ spread }) => spread)).toFixed(2),
+      unless(mean(corridors).toFixed(1)),
+      unless(
+        mean(
+          looks.map(({ corridors: pieces }) => Math.max(0, ...pieces)),
+        ).toFixed(1),
+      ),
+      unless(mean(looks.map(({ spread }) => spread)).toFixed(2)),
       mean(looks.map(({ exitsPerRoom }) => exitsPerRoom)).toFixed(2),
-      mean(looks.map(({ deadEnds: ends }) => ends)).toFixed(1),
+      unless(mean(looks.map(({ deadEnds: ends }) => ends)).toFixed(1)),
     ]);
   }
 }

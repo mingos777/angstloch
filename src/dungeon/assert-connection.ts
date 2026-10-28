@@ -1,4 +1,4 @@
-import type { RoomConnection } from '../rooms/room-dungeon-options';
+import type { RoomConnection } from './room-connection';
 
 const CONNECTIONS: readonly string[] = [
   'nearest',

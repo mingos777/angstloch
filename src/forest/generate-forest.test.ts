@@ -198,7 +198,31 @@ describe('generateForest', () => {
     expect(grid.get(60, 30)).toBe(Tile.Tree);
   });
 
-  it('lays the paths that clearings ask for, with the tiles of the roads', () => {
+  it('lays the paths that clearings ask for, with the options of paths', () => {
+    // given
+    const clearings = [
+      {
+        x: 40,
+        y: 10,
+        radiusX: { min: 3, max: 3 },
+        path: { width: 1, windiness: 0 },
+      },
+    ];
+    const roads = { angle: 0, windiness: 0 };
+    const paths = { roadTile: Tile.Floor };
+    const options = { roads, clearings: { clearings }, paths };
+
+    // when
+    const { roads: laid, junctions, grid } = forest(options);
+
+    // then
+    expect(laid).toHaveLength(2);
+    expect(laid[1]?.kind).toBe('branch');
+    expect(junctions).toHaveLength(1);
+    expect(grid.get(40, 10)).toBe(Tile.Floor);
+  });
+
+  it('gives the paths nothing of the options of the roads', () => {
     // given
     const clearings = [
       {
@@ -212,13 +236,10 @@ describe('generateForest', () => {
     const options = { roads, clearings: { clearings } };
 
     // when
-    const { roads: laid, junctions, grid } = forest(options);
+    const { grid } = forest(options);
 
     // then
-    expect(laid).toHaveLength(2);
-    expect(laid[1]?.kind).toBe('branch');
-    expect(junctions).toHaveLength(1);
-    expect(grid.get(40, 10)).toBe(Tile.Floor);
+    expect(grid.get(40, 10)).toBe(Tile.Road);
   });
 
   it('places a template on its clearing', () => {

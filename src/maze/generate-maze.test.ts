@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { generateMaze } from './generate-maze';
+import { addExits } from '../exits/add-exits';
+import { emptyMap } from '../pipeline/empty-map';
+import { pipeline } from '../pipeline/pipeline';
+import { carveMaze } from './carve-maze';
+import { openMazeRooms } from './open-maze-rooms';
+import { placeMazeRooms } from './place-maze-rooms';
 import type { Grid } from '../core/grid';
 import type { MazeOptions } from './maze-options';
 import type { MazeResult } from './maze-result';
@@ -202,7 +208,7 @@ describe('generateMaze', () => {
 
   it('adds the requested exits as doors on the border, facing maze cells', () => {
     // given
-    const exits = { count: { min: 3, max: 3 } };
+    const exits = { count: { min: 3, max: 3 }, lattice: true };
 
     // when
     const { grid, exits: doors } = maze({ exits });
@@ -328,10 +334,33 @@ describe('generateMaze', () => {
     }
   });
 
-  it('keeps rooms off the start of the maze', () => {
+  it('gives each step only its own options', () => {
+    // given
+    const carve = { start: { x: 9, y: 9 }, loopChance: 0.2 };
+    const rooms = { roomCount: { min: 3, max: 3 } };
+    const exits = { count: { min: 2, max: 2 } };
+    const byHand = pipeline(
+      emptyMap({ width: 41, height: 31, tile: Tile.Wall }),
+      [
+        placeMazeRooms(rooms),
+        carveMaze(carve),
+        openMazeRooms(),
+        addExits(exits),
+      ],
+      { random: mulberry32(5) },
+    );
+
+    // when
+    const result = withRooms({ maze: carve, rooms, exits }, 5);
+
+    // then
+    expect(result.grid.toString()).toBe(byHand.grid.toString());
+  });
+
+  it('keeps rooms off the start of the maze given as keepClear', () => {
     // given
     const start = { x: 9, y: 9 };
-    const rooms = { roomCount: { min: 6, max: 6 } };
+    const rooms = { roomCount: { min: 6, max: 6 }, keepClear: start };
 
     // when
     const results = SEEDS.map((seed) =>
@@ -422,7 +451,8 @@ describe('generateMaze', () => {
         },
       ],
     };
-    const options = { rooms, maze: { start: { x: 11, y: 11 } } };
+    const start = { x: 11, y: 11 };
+    const options = { rooms: { ...rooms, keepClear: start }, maze: { start } };
 
     // when
     const { attempts, failures, rooms: placed } = withRooms(options, 3);
@@ -446,7 +476,8 @@ describe('generateMaze', () => {
         },
       ],
     };
-    const options = { rooms, maze: { start: { x: 11, y: 11 } } };
+    const start = { x: 11, y: 11 };
+    const options = { rooms: { ...rooms, keepClear: start }, maze: { start } };
 
     // when
     const act = () => withRooms(options);
@@ -518,7 +549,8 @@ describe('generateMaze', () => {
       width: 21,
       height: 21,
       maze: { start: { x: 5, y: 5 } },
-      rooms: { roomCount: { min: 2, max: 2 } },
+      // clear of the start, which Math.random would otherwise put a room on now and then
+      rooms: { roomCount: { min: 2, max: 2 }, keepClear: { x: 5, y: 5 } },
       openings: { exitsPerRoom: { min: 1, max: 2 } },
       exits: { count: { min: 1, max: 1 } },
     };

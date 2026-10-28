@@ -266,7 +266,7 @@ function partitionSymmetric(random: Random, plan: RoomPlan): Room[] {
  * again, and every resulting area gets one room. With a symmetric layout, only
  * a part of the map is partitioned and the rooms are mirrored.
  */
-export const partitionRooms: RoomPlacer = (random, plan) =>
+export const partitionRoomPlan: RoomPlacer = (random, plan) =>
   plan.transforms.length > 0
     ? partitionSymmetric(random, plan)
     : partition(random, plan).map(({ room }, id) => ({ ...room, id }));

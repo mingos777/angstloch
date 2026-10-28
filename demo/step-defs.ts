@@ -4,6 +4,7 @@ import {
   addFootbridges,
   addRoads,
   addStreams,
+  carveCorridors,
   carveMaze,
   carveNoiseCave,
   digCaveTunnels,
@@ -12,12 +13,15 @@ import {
   digRings,
   digVeins,
   growCave,
+  growRooms,
   openMazeRooms,
+  partitionRooms,
   placeClearings,
   placeMazeRooms,
   placeMineRooms,
   placeTemplates,
   plantTrees,
+  scatterRooms,
 } from '../src';
 import type {
   AnyStep,
@@ -25,12 +29,15 @@ import type {
   CavePlacement,
   CaveTunnelStyle,
   ClearingSpec,
+  CorridorSymmetry,
   LayoutSymmetry,
   MazeSymmetry,
   MineHallEntrances,
   MineRingShape,
   NoiseCaveShape,
+  Placement,
   RoadEntry,
+  RoomConnection,
   RoomTemplate,
 } from '../src';
 import { FOREST_TEMPLATES } from './forest-templates';
@@ -97,6 +104,53 @@ function caveOptions(v: Values) {
     area: v.area(),
     count: v.range('count'),
     placement: v.text('placement') as CavePlacement,
+  };
+}
+
+/** The fields that `scatterRooms`, `partitionRooms` and `growRooms` share. */
+function roomPlacementFields(): Field[] {
+  return [
+    select('placement', 'Placement', 'free', [
+      ['free', 'free'],
+      ['lattice', 'lattice'],
+    ]),
+    ...pair('roomWidth', 'Room width', 3, 7, POSITIVE),
+    ...pair('roomHeight', 'Room height', 3, 7, POSITIVE),
+    number('sizeUniformity', 'Size uniformity', 0, FRACTION),
+    number('roomCountMin', 'Rooms min', 1, { min: '0' }),
+    number('roomCountMax', 'Rooms max (blank: no limit)', '', { min: '0' }),
+    number('roomSpacing', 'Room spacing', 1, POSITIVE),
+    number('fill', 'Fill', 0.12, FRACTION),
+    number('spacingUniformity', 'Spacing uniformity', 0, FRACTION),
+    json('templates', 'Templates (JSON, as the template editor exports them)'),
+    check('templateSymmetry', 'Mirror templates', false),
+    number('doorChance', 'Door chance (templates)', 1, FRACTION),
+    select('symmetry', 'Symmetry', 'none', SYMMETRIES),
+    number('symmetryChance', 'Symmetry chance', 1, FRACTION),
+    ...areaFields(),
+  ];
+}
+
+/** The options of a room placement step, from the controls of `roomPlacementFields`, but its `spacingUniformity`, which `growRooms` has not. */
+function roomPlacementOptions(v: Values) {
+  return {
+    placement: v.text('placement') as Placement,
+    roomWidth: v.range('roomWidth'),
+    roomHeight: v.range('roomHeight'),
+    sizeUniformity: v.number('sizeUniformity'),
+    roomCount: {
+      min: v.number('roomCountMin'),
+      max: v.optional('roomCountMax') ?? Number.MAX_SAFE_INTEGER,
+    },
+    roomSpacing: v.number('roomSpacing'),
+    fill: v.number('fill'),
+    templates: v.json('templates') as RoomTemplate[] | undefined,
+    templateSymmetry: v.flag('templateSymmetry'),
+    doorChance: v.number('doorChance'),
+    symmetry: v.text('symmetry') as LayoutSymmetry,
+    symmetryChance: v.number('symmetryChance'),
+    area: v.area(),
+    count: v.range('count'),
   };
 }
 
@@ -623,6 +677,93 @@ export const STEP_DEFS: StepDef[] = [
       openMazeRooms({
         exitsPerRoom: v.range('exitsPerRoom'),
         doorChance: v.number('doorChance'),
+      }),
+  },
+  {
+    name: 'scatterRooms',
+    summary:
+      'dungeon rooms tried at random spots, not opened yet (needs a wall map)',
+    fields: roomPlacementFields(),
+    make: (v) =>
+      scatterRooms({
+        ...roomPlacementOptions(v),
+        spacingUniformity: v.number('spacingUniformity'),
+      }),
+  },
+  {
+    name: 'partitionRooms',
+    summary:
+      'dungeon rooms, one in each part of a binary space partition, not opened yet (needs a wall map)',
+    fields: roomPlacementFields(),
+    make: (v) =>
+      partitionRooms({
+        ...roomPlacementOptions(v),
+        spacingUniformity: v.number('spacingUniformity'),
+      }),
+  },
+  {
+    name: 'growRooms',
+    summary:
+      'dungeon rooms grown from a seed, each beyond the wall of another, not opened yet (needs a wall map)',
+    fields: [
+      ...pair('gap', 'Gap', 1, 8, { min: '0' }),
+      number('horizontalBias', 'Horizontal bias', 0, { min: '0' }),
+      number('verticalBias', 'Vertical bias', 0, { min: '0' }),
+      ...roomPlacementFields().filter(({ key }) => key !== 'spacingUniformity'),
+    ],
+    make: (v) =>
+      growRooms({
+        ...roomPlacementOptions(v),
+        gap: v.range('gap'),
+        horizontalBias: v.number('horizontalBias'),
+        verticalBias: v.number('verticalBias'),
+      }),
+  },
+  {
+    name: 'carveCorridors',
+    summary:
+      'corridors and doors that join the rooms, dropping rooms that cannot be joined',
+    fields: [
+      select('connection', 'Connection', 'nearest', [
+        ['nearest', 'nearest'],
+        ['bsp', 'bsp'],
+        ['bsp-random', 'bsp-random'],
+      ]),
+      ...pair('exitsPerRoom', 'Exits per room', 1, 3, POSITIVE),
+      number('loopChance', 'Loop chance', 0.1, FRACTION),
+      number('deadEndChance', 'Dead end chance', 0, FRACTION),
+      number('doorChance', 'Door chance', 1, FRACTION),
+      number('straight', 'Straight', 0.5, FRACTION),
+      number('horizontalBias', 'Horizontal bias', 0, { min: '0' }),
+      number('verticalBias', 'Vertical bias', 0, { min: '0' }),
+      select('placement', 'Placement', 'free', [
+        ['free', 'free'],
+        ['lattice', 'lattice'],
+      ]),
+      select('symmetry', 'Symmetry', 'none', SYMMETRIES),
+      number('symmetryChance', 'Symmetry chance', 1, FRACTION),
+      select('corridorSymmetry', 'Corridor symmetry', 'none', [
+        ['none', 'none'],
+        ['whirlpool', 'whirlpool'],
+        ['snowflake', 'snowflake'],
+      ]),
+      number('corridorSymmetryChance', 'Corridor symmetry chance', 1, FRACTION),
+    ],
+    make: (v) =>
+      carveCorridors({
+        connection: v.text('connection') as RoomConnection,
+        exitsPerRoom: v.range('exitsPerRoom'),
+        loopChance: v.number('loopChance'),
+        deadEndChance: v.number('deadEndChance'),
+        doorChance: v.number('doorChance'),
+        straight: v.number('straight'),
+        horizontalBias: v.number('horizontalBias'),
+        verticalBias: v.number('verticalBias'),
+        placement: v.text('placement') as Placement,
+        symmetry: v.text('symmetry') as LayoutSymmetry,
+        symmetryChance: v.number('symmetryChance'),
+        corridorSymmetry: v.text('corridorSymmetry') as CorridorSymmetry,
+        corridorSymmetryChance: v.number('corridorSymmetryChance'),
       }),
   },
   {

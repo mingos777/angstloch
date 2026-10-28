@@ -30,7 +30,16 @@ export interface RoomPlan {
   isBlocked?: (room: Pick<Room, 'x' | 'y' | 'width' | 'height'>) => boolean;
 }
 
-export type RoomPlacer = (random: Random, plan: RoomPlan) => Room[];
+/**
+ * Picks the spots of the ordinary rooms. `seeds` are the boxes, walls
+ * included, of rooms there are already that new rooms may be built off, which
+ * only `growRooms` uses.
+ */
+export type RoomPlacer = (
+  random: Random,
+  plan: RoomPlan,
+  seeds: readonly Pick<Room, 'x' | 'y' | 'width' | 'height'>[],
+) => Room[];
 
 /** Wall tiles between a room's floor and the map edge. */
 export const EDGE_CLEARANCE = 1;

@@ -24,7 +24,7 @@ export interface OperationExit {
   door?: boolean;
 }
 
-/** Everything that adds one link, one dead end or one step of digging to a dungeon, so that it can be done again as a mirror image. Room ids may be ids of rooms that are about to be added. */
+/** Everything that adds one link or one dead end to a dungeon, so that it can be done again as a mirror image. */
 export interface Operation {
   paths: OperationPath[];
   exits: OperationExit[];

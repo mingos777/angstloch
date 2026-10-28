@@ -17,6 +17,7 @@ import { downloadCanvas } from './download-canvas';
 import { Color, drawGrid } from './draw-grid';
 import type { DisplayMode } from './draw-grid';
 import { STEP_DEFS } from './step-defs';
+import { createTemplateEditor } from './template-editor';
 import type { StepDef } from './step-defs';
 import { Values } from './step-fields';
 import type { Field, FieldValue } from './step-fields';
@@ -32,6 +33,7 @@ const canvas = document.querySelector<HTMLCanvasElement>('#map');
 const error = document.querySelector<HTMLElement>('#error');
 const stats = document.querySelector<HTMLElement>('#stats');
 const failures = document.querySelector<HTMLElement>('#failures');
+const templatePanel = document.querySelector<HTMLElement>('#templates');
 const context = canvas?.getContext('2d');
 
 /** A step in the list, with what its controls hold. */
@@ -130,12 +132,58 @@ const NOISE_CAVE = ['carveNoiseCave', 'digCaveTunnels'];
 /** The steps of `generateMaze`, with its defaults. It is carved out of wall too. */
 const MAZE: CardSpec[] = ['carveMaze'];
 
-/** The steps of `generateMaze` with rooms and exits (on the lattice, as the preset puts them), with the step defaults. */
+/** The steps of `generateMaze` with rooms and exits, the exits on the lattice so their doors face the cells of the maze. */
 const MAZE_WITH_ROOMS: CardSpec[] = [
   ['placeMazeRooms', { roomCountMin: '3', roomCountMax: '5' }],
   'carveMaze',
   'openMazeRooms',
   ['addExits', { lattice: true }],
+];
+
+/** The steps of `generateRoomDungeon`, with its defaults. It is carved out of wall too. */
+const DUNGEON: CardSpec[] = ['scatterRooms', 'carveCorridors'];
+
+/** The steps of `generateDigDungeon`, with its defaults. It is carved out of wall too. */
+const GROWN_DUNGEON: CardSpec[] = ['growRooms', 'carveCorridors'];
+
+/** Rooms scattered round a pillar hall and a noise cavern, which `carveCorridors` joins as stand-ins: the features run of check:dungeon. */
+const DUNGEON_WITH_FEATURES: CardSpec[] = [
+  [
+    'digPillarHalls',
+    {
+      areaWidthMin: '16',
+      areaWidthMax: '16',
+      areaHeightMin: '12',
+      areaHeightMax: '12',
+    },
+  ],
+  [
+    'carveNoiseCave',
+    {
+      largestOnly: true,
+      areaWidthMin: '14',
+      areaWidthMax: '18',
+      areaHeightMin: '10',
+      areaHeightMax: '14',
+    },
+  ],
+  'scatterRooms',
+  'carveCorridors',
+];
+
+/** A cavern in part of the map and a few rooms, joined by cave tunnels that enter the rooms through their potential exits. */
+const CAVE_WITH_ROOMS: CardSpec[] = [
+  [
+    'growCave',
+    {
+      areaWidthMin: '24',
+      areaWidthMax: '24',
+      areaHeightMin: '16',
+      areaHeightMax: '16',
+    },
+  ],
+  ['scatterRooms', { roomCountMin: '4', roomCountMax: '6' }],
+  'digCaveTunnels',
 ];
 
 /** Outlines a tile. */
@@ -573,6 +621,41 @@ document.querySelector('#load-maze')?.addEventListener('click', () => {
 document.querySelector('#load-maze-rooms')?.addEventListener('click', () => {
   setWallCards(MAZE_WITH_ROOMS);
 });
+document.querySelector('#load-dungeon')?.addEventListener('click', () => {
+  setWallCards(DUNGEON);
+});
+/** Sets the size of the map to the one that check:dungeon measures. */
+function setDungeonSize(): void {
+  for (const [name, size] of [
+    ['width', 61],
+    ['height', 41],
+  ] as const) {
+    const input = form?.elements.namedItem(name);
+    if (input instanceof HTMLInputElement) {
+      input.value = String(size);
+    }
+  }
+}
+
+document.querySelector('#load-grown-dungeon')?.addEventListener('click', () => {
+  setDungeonSize();
+  setWallCards(GROWN_DUNGEON);
+});
+document
+  .querySelector('#load-dungeon-features')
+  ?.addEventListener('click', () => {
+    setDungeonSize();
+    setWallCards(DUNGEON_WITH_FEATURES);
+  });
+document.querySelector('#load-cave-rooms')?.addEventListener('click', () => {
+  setDungeonSize();
+  setWallCards(CAVE_WITH_ROOMS);
+});
+// the room cards take the templates as JSON, which the editor exports
+if (templatePanel) {
+  createTemplateEditor(templatePanel, () => undefined);
+}
+
 document.querySelector('#clear-steps')?.addEventListener('click', () => {
   setCards([]);
 });

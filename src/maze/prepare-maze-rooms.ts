@@ -51,7 +51,7 @@ export function prepareMazeRooms(
   });
   const templated = prepareTemplates(
     random,
-    { width, height, templates: options.templates },
+    { templates: options.templates },
     resolved,
     'none',
   );

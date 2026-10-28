@@ -1,10 +1,17 @@
-import type { DungeonOptions } from '../rooms/dungeon-options';
-import type { Range } from '../core/range';
+import type { BaseOptions } from '../core/base-options';
+import type { CarveCorridorsOptions } from './carve-corridors-options';
+import type { GrowRoomsOptions } from './grow-rooms-options';
 
-/** Options of `generateDigDungeon`. */
-export interface DigDungeonOptions extends DungeonOptions {
-  /** Length of the corridor dug from a room or another corridor to the next room, in tiles. 0 puts the next room right against the wall of the room, with one door between them, which needs a `roomSpacing` of 1. With `lattice` placement lengths are rounded to what fits the lattice. Defaults to 1 to 8. */
-  corridorLength?: Range;
-  /** Chance that a new corridor branches off an existing corridor instead of a room, from 0 to 1. Defaults to 0.3. */
-  branchChance?: number;
+/**
+ * The options of a grown dungeon that are not its size or its randomness: one
+ * key per step, each holding the options of that step.
+ */
+export interface DigDungeonStepOptions {
+  /** The rooms, grown from a room in the middle. See `growRooms`. Defaults to the defaults of that step. */
+  grow?: GrowRoomsOptions;
+  /** The corridors that join the rooms. See `carveCorridors`. It takes nothing from the rooms' options, so lattice or symmetric rooms want the same `placement`, `symmetry` and `symmetryChance` here. Defaults to the defaults of that step. */
+  corridors?: CarveCorridorsOptions;
 }
+
+/** The options of `generateDigDungeon`. */
+export interface DigDungeonOptions extends BaseOptions, DigDungeonStepOptions {}

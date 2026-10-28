@@ -5,6 +5,7 @@ import { pickRoomSize } from './pick-room-size';
 import type { Random } from '../core/random';
 import { randomInt } from '../core/random-int';
 import type { Room } from './room';
+import { roomWithTwins } from './room-with-twins';
 import { roomsConflict } from './rooms-conflict';
 
 /** Failed placements in a row after which the map counts as full. */
@@ -37,7 +38,7 @@ function distanceToNearest(room: Room, others: Room[]): number {
  * With spacing uniformity, several candidates are tried at once and the one
  * farthest from the existing rooms wins.
  */
-export const scatterRooms: RoomPlacer = (random, plan) => {
+export const scatterRoomPlan: RoomPlacer = (random, plan) => {
   const { width, height, step, spacing, roomCount, fill } = plan;
   const candidates =
     1 + Math.round(plan.spacingUniformity * (MAX_CANDIDATES - 1));
@@ -58,26 +59,6 @@ export const scatterRooms: RoomPlacer = (random, plan) => {
       add(center);
     }
   }
-
-  /** The room and its distinct mirror images. */
-  const withTwins = (room: Room): Room[] => {
-    const group = [room];
-    for (const transform of plan.transforms) {
-      const image = transform.room(room);
-      if (
-        !group.some(
-          (other) =>
-            other.x === image.x &&
-            other.y === image.y &&
-            other.width === image.width &&
-            other.height === image.height,
-        )
-      ) {
-        group.push(image);
-      }
-    }
-    return group;
-  };
 
   const fitsTogether = (group: Room[]): boolean =>
     rooms.length + group.length <= roomCount.max &&
@@ -126,7 +107,9 @@ export const scatterRooms: RoomPlacer = (random, plan) => {
         exitCount: 0,
         doorCount: 0,
       };
-      const group = mirrored ? withTwins(candidate) : [candidate];
+      const group = mirrored
+        ? roomWithTwins(candidate, plan.transforms)
+        : [candidate];
       if (fitsTogether(group)) {
         fitting.push(group);
       }

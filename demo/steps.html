@@ -10,7 +10,7 @@
     <h1>Angstloch playground</h1>
     <nav>
       <a href="./index.html">Index</a><a href="./steps.html">Steps</a
-      ><a href="./dungeon.html">Dungeon</a><a href="./noise.html">Noise</a>
+      ><a href="./noise.html">Noise</a>
     </nav>
     <form id="controls">
       <label
@@ -48,6 +48,14 @@
       <button id="load-noise-cave" type="button">Load a noise cave</button>
       <button id="load-maze" type="button">Load a maze</button>
       <button id="load-maze-rooms" type="button">Load a maze with rooms</button>
+      <button id="load-dungeon" type="button">Load a dungeon</button>
+      <button id="load-grown-dungeon" type="button">
+        Load a grown dungeon
+      </button>
+      <button id="load-dungeon-features" type="button">
+        Load a dungeon with a hall and a cavern
+      </button>
+      <button id="load-cave-rooms" type="button">Load a cave with rooms</button>
       <button id="clear-steps" type="button">Remove all</button>
     </div>
     <div id="steps"></div>
@@ -93,6 +101,12 @@
     <canvas id="map"></canvas>
     <p id="error"></p>
     <pre id="failures"></pre>
+    <h2>Template editor</h2>
+    <p>
+      Export the templates as JSON and paste them into the Templates field of a
+      room step.
+    </p>
+    <section id="templates"></section>
     <script type="module" src="./steps.ts"></script>
   </body>
 </html>
