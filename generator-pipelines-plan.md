@@ -7,6 +7,7 @@
 The roadmap's signed-off design (ROADMAP.md › Composable generation) replaces this with an empty base map plus a list of steps run by `pipeline`. The forest is the pilot. This plan splits that work into small tasks, one at a time, with a review after each.
 
 Decisions taken in this session, on top of the roadmap:
+
 - **`generateForest` options are nested per step**: `{ width, height, random, trees, streams, roads, clearings, templates, footbridges }`. Each key holds that step's options, and the verges sit inside each feature.
 - **No `density` anywhere in the API.** The chance of a tree is internal to `plantTrees`: it adds no extras, the verges never see it, and `density` goes from the forest result. No step needs it, and a game can count trees or sample the public noise. A reporting option on `plantTrees` can be added later without breaking anything.
 - **Scope is the forest only.** Mines and dungeons keep `retryPlacement` until each one gets its own design talk.
@@ -37,21 +38,23 @@ Decisions taken in this session, on top of the roadmap:
 
 ### Steps of the pilot, each next to the code it wraps
 
-| Step | Dir | Requires | Uses if present | Adds | Options |
-|---|---|---|---|---|---|
-| `plantTrees` | `forest/` | — | — | — | `scaleX/Y`, `rotation`, `octaves`, `persistence`, `lacunarity`, `noise`, `density: Range` of fractions (0–0.25), `tile` (Tree) |
-| `addStreams` | `streams/` | — | — | `streams` | water part of `StreamOptions`, `shallowTile`, `deepTile`, Verge (replaces `bankClearance`/`bankFalloff`) |
-| `addRoads` | `streams/` (it bends roads across streams) | — | `streams` (bends roads across them, lays bridges) | `roads`, `junctions`, `exits`, `bridges` | `RoadOptions`, `roadTile`, `bridgeTile`, `bridgeAngle`, Verge |
-| `placeClearings` | `forest/` | — | `roads` (road distance, branch ends), `streams` (`at: 'stream'`) | `clearings` | `clearings: ClearingSpec[]`, `spacing`, Verge (falloff only matters) |
-| `placeTemplates` | `forest/` | — | `clearings` (templates with `clearing: true`) | `templates` | `templates: RoomTemplate[]` |
-| `addClearingPaths` | `forest/` | `clearings` | `roads` (start of a path), `templates` (stop at the edge) | `roads`, `junctions`, `exits`, `bridges` | `roadTile`, `bridgeTile`, Verge |
-| `addFootbridges` | `streams/` | `streams` | `roads` (count as land) | `bridges` | `minimum`, `bridgeTile` |
+| Step               | Dir                                        | Requires    | Uses if present                                                  | Adds                                     | Options                                                                                                                        |
+| ------------------ | ------------------------------------------ | ----------- | ---------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `plantTrees`       | `forest/`                                  | —           | —                                                                | —                                        | `scaleX/Y`, `rotation`, `octaves`, `persistence`, `lacunarity`, `noise`, `density: Range` of fractions (0–0.25), `tile` (Tree) |
+| `addStreams`       | `streams/`                                 | —           | —                                                                | `streams`                                | water part of `StreamOptions`, `shallowTile`, `deepTile`, Verge (replaces `bankClearance`/`bankFalloff`)                       |
+| `addRoads`         | `streams/` (it bends roads across streams) | —           | `streams` (bends roads across them, lays bridges)                | `roads`, `junctions`, `exits`, `bridges` | `RoadOptions`, `roadTile`, `bridgeTile`, `bridgeAngle`, Verge                                                                  |
+| `placeClearings`   | `forest/`                                  | —           | `roads` (road distance, branch ends), `streams` (`at: 'stream'`) | `clearings`                              | `clearings: ClearingSpec[]`, `spacing`, Verge (falloff only matters)                                                           |
+| `placeTemplates`   | `forest/`                                  | —           | `clearings` (templates with `clearing: true`)                    | `templates`                              | `templates: RoomTemplate[]`                                                                                                    |
+| `addClearingPaths` | `forest/`                                  | `clearings` | `roads` (start of a path), `templates` (stop at the edge)        | `roads`, `junctions`, `exits`, `bridges` | `roadTile`, `bridgeTile`, Verge                                                                                                |
+| `addFootbridges`   | `streams/`                                 | `streams`   | `roads` (count as land)                                          | `bridges`                                | `minimum`, `bridgeTile`                                                                                                        |
 
 **Hidden state is rebuilt from the public extras** (roadmap decision):
+
 - `rebuild-stream-map.ts` (`streams/`) re-reverses tributaries to their grown order, re-stamps them with `stampRoad` (brush plus `extendPastBorder`, so `covered` is exact) and returns a `LaidStreams` without `deep`, which only `addStreams` needs and has itself. It feeds `createSteerAcrossStreams`, `layFootbridges` and `at: 'stream'` clearings.
 - `rebuild-road-map.ts` (`roads/`) builds a fresh `createRoadMap` with the existing roads re-stamped, for `placeClearings` (distances, branch ends) and `addClearingPaths` (`findStart`, `addPath`).
 
 **Per-step behavior notes:**
+
 - `plantTrees` plants only where `grid === base`, sets the prunable bit, and draws one `random()` per base tile.
 - `addStreams` and `addRoads` paint over whatever is there. `addStreams` throws when `roads` are already in the state, which is the run-time check of "streams before roads".
 - `addRoads` keeps today's bridge rule. A road tile over water becomes `bridgeTile` where a crossing plan's approach-to-departure brush covers it or `findSpans` says it spans the water. Otherwise the water stays. Then it prunes its verge. `ctx.trace('addRoads', { grown, plans })` replaces `ForestObserver`.

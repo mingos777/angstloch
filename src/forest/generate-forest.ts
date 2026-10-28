@@ -1,16 +1,50 @@
-import { buildForest } from './build-forest';
+import { Tile } from '../core/tile';
+import type { Point } from '../core/point';
+import { emptyMap } from '../pipeline/empty-map';
+import { pipeline } from '../pipeline/pipeline';
+import type { Road } from '../roads/road';
+import { createForestSteps } from './create-forest-steps';
 import type { ForestOptions } from './forest-options';
 import type { ForestResult } from './forest-result';
+import type { ForestTemplate } from './forest-template';
+import type { PlacedClearing } from './placed-clearing';
 
 /**
- * Generates a forest. A noise map says how dense the trees are on each tile,
- * from `minDensity` where the noise is lowest to `maxDensity` where it is
- * highest, and every tile then gets a tree with that chance. With the `roads`
- * option, roads are laid first and keep the trees off themselves and, with a
- * `clearance`, off the tiles beside them, and with a `falloff` the trees
- * thin out gradually beyond that. The `clearings` option makes glades with
- * ragged edges, which the `falloff` thins out as well.
+ * Generates a forest, a ready-made composition of steps: noise decides where
+ * the trees grow (`plantTrees`), then come the streams, the roads, the
+ * clearings, the templates, the paths to clearings and the footbridges, as
+ * far as their options are given. Each step clears the trees from its own
+ * verge. The map is built again, up to 3 times in all, when a step throws,
+ * which is what happens to a template that finds no place. For other
+ * compositions, run the steps with `pipeline`.
  */
 export function generateForest(options: ForestOptions): ForestResult {
-  return buildForest(options);
+  const { width, height, random } = options;
+  const run = pipeline(
+    emptyMap({ width, height, tile: Tile.Grass }),
+    createForestSteps(options),
+    { random },
+  );
+  // a step that was left out added nothing
+  const extras: Partial<{
+    roads: Road[];
+    junctions: Point[];
+    exits: Point[];
+    streams: Road[];
+    bridges: Point[];
+    clearings: PlacedClearing[];
+    templates: ForestTemplate[];
+  }> = run as unknown as object;
+  return {
+    grid: run.grid,
+    roads: extras.roads ?? [],
+    junctions: extras.junctions ?? [],
+    exits: extras.exits ?? [],
+    streams: extras.streams ?? [],
+    bridges: extras.bridges ?? [],
+    clearings: extras.clearings ?? [],
+    templates: extras.templates ?? [],
+    attempts: run.attempts,
+    failures: run.failures,
+  };
 }

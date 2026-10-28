@@ -408,13 +408,24 @@ Different scales stretch the shapes: with `scaleX: 80` and `scaleY: 20` they are
 ```ts
 import { generateForest } from 'angstloch';
 
-const { grid, density } = generateForest({ width: 120, height: 70 });
+const { grid } = generateForest({ width: 120, height: 70 });
 console.log(grid.toString());
 ```
 
 A forest is made from a [noise](#noise) map that says how dense the trees are: dense where the noise is high and open where it is low. Every tile then gets a tree with the chance that the map gives it. So a wood is a place where trees are likely, not a solid block, and its edge is ragged. Trees are `Tile.Tree` and the ground between them is `Tile.Grass`. Whether a tree blocks movement or sight is for the game to decide; the generator makes no connectivity guarantee.
 
-The chance of a tree is set at the two ends of the noise: `minDensity` where the noise is at its lowest and `maxDensity` where it is at its highest. In between the chance rises evenly with the noise. With the defaults, 0 and 0.25, the lowest parts are bare and the thickest woods are a quarter full of trees, so the trees stand apart. Raise `maxDensity` for tighter woods: 1 packs the thickest parts solid. Both values can be anything from 0 to 1, and `minDensity` may be the larger of the two, which puts the trees where the noise is low. The noise is sampled at the center of each tile, and `random` both seeds the built-in noise and rolls the chance for each tile, so the same seed always gives the same forest. The noise rarely reaches the very ends of its range, so the chances rarely do either.
+`generateForest` is a ready-made composition of the [steps](#composing-maps) of this library, and its options are nested, one key for each step: `trees` for [`plantTrees`](#planttrees), `streams` for [`addStreams`](#addstreams), `roads` for [`addRoads`](#addroads), `clearings` for [`placeClearings`](#placeclearings), `templates` for [`placeTemplates`](#placetemplates) and `footbridges` for [`addFootbridges`](#addfootbridges). Each key holds the options of its step, so everything those sections say about a step is true of the key. A step whose key is missing is left out (`trees` is the exception: the trees are always planted, with the defaults when the key is missing). The steps run in this order:
+
+1. `plantTrees` plants the trees over the grass.
+2. `addStreams`, laid first, since a natural feature has priority.
+3. `addRoads`, which bend to cross the streams.
+4. `placeClearings` and 5. `placeTemplates`.
+5. `addClearingPaths`, when a clearing asks for a path. It takes its tiles and its verge from `roads` (`roadTile`, `bridgeTile`, `clearance`, `falloff`, `distance`), so that paths and roads look alike.
+6. `addFootbridges`, when there are `streams`, unless `footbridges` is `false`.
+
+Every step that lays something clears the trees from its own [verge](#verges-and-pruneverge), so the trees fill in around roads, water and clearings. When a step throws, which happens to a template that finds no room, the forest is built again from the start, up to 3 times in all, and only then is the error thrown; see [`pipeline`](#pipeline). The result reports `attempts` and `failures`. For a forest that is not this composition, run the steps yourself with `pipeline`, in any order they allow: that is what this function does.
+
+The chance of a tree is set at the two ends of the noise: `trees.density` is a `Range` of fractions, `min` where the noise is at its lowest and `max` where it is at its highest. In between the chance rises evenly with the noise. With the defaults, 0 and 0.25, the lowest parts are bare and the thickest woods are a quarter full of trees, so the trees stand apart. Raise `max` for tighter woods: 1 packs the thickest parts solid. Both can be anything from 0 to 1, and `min` may be the larger of the two, which puts the trees where the noise is low. The noise is sampled at the center of each tile, and `random` both seeds the built-in noise and rolls the chance for each tile, so the same seed always gives the same forest. The noise rarely reaches the very ends of its range, so the chances rarely do either. There is no `density` in the result: count the trees, or sample the noise yourself.
 
 ### Roads
 
@@ -426,7 +437,7 @@ const { grid, roads, exits } = generateForest({
 });
 ```
 
-Without `roads` the forest has no roads. With it, a main road runs through the forest from one edge of the map to the opposite one, and no trees grow on it: road tiles are `Tile.Road` (or `roadTile`). The roads are laid before the trees, so the trees fill in around them.
+Without `roads` the forest has no roads. With it, a main road runs through the forest from one edge of the map to the opposite one, and no trees grow on it: road tiles are `Tile.Road` (or `roadTile`). The trees are planted first and the roads laid over them, so the trees fill in around the roads.
 
 The road is laid through a random point near the middle of the map, at the `angle`, and is then followed in both directions until it leaves the map. The angle is in degrees, clockwise from east, like `rotation`: 0 runs from left to right, 90 from top to bottom and 45 from the top left towards the bottom right. `'random'` picks an angle. The road winds as far as `windiness` says: its centerline is pushed to either side by smooth noise, which makes gentle bends and not jitter. At 1 it strays up to 12 tiles from the straight line. Its width is picked from the `width` range, in whole tiles, and the road is rounded at its edges when it is wide. Where a road leaves the map, it is laid as if it went on a little past the border, so the border cuts it at the angle it leaves at instead of ending it in a block; a road that leaves at a shallow angle tapers along the edge. Its centerline in `roads` and its tile in `exits` stay on the map.
 
@@ -438,23 +449,23 @@ The road is laid through a random point near the middle of the map, at the `angl
 
 An invalid angle, width or windiness throws a `RangeError`.
 
-#### Clearance
+#### Clearance, falloff and distance
 
-By default the trees grow right up to the road, which can look like a hedge. `clearance` keeps a strip beside every road free of trees, the main road, the crossings and the branches alike. It is a number of tiles, and it is an option of the forest and not of `roads`, since it is about the trees. No tree grows within `clearance` tiles of a road tile, in any direction. With the default `distance`, a step to a diagonal neighbor counts as one tile (see [Falloff and distance](#falloff-and-distance) for the other ways of measuring). So a clearance of 1 keeps trees off all eight neighbors of every road tile, diagonals included, a clearance of 2 clears a strip two tiles wide on either side, and so on. The strip has a hard edge: beyond it the trees grow as thick as they would have anyway.
+By default the trees grow right up to the road, which can look like a hedge. The [verge](#verges-and-pruneverge) of `roads` keeps a strip beside every road free of trees: the main road, the crossings, the branches and the paths to clearings alike. It has three fields, `clearance`, `falloff` and `distance`, which sit among the options of `roads`:
 
-The `density` in the result is 0 on the tiles that are kept clear, since it is the chance that was used (see also [Falloff and distance](#falloff-and-distance)). The tiles of the road keep the density that the noise gave them. With a `clearance` of 0, which is the default, or without roads, no tiles are cleared. A `clearance` that is not a whole number of at least 0 throws a `RangeError`.
+```ts
+generateForest({
+  width: 120,
+  height: 70,
+  roads: { clearance: 1, falloff: 3, distance: 'euclidean' },
+});
+```
 
-#### Falloff and distance
+- `clearance` is a number of tiles, 0 by default. No tree grows within `clearance` tiles of a road tile, in any direction. With the default `distance`, a step to a diagonal neighbor counts as one tile, so a clearance of 1 keeps trees off all eight neighbors of every road tile, diagonals included, and a clearance of 2 clears a strip two tiles wide on either side. The strip has a hard edge: beyond it the trees grow as thick as they would have anyway.
+- `falloff` softens that edge: beyond the clear strip, the trees thicken gradually until they are at full density again. It is a number of tiles, 0 by default, and the chance of a tree grows in equal steps over them, so with a `falloff` of 3 the first tile past the clearance has a quarter of its chance, the next half, the next three quarters, and the one after that all of it. The two are independent: a `falloff` with a `clearance` of 0 thins the trees right next to the road, and a `clearance` with no `falloff` is the hard strip.
+- `distance` says how the distance to a road is measured: `'chebyshev'` (the default) counts a diagonal step as one tile, which makes square verges; `'manhattan'` counts only orthogonal steps, which makes diamonds and suits games where diagonal movement is not possible; `'euclidean'` measures the straight line between tile centers, so a diagonal step is about 1.41 tiles, which makes round verges and a continuous falloff.
 
-`clearance` has a hard edge. `falloff` softens it: beyond the clear strip, the trees thicken gradually until they are at full density again. It is a number of tiles, and the chance of a tree grows in equal steps over them, so with a `falloff` of 3 the first tile past the clearance has a quarter of its chance, the next half, the next three quarters, and the one after that all of it. The two options are independent: a `falloff` with a `clearance` of 0 thins the trees right next to the road, and a `clearance` with no `falloff` is the hard strip. The tiles of the road keep their own density. The same ramp thins the trees beyond the edge of a [clearing](#clearings). Without roads or clearings, `falloff` does nothing.
-
-`distance` says how the distance to a road is measured, for both `clearance` and `falloff`:
-
-- `'chebyshev'` (the default) counts a diagonal step as one tile, which makes square verges.
-- `'manhattan'` counts only orthogonal steps, which makes diamonds. It suits games where diagonal movement is not possible.
-- `'euclidean'` measures the straight line between tile centers, so a diagonal step is about 1.41 tiles, which makes round verges. It suits games where a diagonal step costs more than an orthogonal one. The falloff is then continuous: tiles at different distances get slightly different chances.
-
-`distance` applies even when the `falloff` is 0, since it shapes the `clearance`, and it measures the distance to a clearing too. Without roads or clearings it does nothing. A `falloff` that is not a whole number of at least 0, or a `distance` that is not one of the three, throws a `RangeError`.
+The verges of the other features are those of their steps, each with its own values: `streams` has the same three fields for the banks (see [Banks](#banks)), `clearings` has `falloff` and `distance`, since a clearing is bare inside its edge (see [Clearings](#clearings)), and `templates` has a `distance` for the `margin` of its templates. Where two verges overlap, slightly more is cleared than either alone would. A `clearance` or `falloff` that is not a whole number of at least 0, or a `distance` that is not one of the three, throws a `RangeError`.
 
 #### Clearings
 
@@ -464,18 +475,22 @@ The `density` in the result is 0 on the tiles that are kept clear, since it is t
 const { grid, clearings } = generateForest({
   width: 120,
   height: 80,
-  clearings: [
-    {
-      x: 60,
-      y: 40,
-      radiusX: { min: 12, max: 12 },
-      radiusY: { min: 7, max: 7 },
-      angle: 30,
-    },
-    { x: 20, y: 15, radiusX: { min: 4, max: 4 }, irregularity: 0.8 },
-    { radiusX: { min: 3, max: 6 } }, // placed at random, radius 3 to 6
-    { radiusX: { min: 4, max: 4 } },
-  ],
+  clearings: {
+    clearings: [
+      {
+        x: 60,
+        y: 40,
+        radiusX: { min: 12, max: 12 },
+        radiusY: { min: 7, max: 7 },
+        angle: 30,
+      },
+      { x: 20, y: 15, radiusX: { min: 4, max: 4 }, irregularity: 0.8 },
+      { radiusX: { min: 3, max: 6 } }, // placed at random, radius 3 to 6
+      { radiusX: { min: 4, max: 4 } },
+    ],
+    spacing: 2,
+    falloff: 3,
+  },
 });
 ```
 
@@ -492,9 +507,9 @@ const { grid, clearings } = generateForest({
 
 The edge is not a clean oval. Noise shifts every tile before its distance to the center is measured, so the edge bulges and pinches, and every clearing gets its own outline, even when they are given the same shape. The radii are the radii of the plain oval, and the ragged edge wanders around them, so the real size is only approximately what you asked for. A tile only belongs to the clearing if it joins the center through other tiles of the clearing, so a clearing is always one piece, with no detached specks of bare ground beyond its edge. The center is always part of the clearing, and the part that falls outside the map is cut off.
 
-No tree grows in a clearing, and the `density` is 0 there. Beyond its edge the [`falloff`](#falloff-and-distance) thins the trees out, measured with `distance`, as it does beside a road. A road that runs through a clearing stays a road. `clearance` is about roads only and does not apply to clearings. The noise of the clearings is separate from the noise that sets the density of the trees, so adding a clearing never changes where the woods are thick.
+No tree grows in a clearing. Beyond its edge the `falloff` of `clearings` thins the trees out, measured with its `distance`, as the falloff of a [verge](#verges-and-pruneverge) does beside a road. There is no `clearance`, since the inside of a clearing is always bare. A road that runs through a clearing stays a road. The noise of the clearings is separate from the noise that sets the density of the trees, so adding a clearing never changes where the woods are thick.
 
-A clearing without a center is placed after the ones that have a center, in the order of the list. Its center is picked at random, with these rules: the whole plain oval stays inside the map, and it keeps away from every clearing placed before it by at least the sum of their larger radii, so the plain ovals do not overlap (the ragged edges can still touch). `clearingSpacing` adds tiles to that distance: a whole number, default 0. It does not move clearings that have a center, and it does not apply to them. A clearing that finds no room after a number of tries, or that is too large for the map, is left out and no error is thrown, so the `clearings` in the result may be fewer than asked for, always in the order of the list. Random placement uses the `random` source, so the same seed gives the same places.
+A clearing without a center is placed after the ones that have a center, in the order of the list. Its center is picked at random, with these rules: the whole plain oval stays inside the map, and it keeps away from every clearing placed before it by at least the sum of their larger radii, so the plain ovals do not overlap (the ragged edges can still touch). `spacing` (an option of `clearings`, next to the list) adds tiles to that distance: a whole number, default 0. It does not move clearings that have a center, and it does not apply to them. A clearing that finds no room after a number of tries, or that is too large for the map, is left out and no error is thrown, so the `clearings` in the result may be fewer than asked for, always in the order of the list. Random placement uses the `random` source, so the same seed gives the same places.
 
 With roads, a clearing placed at random also keeps its `roadDistance` from the roads that are laid when it is placed: its center lies at least `min` and at most `max` tiles from the nearest road tile, measured with `distance`. The default range of 8 to 25 puts it near enough to reach but off the road. When no tile on the map fits, the clearing is left out, as above. `roadDistance` does nothing without roads, and for a clearing with a center of its own. Paths to clearings are laid after all clearings are placed, so they do not count as roads for this distance.
 
@@ -507,18 +522,20 @@ const { grid, clearings } = generateForest({
   width: 120,
   height: 80,
   roads: { branches: { min: 3, max: 3 }, branchLength: { min: 15, max: 30 } },
-  clearings: [
-    { at: 'branch-end', radiusX: { min: 3, max: 6 } },
-    { at: 'branch-end', radiusX: { min: 3, max: 6 } },
-  ],
+  clearings: {
+    clearings: [
+      { at: 'branch-end', radiusX: { min: 3, max: 6 } },
+      { at: 'branch-end', radiusX: { min: 3, max: 6 } },
+    ],
+  },
 });
 ```
 
 - Each such clearing takes the next branch end, in the order the branches were laid, so two of them fill two dead ends. A clearing that finds no branch end is left out, with no error, so there may be fewer `clearings` than asked for. That is also the case without roads.
 - Only the ends that lie inside the map count. A branch that runs to the border is an exit and gets no clearing, and neither do the [paths to clearings](#paths-to-clearings), which already end in a clearing.
-- These clearings never keep away from others: `clearingSpacing` does not apply to them, and none is dropped for overlapping another. Two that touch merge into one bare patch, which suits several paths that lead to one glade.
+- These clearings never keep away from others: `spacing` does not apply to them, and none is dropped for overlapping another. Two that touch merge into one bare patch, which suits several paths that lead to one glade.
 - The `clearings` in the result list them after all the others, in the order of their branches.
-- The other options (radii, `angle`, `irregularity`) work as for any clearing, and so do `clearance`, `falloff` and `distance`. `roadDistance` does nothing for them. A `path` does nothing either, since the center is on a road already.
+- The other options (radii, `angle`, `irregularity`) work as for any clearing, and so do `falloff` and `distance`. `roadDistance` does nothing for them. A `path` does nothing either, since the center is on a road already.
 
 An `at` that is not `'branch-end'` or `'stream'`, or one that comes with an `x` or `y`, throws a `RangeError`.
 
@@ -531,12 +548,12 @@ const { grid, clearings } = generateForest({
   width: 120,
   height: 80,
   streams: { width: { min: 2, max: 3 } },
-  clearings: [{ at: 'stream', radiusX: { min: 5, max: 8 } }],
+  clearings: { clearings: [{ at: 'stream', radiusX: { min: 5, max: 8 } }] },
 });
 ```
 
 - No tree grows in the clearing, as in any other, but the water in it stays water, so the stream flows through the glade, and the roads and bridges in it stay as they are.
-- It is placed like a clearing at a random place: it keeps `clearingSpacing` tiles beyond the radii from the clearings placed before it, the whole plain oval stays inside the map, and the clearings are placed in the order of the list, after the ones with a center. A clearing that finds no room, or when there is no stream, is left out with no error.
+- It is placed like a clearing at a random place: it keeps `spacing` tiles beyond the radii from the clearings placed before it, the whole plain oval stays inside the map, and the clearings are placed in the order of the list, after the ones with a center. A clearing that finds no room, or when there is no stream, is left out with no error.
 - `roadDistance` does nothing for it, and neither does a `path`, since its center is in the water.
 
 #### Paths to clearings
@@ -548,7 +565,7 @@ A clearing can have a path: set `path` to `true`, or to `{ width, windiness }`. 
 | `width`     | 1       | Width of the path in tiles, a whole number, 1 or more. |
 | `windiness` | 0.3     | How much the path winds, from 0 (straight) to 1.       |
 
-The path is a road of kind `'branch'` in `roads`, after the roads of the `roads` option and in the order of the clearings, so it shows up in `junctions` (where it meets a road) and in `exits` (where it reaches the border) like any branch. Its tiles are road tiles, so `clearance` and `falloff` apply to it, and it keeps the road tile `roadTile`. This works with or without the `roads` option, and with clearings that have a center of their own as well as random ones. A later path may start at an earlier path if that is the nearest road. A clearing whose center is on a road already gets no path. A clearing that was left out gets none either. The default is no path, since a glade can just as well be in the middle of the forest with no way in.
+The path is a road of kind `'branch'` in `roads`, after the roads of the `roads` option and in the order of the clearings, so it shows up in `junctions` (where it meets a road) and in `exits` (where it reaches the border) like any branch. The paths are laid by [`addClearingPaths`](#addclearingpaths) after the templates, with the `roadTile`, `bridgeTile` and verge of `roads` (the defaults when there are no `roads`), so the verge of the roads applies to them. This works with or without the `roads` option, and with clearings that have a center of their own as well as random ones. A later path may start at an earlier path if that is the nearest road. A path that stops at the template on its clearing, and a path that runs through another template, are described under [`addClearingPaths`](#addclearingpaths). A clearing whose center is on a road already gets no path. A clearing that was left out gets none either. The default is no path, since a glade can just as well be in the middle of the forest with no way in.
 
 A clearing with a center outside the map, an `x` or `y` that is not a whole number, only one of the two given, a radius that is not a `Range` of whole numbers of at least 1, an angle that is not finite, an `irregularity` outside 0 to 1, an invalid `roadDistance` range, or a path with a `width` that is not a whole number of at least 1 or a `windiness` outside 0 to 1 throws a `RangeError`.
 
@@ -620,15 +637,17 @@ const { grid, streams, bridges } = generateForest({
 
 The stream runs from one border of the map to the opposite one through a point near the middle (or, with `spring`, rises at that point, see [below](#springs)), and the water flows the way of its `angle`, so the first point of its centerline in `streams` is upstream and the last is the mouth. Its banks are `Tile.ShallowWater`, which can be waded at the cost of getting wet. A stream wide enough has `Tile.DeepWater` in the middle, which a game may gate behind a swimming ability, or it may treat both as plain water. No tree grows in the water, and where a stream flows off the map there is no bank at the edge. Like a road, a stream goes on a little past the border, so the edge cuts it cleanly, deep water included.
 
-| Stream option | Default                | Meaning                                                                                                                                                                                                                                                                                                                                      |
-| ------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `angle`       | `'random'`             | Direction of the flow in degrees, clockwise from east, so 0 flows left to right and 90 top to bottom. `'random'` picks one.                                                                                                                                                                                                                  |
-| `width`       | `{ min: 1, max: 2 }`   | Width in tiles, a `Range` of whole numbers, 1 or more. A whole number in it is picked at random.                                                                                                                                                                                                                                             |
-| `windiness`   | 0.5                    | How much the stream winds, from 0 (straight) to 1 (it may stray up to 12 tiles to either side of the straight line).                                                                                                                                                                                                                         |
-| `shoreWidth`  | 1                      | How many tiles of shallow water the stream has on each side, a whole number, 0 or more. The rest, in the middle, is deep. A stream no wider than twice this has no deep water: with the default, widths 1 and 2 are all shallow and width 3 has a single band of deep water along its middle, and each extra tile of width widens that band. |
-| `spring`      | `false`                | Whether the stream rises at a spring inside the map and flows from it to the edge, see [Springs](#springs).                                                                                                                                                                                                                                  |
-| `bridges`     | 0                      | How many bridges the map has at least, counting those of the roads, a whole number, 0 or more. See [Footbridges](#footbridges).                                                                                                                                                                                                              |
-| `bridgeAngle` | `{ min: 75, max: 90 }` | The angle in whole degrees, from 1 to 179, at which a generated road meets the stream, as a `Range`. It is picked at random, to the left or the right.                                                                                                                                                                                       |
+| Stream option                      | Default                               | Meaning                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `angle`                            | `'random'`                            | Direction of the flow in degrees, clockwise from east, so 0 flows left to right and 90 top to bottom. `'random'` picks one.                                                                                                                                                                                                                  |
+| `width`                            | `{ min: 1, max: 2 }`                  | Width in tiles, a `Range` of whole numbers, 1 or more. A whole number in it is picked at random.                                                                                                                                                                                                                                             |
+| `windiness`                        | 0.5                                   | How much the stream winds, from 0 (straight) to 1 (it may stray up to 12 tiles to either side of the straight line).                                                                                                                                                                                                                         |
+| `shoreWidth`                       | 1                                     | How many tiles of shallow water the stream has on each side, a whole number, 0 or more. The rest, in the middle, is deep. A stream no wider than twice this has no deep water: with the default, widths 1 and 2 are all shallow and width 3 has a single band of deep water along its middle, and each extra tile of width widens that band. |
+| `spring`                           | `false`                               | Whether the stream rises at a spring inside the map and flows from it to the edge, see [Springs](#springs).                                                                                                                                                                                                                                  |
+| `shallowTile`, `deepTile`          | `Tile.ShallowWater`, `Tile.DeepWater` | The tiles of the shallow and the deep water.                                                                                                                                                                                                                                                                                                 |
+| `clearance`, `falloff`, `distance` | 0, 0, `'chebyshev'`                   | The verge kept clear of trees beside the water, see [Banks](#banks).                                                                                                                                                                                                                                                                         |
+
+The bridges are the business of the other steps: the angle at which roads meet the stream is `bridgeAngle` among the `roads` options, and the footbridges are the `footbridges` key (see [Bridges](#bridges) and [Footbridges](#footbridges)).
 
 #### Springs
 
@@ -649,11 +668,11 @@ In `streams` a tributary is a `Road` of `kind` `'branch'`, after the main stream
 
 #### Banks
 
-By default trees grow right up to the water, as they often do. `bankClearance` and `bankFalloff` thin them out beside it, exactly as `clearance` and `falloff` do beside a road, but for the water of every stream and with their own values: `bankClearance` tiles are bare and the trees then thicken over `bankFalloff` tiles. The `distance` model measures both. Both default to 0 and must be whole numbers of at least 0, or a `RangeError` is thrown.
+By default trees grow right up to the water, as they often do. The `clearance`, `falloff` and `distance` of `streams` thin them out beside it, exactly as those of `roads` do beside a road ([see above](#clearance-falloff-and-distance)), for the water of every stream and with their own values: `clearance` tiles are bare and the trees then thicken over `falloff` tiles. They default to 0, 0 and `'chebyshev'`, and `clearance` and `falloff` must be whole numbers of at least 0, or a `RangeError` is thrown.
 
 #### Bridges
 
-Where a road meets water, the road wins: its tiles over the water become `Tile.Bridge`, as wide as the road, and the water under it is not shown. A generated road (the main road, the crossings and the branches of `roads`) is first grown as described above, and if it comes near water (within half its width and a tile of it), its way across the streams is planned and the road is laid again through the plan:
+Where a road meets water, the road wins: its tiles over the water become `Tile.Bridge`, as wide as the road, and the water under it is not shown. A generated road (the main road, the crossings and the branches of `roads`, which keep the `bridgeAngle` of `roads` and `bridgeTile`) is first grown as described above, and if it comes near water (within half its width and a tile of it), its way across the streams is planned and the road is laid again through the plan:
 
 - **Ends.** An end on the edge of the map that lies in or beside the water slides along the edge to the nearest tile clear of it, preferably on the same side and on the land the road reaches first (within 30 tiles), so a road and a stream that leave the map at the same place do not overlap. An end on the edge may also slide up to 30 tiles along its side when that lets the road reach its first crossing, or leave its last one, with a gentler turn and leave the edge squarely, so the road's `angle` is a best effort near streams. An end inside the map, such as the start of a branch, does not move.
 - **Route.** The road goes over the same land as it was grown over, crossing from each piece of land that the water cuts the map into to the next, a stream crossed back and forth only once. Where that means crossing a tributary and then the stream it joins, the road may instead cross the stream once below where the two meet, whichever turns the road less; a crossing of that kind is looked for within 20 tiles of the grown road only.
@@ -668,17 +687,17 @@ Footbridges join the land where water that a walker cannot step through cuts it 
 
 A footbridge is one tile of `Tile.Bridge` wide and goes square across the stream, so where the stream runs at a slant it is a staircase of tiles that touch along edges, which can be walked without diagonal steps. Where it cannot go square, it slants by up to 20 degrees. It is never longer than the stream is wide plus two tiles, so it never runs along a stream, and never lies on the edge of the map. Pieces that no such footbridge can join are left apart, which did not happen in 800 random maps with streams 2 to 4 tiles wide and up to four tributaries. Trees are taken to be passable, as the generator does elsewhere. A stream with a `spring` does not cut the land and needs none.
 
-`bridges` asks for more: it is the least number of bridges the map has, roads included. If the roads and the footbridges that join the land make fewer, more footbridges are added, each across a stream at a random place, at least 8 tiles from another bridge. These may cross a stream of any width, 1 included, and go square across it as above. When there is no room, the map has fewer than `bridges`. Footbridges are not bent to `bridgeAngle`; that is for roads.
+`footbridges` is on by default whenever there are `streams`, and `footbridges: false` turns it off, for a forest whose streams may cut the land. Its `minimum` (0 by default) asks for more: it is the least number of bridges the map has, roads included. If the roads and the footbridges that join the land make fewer, more footbridges are added, each across a stream at a random place, at least 8 tiles from another bridge. These may cross a stream of any width, 1 included, and go square across it as above. When there is no room, the map has fewer than `minimum`. Footbridges are not bent to `bridgeAngle`; that is for roads.
 
 `bridges` in the result has one point for every bridge, footbridges included: a group of bridge tiles that touch along an edge, at the tile nearest to its middle. The roads and `junctions` are not changed by a bridge, and a stream never makes a junction.
 
-`shallowTile`, `deepTile` and `bridgeTile` replace the tiles of the water and the bridge, for instance `Tile.Floor` for shallow water and `Tile.Wall` for deep water in a game that makes no distinction.
+`shallowTile` and `deepTile` of `streams` and the `bridgeTile` of `roads` and `footbridges` replace the tiles of the water and the bridge, for instance `Tile.Floor` for shallow water and `Tile.Wall` for deep water in a game that makes no distinction. Give the same `bridgeTile` to every step that has one.
 
-A `bridges` that is not a whole number of at least 0, a `width`, `tributaryWidth` or `tributaryLength` that is not a `Range` of whole numbers of at least 1, `tributaries` that is not a `Range` of whole numbers of at least 0, a `tributaryAngle` that is not a `Range` of whole degrees from 1 to 179, a `windiness` outside 0 to 1, a `shoreWidth` that is not a whole number of at least 0, an `angle` that is not finite or `'random'`, a `bridgeAngle` that is not a `Range` of whole degrees from 1 to 179, or a `shallowTile`, `deepTile` or `bridgeTile` that is not a `Tile` value throws a `RangeError`.
+A `minimum` that is not a whole number of at least 0, a `width`, `tributaryWidth` or `tributaryLength` that is not a `Range` of whole numbers of at least 1, `tributaries` that is not a `Range` of whole numbers of at least 0, a `tributaryAngle` that is not a `Range` of whole degrees from 1 to 179, a `windiness` outside 0 to 1, a `shoreWidth` that is not a whole number of at least 0, an `angle` that is not finite or `'random'`, a `bridgeAngle` that is not a `Range` of whole degrees from 1 to 179, or a `shallowTile`, `deepTile` or `bridgeTile` that is not a `Tile` value throws a `RangeError`.
 
 ### Templates in forests
 
-Put a ruin, a camp or a boss arena in the forest with `templates`: a list of the same [`RoomTemplate`](#room-templates) objects as the dungeons take. A forest has no tunnels, so a template has no exits: it is a design of `Floor`, `Wall` and `Unused` cells. A template with an `Exit`, `Door` or `OptionalExit` cell, or with `positions` or `areas`, throws a `RangeError`, as does an invalid `count`, `chance`, `margin` or `rotate`.
+Put a ruin, a camp or a boss arena in the forest with `templates: { templates }`, the options of [`placeTemplates`](#placetemplates): a list of the same [`RoomTemplate`](#room-templates) objects as the dungeons take. A forest has no tunnels, so a template has no exits: it is a design of `Floor`, `Wall` and `Unused` cells. A template with an `Exit`, `Door` or `OptionalExit` cell, or with `positions` or `areas`, throws a `RangeError`, as does an invalid `count`, `chance`, `margin` or `rotate`.
 
 ```ts
 import { TemplateCell, generateForest, type RoomTemplate } from 'angstloch';
@@ -703,8 +722,8 @@ const { grid, templates } = generateForest({
   width: 120,
   height: 80,
   roads: {},
-  clearings: [{ radiusX: { min: 8, max: 8 }, path: true }],
-  templates: [ruin],
+  clearings: { clearings: [{ radiusX: { min: 8, max: 8 }, path: true }] },
+  templates: { templates: [ruin] },
 });
 ```
 
@@ -716,7 +735,7 @@ const { grid, templates } = generateForest({
 | `count`            | exactly 1      | Number of copies, a `Range` of at least 0. Each copy is rolled against `chance` on its own and goes on a clearing of its own.                                                     |
 | `rotate`, `mirror` | `[0]`, `false` | The variants a copy may be placed in, as for dungeons.                                                                                                                            |
 
-**Where a template goes.** A template with `clearing: true` is centered on a free clearing from `clearings`, picked at random among those where it fits. The clearing is never grown: ask for clearings of a fitting size. A clearing holds one template at most. When no free clearing has room for it, because there are none or all are taken or blocked, the template gets a clearing of its own: it goes to a random spot, and the whole box of the template is free of trees. The `margin` makes the trees thicken over that many tiles beyond the box, with the same ramp as the [`falloff`](#falloff-and-distance) (with a `margin` of 3 the first tile beyond the box has a quarter of the chance of a tree, the next half, the next three quarters), so a template leaves no bare rectangle. That clearing is not in `clearings`: `ownClearing` of the template says so. The `density` result follows the ramp.
+**Where a template goes.** A template with `clearing: true` is centered on a free clearing from `clearings`, picked at random among those where it fits. The clearing is never grown: ask for clearings of a fitting size. A clearing holds one template at most. When no free clearing has room for it, because there are none or all are taken or blocked, the template gets a clearing of its own: it goes to a random spot, and the whole box of the template is free of trees. The `margin` makes the trees thicken over that many tiles beyond the box, with the same ramp as a [verge](#verges-and-pruneverge)'s falloff (with a `margin` of 3 the first tile beyond the box has a quarter of the chance of a tree, the next half, the next three quarters), so a template leaves no bare rectangle. That clearing is not in `clearings`: `ownClearing` of the template says so.
 
 **Which tiles a template changes.** `Floor` cells become `Tile.Floor` and `Wall` cells `Tile.Wall`, over trees and ground. `Unused` cells leave whatever the map has there: a tree, grass, a road or water. A template never covers a road, a path or water: it is placed only where none of its `Floor` or `Wall` cells lies on one, and where it overlaps no other template. A path to the clearing it stands on (see [Paths to clearings](#paths-to-clearings)) stops at the edge of the template. A road that a template cannot be placed clear of makes that forest fail, see below.
 
@@ -726,64 +745,48 @@ The `templates` result lists the templates that were placed, in the order of the
 
 ### `ForestOptions`
 
-| Option            | Default             | Meaning                                                                                                                                                                  |
-| ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `width`           |                     | Map width in tiles. Required.                                                                                                                                            |
-| `height`          |                     | Map height in tiles. Required.                                                                                                                                           |
-| `random`          | `Math.random`       | Source of randomness.                                                                                                                                                    |
-| `minDensity`      | 0                   | The chance of a tree where the noise is at its lowest, from 0 to 1.                                                                                                      |
-| `maxDensity`      | 0.25                | The chance of a tree where the noise is at its highest, from 0 to 1. With the same value as `minDensity`, trees are scattered evenly.                                    |
-| `scaleX`          | 40                  | Size in tiles of a feature of the noise along the x axis, before rotation. Larger values make broader woods and glades. A positive number.                               |
-| `scaleY`          | 40                  | The same along the y axis. Different scales stretch the woods.                                                                                                           |
-| `rotation`        | 0                   | Clockwise rotation of the noise in degrees. A stretched wood runs diagonally with a rotation of 45. See [`transformNoise`](#noise).                                      |
-| `octaves`         | 1                   | Layers of the built-in noise, each finer than the one before. With 1 there is a single layer, and `persistence` and `lacunarity` do nothing. A whole number, 1 or more.  |
-| `persistence`     | 0.2                 | How much each layer counts against the one before it, from 0 to 1. Only matters with more than one octave.                                                               |
-| `lacunarity`      | 1                   | How much finer each layer is than the one before it. A positive number. Only matters with more than one octave.                                                          |
-| `noise`           | built-in            | A [`NoiseFunction`](#noise) to use instead of the built-in simplex noise.                                                                                                |
-| `groundTile`      | `Tile.Grass`        | The tile for ground without a tree. Any `Tile` value, for instance `Tile.Floor`.                                                                                         |
-| `treeTile`        | `Tile.Tree`         | The tile for a tree, for instance `Tile.Wall` for a forest that blocks like rock.                                                                                        |
-| `roads`           | no roads            | Lays a road through the forest, see [Roads](#roads).                                                                                                                     |
-| `clearance`       | 0                   | How many tiles beside a road are kept free of trees, a whole number, 0 or more. See [Clearance](#clearance).                                                             |
-| `falloff`         | 0                   | How many tiles the trees take to thicken from none to full density beyond the `clearance`, a whole number, 0 or more. See [Falloff and distance](#falloff-and-distance). |
-| `distance`        | `'chebyshev'`       | How distances to a road are measured for `clearance` and `falloff`: `'chebyshev'`, `'manhattan'` or `'euclidean'`. See [Falloff and distance](#falloff-and-distance).    |
-| `clearings`       | none                | Glades with ragged edges, free of trees: a list of `ClearingSpec`. See [Clearings](#clearings).                                                                          |
-| `clearingSpacing` | 0                   | How many tiles beyond their radii clearings placed at random keep from other clearings, a whole number, 0 or more. See [Clearings](#clearings).                          |
-| `templates`       | none                | Prefabricated [`RoomTemplate`](#room-templates)s to place, such as a ruin on a clearing. See [Templates in forests](#templates-in-forests).                              |
-| `bankClearance`   | 0                   | How many tiles beside the water of a stream are kept free of trees, a whole number, 0 or more. See [Banks](#banks).                                                      |
-| `bankFalloff`     | 0                   | How many tiles the trees take to thicken beyond the `bankClearance`, a whole number, 0 or more. See [Banks](#banks).                                                     |
-| `streams`         | no streams          | Lays a stream, or a river, through the forest, see [Streams and rivers](#streams-and-rivers).                                                                            |
-| `shallowTile`     | `Tile.ShallowWater` | The tile for the shallow water of a stream.                                                                                                                              |
-| `deepTile`        | `Tile.DeepWater`    | The tile for the deep water of a stream.                                                                                                                                 |
-| `bridgeTile`      | `Tile.Bridge`       | The tile for a bridge, where a road crosses water.                                                                                                                       |
-| `roadTile`        | `Tile.Road`         | The tile for a road.                                                                                                                                                     |     |
+| Option        | Default         | Meaning                                                                                                                                                                                                                                                               |
+| ------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `width`       |                 | Map width in tiles. Required.                                                                                                                                                                                                                                         |
+| `height`      |                 | Map height in tiles. Required.                                                                                                                                                                                                                                        |
+| `random`      | `Math.random`   | Source of randomness, shared by all the steps.                                                                                                                                                                                                                        |
+| `trees`       | the defaults    | The options of [`plantTrees`](#planttrees): `scaleX`, `scaleY`, `rotation`, `octaves`, `persistence`, `lacunarity`, `noise`, `density` (a `Range` of fractions, default `{ min: 0, max: 0.25 }`) and `tile` (default `Tile.Tree`). The ground is always `Tile.Grass`. |
+| `streams`     | no streams      | The options of [`addStreams`](#addstreams), a stream or a river: see [Streams and rivers](#streams-and-rivers). Includes the tiles of the water and the verge beside it.                                                                                              |
+| `roads`       | no roads        | The options of [`addRoads`](#addroads): see [Roads](#roads). Includes `roadTile`, `bridgeTile`, `bridgeAngle` and the verge (`clearance`, `falloff`, `distance`), which the paths to clearings use too.                                                               |
+| `clearings`   | no clearings    | The options of [`placeClearings`](#placeclearings): `{ clearings, spacing, falloff, distance }`, where `clearings` is the list of `ClearingSpec`: see [Clearings](#clearings).                                                                                        |
+| `templates`   | no templates    | The options of [`placeTemplates`](#placetemplates): `{ templates, distance }`, where `templates` is the list of [`RoomTemplate`](#room-templates)s: see [Templates in forests](#templates-in-forests).                                                                |
+| `footbridges` | on with streams | The options of [`addFootbridges`](#addfootbridges): `{ minimum, bridgeTile }`. Used only when there are `streams`, and then on by default; `false` leaves the footbridges out.                                                                                        |
 
-An injected `noise` takes the place of the built-in simplex noise: it receives positions in noise units, which is the tile center divided by the scales after the rotation, and returns a number from -1 to 1. Anything outside that range is limited to it. Since it replaces the built-in noise, `octaves`, `persistence` and `lacunarity` do not apply to it; wrap it in [`createFractalNoise`](#noise) if you want layers. `scaleX`, `scaleY` and `rotation` apply to it as they do to the built-in noise.
-
-Non-positive or non-integer dimensions, a `minDensity` or `maxDensity` outside 0 to 1, a `groundTile` or `treeTile` that is not a `Tile` value, and invalid noise options (see [Noise](#noise)) throw a `RangeError`.
+Anything the steps check throws a `RangeError` before the forest is made, as does a width or height that is not a positive whole number. A template that is bigger than the map throws a `TemplatePlacementError` just as early.
 
 ### `ForestResult`
 
 - `grid`: the map.
-- `density`: the chance of a tree on every tile, from `minDensity` to `maxDensity`, as a `Float32Array` that runs row by row, so `density[y * grid.width + x]`. A game can use it to tell thick woods from glades, for instance to put mushrooms or a hunter's hut where the trees are few.
 - `roads`: the roads that were laid, the main road first. Each is a `Road` with its `kind` (`'road'` for the main road and crossings, `'branch'` for branches and for the [paths to clearings](#paths-to-clearings)), its `width` in tiles and its `points`, the tiles of its centerline from one end to the other, each next to the one before. Empty without the `roads` option and without paths.
 - `junctions`: the places where roads meet or cross, which are good places for a signpost or an inn. Empty while there is a single road. See [Crossings and branches](#crossings-and-branches).
 - `exits`: the tiles on the map border where a road leaves the map, as for a [maze](#mazes). A game can join the maps on the other sides there.
 - `streams`: the streams that were laid, as `Road`s: `width` in tiles and `points`, the tiles of the centerline from upstream to the mouth. Empty without the `streams` option. See [Streams and rivers](#streams-and-rivers).
 - `bridges`: the bridges, one point for each place where a road or a footbridge crosses water. Empty without streams.
-- `clearings`: the clearings that were made, each with its center `x` and `y`, `radiusX`, `radiusY` (the radii that were picked, plain numbers) and `angle`, the defaults filled in. Empty without the `clearings` option. See [Clearings](#clearings).
+- `clearings`: the clearings that were made, each with its center `x` and `y`, `radiusX`, `radiusY` (the radii that were picked, plain numbers) and `angle`, the defaults filled in, and the `path` it asked for with its width and windiness. Empty without the `clearings` option. See [Clearings](#clearings).
 - `templates`: the templates that were placed, each with its `template` index, its box (`x`, `y`, `width`, `height`), `rotation`, `mirrored`, the `clearing` it stands on and `ownClearing`. Empty without the `templates` option. See [Templates in forests](#templates-in-forests).
+- `attempts` and `failures`: how many times the forest was built (1 to 3) and one `{ attempt, step, error }` for each attempt that failed, also when a later one worked. See [`pipeline`](#pipeline).
+
+There is no `density` in the result, since the chance of a tree belongs to `plantTrees` and nothing else needs it.
 
 ```ts
-const { grid, density } = generateForest({
+const { grid, roads, bridges, attempts } = generateForest({
   width: 200,
   height: 100,
-  scaleX: 80,
-  scaleY: 20,
-  rotation: 30,
-  maxDensity: 0.45,
+  trees: {
+    scaleX: 80,
+    scaleY: 20,
+    rotation: 30,
+    density: { min: 0, max: 0.45 },
+  },
+  streams: { width: { min: 2, max: 3 } },
+  roads: { windiness: 0.5, clearance: 1, falloff: 2 },
+  footbridges: { minimum: 2 },
 });
-const isGlade = (x: number, y: number) =>
-  (density[y * grid.width + x] ?? 0) < 0.1;
 ```
 
 ## Mines
@@ -1413,7 +1416,7 @@ A template is never skipped silently, since a map may need it (a boss arena, a s
 
 ## Composing maps
 
-A map can be composed from an empty base and a list of steps, like middleware, instead of one generator with many options. `pipeline` runs the steps in order, merges what each reports into the map state, and builds the map again from the start when a step throws. The first ready-made step is [`plantTrees`](#planttrees), and the rest of the forest follows (see the roadmap); you can write steps of your own, and the machinery is the same.
+A map can be composed from an empty base and a list of steps, like middleware, instead of one generator with many options. `pipeline` runs the steps in order, merges what each reports into the map state, and builds the map again from the start when a step throws. The forest is made of ready-made steps ([`plantTrees`](#planttrees), [`addStreams`](#addstreams), [`addRoads`](#addroads), [`placeClearings`](#placeclearings), [`placeTemplates`](#placetemplates), [`addClearingPaths`](#addclearingpaths) and [`addFootbridges`](#addfootbridges)), and [`generateForest`](#forests) is a composition of them; you can write steps of your own, and the machinery is the same.
 
 ```ts
 import { Tile, emptyMap, pipeline, stampTile, step } from 'angstloch';
@@ -1526,7 +1529,7 @@ The step draws one random number for every base tile, and the built-in noise is 
 
 ### Verges and `pruneVerge`
 
-A verge is the strip beside a feature that is kept clear of ground cover. Steps that lay a feature (`addStreams` so far, roads and the rest as they arrive) take the three fields of a `Verge` among their options, and you can use the same code in a step of your own: `pruneVerge(state, mask, verge, random)`, where `mask` is a `Uint8Array` with a byte per tile, 1 where the feature is.
+A verge is the strip beside a feature that is kept clear of ground cover. Steps that lay a feature (`addStreams`, `addRoads`, `placeClearings`, `placeTemplates` and `addClearingPaths`) take the three fields of a `Verge` among their options, and you can use the same code in a step of your own: `pruneVerge(state, mask, verge, random)`, where `mask` is a `Uint8Array` with a byte per tile, 1 where the feature is.
 
 | Field       | Default       | Meaning                                                                                                                                                                                                                          |
 | ----------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1620,9 +1623,81 @@ const { clearings } = pipeline(
 - **Reads** `roads` (a random clearing keeps its `roadDistance` from the roads, and `at: 'branch-end'` takes the dead ends of branches that end inside the map, in the order the branches were laid) and `streams` (`at: 'stream'` is centered on a random tile of a stream's centerline, so the stream runs through it; the water stays water). Both are optional.
 - **Adds** `clearings`: for each clearing that was made, `x`, `y`, `radiusX`, `radiusY` and `angle`, with the defaults filled in. A clearing that was asked to have a path, `path: true` or `path: { width, windiness }`, also carries `path: { width, windiness }` (defaults 1 and 0.3), which the step that lays paths to clearings reads. A clearing on a stream never has one.
 
+### `placeTemplates`
+
+`placeTemplates({ templates, distance? })` is a step that places [templates](#templates-in-forests): ruins, camps, boss arenas. `templates` is a list of the same `RoomTemplate` objects as the dungeons take, with no exits, `positions` or `areas`. A template with `clearing: true` is centered on a free clearing from the `clearings` of the state, or gets a clearing of its own at a random spot, and any other template goes to a random spot and leaves the trees round it. `Floor` and `Wall` cells are stamped as `Tile.Floor` and `Tile.Wall` (so they are not prunable), and `Unused` cells leave the map as it is. Run it after `plantTrees` and after the steps that lay roads, water and clearings. Every template is checked when the step is made, and a bad one throws a `RangeError` at once; a template bigger than the map throws a `TemplatePlacementError` from `pipeline` before the first attempt, with no retry.
+
+```ts
+const { grid, templates } = pipeline(
+  emptyMap({ width: 120, height: 80, tile: Tile.Grass }),
+  [
+    plantTrees(),
+    addRoads(),
+    placeClearings({ clearings: [{ radiusX: { min: 8, max: 8 } }] }),
+    placeTemplates({ templates: [ruin] }),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
+- **Free ground.** A cell of a template, other than an `Unused` one, goes only on a tile that holds the base tile or is prunable: untouched ground or ground cover. A road, a path, water, a bridge or another template is never covered, and neither is a tile that any step of your own has stamped. A `clearing` template on a clearing that a road runs through finds no room there, and so makes a clearing of its own.
+- **Own clearing.** The box of the template is free of trees, and the trees thicken over its `margin` beyond the box, with the ramp of a [verge](#verges-and-pruneverge) that has a falloff of `margin` and no clearance. `distance` (default `'chebyshev'`) says how that is measured. The template's `clearing`, `chance`, `margin`, `count`, `rotate` and `mirror` fields work as described under [Templates in forests](#templates-in-forests).
+- **Reads** `clearings`, optionally: a clearing holds one template at most, and the clearing is never grown.
+- **Adds** `templates`: for each template that was placed, in the order of the list and of its copies, `template` (the index in `templates`), the box it fills (`x`, `y`, `width`, `height`), `rotation`, `mirrored`, `clearing` (the index in the `clearings` extra, left out for a template placed anywhere or on a clearing of its own) and `ownClearing`.
+- **Retries.** A copy that finds no spot throws a `TemplatePlacementError`, and `pipeline` builds the map again, up to `attempts` times, before it throws the last error. A template bigger than the map is `permanent` and is thrown at once.
+
+### `addClearingPaths`
+
+`addClearingPaths(options?)` is a step that lays the paths that clearings asked for. Every clearing that `placeClearings` made with a `path` gets one, from the nearest road tile (or from the nearest border when there are no roads) to its center. The path joins the road at a junction. It paints `roadTile` over free ground, which removes its trees, then clears the trees of its verge. A clearing that a road already runs through the center of needs no path and gets none. Every option is checked when the step is made, and a bad one throws a `RangeError` at once.
+
+```ts
+const { grid, roads } = pipeline(
+  emptyMap({ width: 120, height: 80, tile: Tile.Grass }),
+  [
+    plantTrees(),
+    addRoads(),
+    placeClearings({
+      clearings: [{ radiusX: { min: 8, max: 8 }, path: { width: 2 } }],
+    }),
+    placeTemplates({ templates: [ruin] }),
+    addClearingPaths({ clearance: 1, falloff: 2 }),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
+- **Options.** `roadTile` (default `Tile.Road`) and `bridgeTile` (default `Tile.Bridge`), which should be those of `addRoads`, so that paths and roads look alike, and the verge, `clearance`, `falloff` and `distance` ([see above](#verges-and-pruneverge)), which default to 0, 0 and `'chebyshev'`. The width and windiness of a path are those its clearing asked for.
+- **Needs** `clearings`, so it must come after `placeClearings`.
+- **Uses** `roads` (where a path starts, and what it joins), `templates` (where it stops) and `streams` (where it bridges), all optional. Run it after `placeTemplates`, so that it knows the templates, and before `addFootbridges`, which counts roads as land.
+- **Templates.** A path to a clearing with a template stops at the tile before the first tile of the template's box that holds something other than ground or trees, so at the edge of its walls. A path that still runs through a template, which can happen to a path to another clearing, makes the step throw a `TemplatePlacementError` ("a road or path runs through it"), and `pipeline` builds the map again. With wide paths, mind that the brush of a path that stops at a template may touch its wall.
+- **Water.** A path tile over water becomes `bridgeTile` where the path spans the water, joining the two pieces of land it cuts the map into, and stays water everywhere else, as for the generated roads of [`addRoads`](#addroads) that are not planned.
+- **Adds** `roads`, `junctions`, `exits` and `bridges` again, which replace those of `addRoads`: the same lists with the paths added. A path is a road of `kind: 'branch'` that comes after the roads that were there, in the order of the clearings. A path from the border adds an exit.
+
+### `addFootbridges`
+
+`addFootbridges(options?)` is a step that lays footbridges across the streams: one tile wide and square to the stream, as a staircase of tiles that touch along edges where the stream runs at a slant. It first joins the large pieces of land that the water cuts apart (a stream at least 2 tiles wide cuts the land, a 1-wide one is waded; pieces under 20 tiles stay islands), nearest first, so that the walkable land is one piece, and then adds footbridges until the map has `minimum` bridges. It is an opt-in step: a stream through a cave gets none unless you ask. Every option is checked when the step is made, and a bad one throws a `RangeError` at once.
+
+```ts
+const { grid, bridges } = pipeline(
+  emptyMap({ width: 80, height: 50, tile: Tile.Grass }),
+  [
+    plantTrees(),
+    addStreams({ width: { min: 2, max: 3 }, tributaries: { min: 1, max: 1 } }),
+    addRoads(),
+    addFootbridges({ minimum: 2 }),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
+- **Options.** `minimum` (default 0), the number of bridges the map has at least, counting the bridges of roads: footbridges are added across the streams, spaced 8 tiles apart along a row or a column, until it is reached, and fewer are laid when there is no room. A footbridge that joins land the water cuts apart is laid whatever `minimum` says. `bridgeTile` (default `Tile.Bridge`) is the tile it stamps; use the `bridgeTile` of `addRoads`.
+- **Needs** `streams`, so it must come after `addStreams`. Run it after every step that lays roads or paths, since a road that bridges a stream makes a footbridge unnecessary.
+- **Land.** A water tile that holds `bridgeTile` already, which is a bridge of a road, counts as land, and so do dry roads and trees. A stream with a `spring` has land round its source, so it needs none. A footbridge never lies on the edge of the map and is at most 2 tiles longer than its stream is wide. Land that no such footbridge can join stays apart.
+- **Adds** `bridges` again, one point per group of bridge tiles, footbridges and the bridges of roads together, which replaces the list of `addRoads`.
+
 ## Playground
 
-A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons, the caves, the mines, the forests, the noise and the steps each have their own page, and the dungeon page switches between the room-first generator and the digger, and has a **Connection** select (nearest, bsp or bsp-random) next to the partition for the room-first one. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
+A visual playground for the generators lives in `demo/`. It is not published to NPM. Run it with `npm run dev`; the maze, the dungeons, the caves, the mines, the noise and the steps each have their own page, and the dungeon page switches between the room-first generator and the digger, and has a **Connection** select (nearest, bsp or bsp-random) next to the partition for the room-first one. The symmetry controls apply to both generators. The dungeon page has a Templates panel: add, duplicate and remove [room templates](#room-templates), set their count, rotations, mirroring, accuracy, positions and areas, and paint their cells by clicking and dragging with the chosen brush. Templates are kept in the browser's local storage and can be exported and imported as JSON, which is the same list of `RoomTemplate` objects that the `templates` option takes. Templated rooms are outlined on the map and labeled with their template's index, and errors such as a template that does not fit show up under the map.
 
 All pages have a **Display** switch. `simple` paints plain colored squares. `roguelike` shows the map the way a roguelike would, as colored ASCII glyphs on a black background, in the colors of an ANSI terminal: wall `#` (#555555), floor `.` (#aaaaaa), door `+` (#aa5500), grass `.` (#00aa00), tree `T` (#55ff55), road `.` (#aa5500), bridge `#` (#aa5500), shallow water `≈` (#5555ff), deep water `≈` (#0000aa) and a floor with a potential exit `.` (#5555ff). Walls with only walls around them (diagonals included, the map edge counting as wall) are left blank.
 
@@ -1630,13 +1705,11 @@ The maze page has the same room controls: the count, size and exits of ordinary 
 
 The **Download PNG** button next to the switch saves the map as currently displayed (in either mode, at the chosen tile size) as `angstloch-maze.png`, `angstloch-dungeon.png`, `angstloch-cave.png` or `angstloch-mine.png`, handy for illustrating settings. On the dungeon page the exit highlight follows the "Show exits" checkbox.
 
-The forest page has a control for every `ForestOptions` field, including a switch for the road with its angle (blank for random), width and windiness, the clearance, the falloff and the distance model (chebyshev, manhattan or euclidean), any number of clearings (an **Add clearing** button adds a row with a position (or **At** a branch end), radii as min and max (blank y radii mean the same as x), angle and irregularity; a blank position means a random place, plus its road distance range and a **Path** checkbox with the path's width and windiness), the clearing spacing, the crossings and branches with all their options (branch length is only limited when **Limit branch length** is ticked), **Mark junctions** (red squares) and **Mark road exits**, **Show grown roads** (a small magenta dot on every tile of each generated road as it was grown, before the streams bent it), **Show crossing plans** (outlined squares on the planned ends of each road and on the waypoints of its crossings: cyan where the road turns onto and off the straight run, yellow at both banks), a **Stream** switch with its angle (blank for random), a **Spring** switch, the least number of bridges, width, windiness, shore width, tributaries (count, width, angle and, when **Limit tributary length** is ticked, length), the bank clearance and falloff, and the bridge angle, a switch between grass-and-tree and floor-and-wall tiles (where deep water becomes a wall), and a **density** display that paints the chance of a tree on every tile, stretched over the range from `minDensity` to `maxDensity`: white for thick woods and black for glades, so you can see what the noise settings do before the trees are rolled. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
-
 The mine page has a control for every `MineOptions` field (hall entrances is a select of `facing` and `edge`), with the ranges as a min and a max, a blank angle for a random one, and a blank density, hall size or ring count for the default. The stats line shows the share of floor, the number of tunnels and the exits, and **Mark tunnels** paints the middle line of the main shaft red and of the other tunnels (adits, veins, rings and spokes) blue, **Mark halls** outlines the halls of the pillars layout, and **Mark caverns** outlines the caverns, the room count (a maximum of 0 means no rooms), size, exits and door chance work as on the maze page, and its Templates panel, shared with the maze and dungeon pages, takes templates with **Use templates**, which are outlined and labeled by **Outline templates**.
 
 The noise page paints a `NoiseFunction` as gray squares, black for -1 and white for 1, with controls for the size, the seed, the fractal options and the transform: `scaleX`, `scaleY` and `rotation`. The fractal controls start at the defaults of `createFractalNoise`, and the scales start at 40, which is a size that shows a few features on the default map. The stats line shows the lowest, highest and mean value.
 
-The steps page shows how [`pipeline`](#composing-maps) works, with [`plantTrees`](#planttrees), [`addStreams`](#addstreams) (a **Stream** switch with its angle (blank for random), width, windiness and tributaries, and the clearance and falloff of its bank), [`addRoads`](#addroads) (a **Roads** switch with angle (blank for random), width, windiness, crossings, branches, the bridge angle, and the clearance and falloff of its verge; **Show grown roads** puts a small magenta dot on every tile of a road as it was grown, and **Show crossing plans** outlines the ends of each road and the waypoints of its crossings, cyan where the road turns onto and off the straight run and yellow at both banks, both fed by `trace` and shown from the `addRoads` step on), a `border` step of its own that stamps a border with `stampTile` and then clears a [verge](#verges-and-pruneverge) round it with `pruneVerge`, and a `flaky` step that throws with the **Failure chance** you set, to show the retries. Controls: the size, the seed, the base tile, the planted tile (any of tree, wall, floor or grass, on any base, so a steppe of rocks on floor is a click away), the density range and scale of the noise, the border tile, the verge's clearance, falloff and distance, the failure chance and the number of attempts. **Show after step** picks the map after any step of the last attempt, starting with the base, through `onStep`. The stats line gives the attempts, the failures and how many tiles are still prunable, and the failures are listed under the map.
+The steps page is where forests are made, and the way the playground is going: a page with no fixed generator, but a list of steps that you add, order and configure one by one. The form at the top sets the size, the seed, the base tile and the number of attempts. **Add a step** picks any of [`plantTrees`](#planttrees), [`addStreams`](#addstreams), [`addRoads`](#addroads), [`placeClearings`](#placeclearings), [`placeTemplates`](#placetemplates), [`addClearingPaths`](#addclearingpaths) and [`addFootbridges`](#addfootbridges) and appends a card with a control for each of its options (a blank angle means a random one, ranges are a min and a max, and the road and clearing cards take exact roads and clearings as JSON). A card has buttons to move it up or down and to remove it, **Load a forest** starts from the steps of a forest, and **Remove all** starts from nothing. Every change runs the pipeline again, so a step put in the wrong order shows the error of [`pipeline`](#pipeline) under the map, and a bad option shows its `RangeError`. **Show after step** picks the map after any step of the last attempt, starting with the base, through `onStep`. The overlays, drawn from what the steps reported up to the chosen step, are **Mark clearing centers**, **Outline templates**, **Mark junctions**, **Mark road exits**, **Show grown roads** (a small magenta dot on every tile of a road as it was grown, before the streams bent it) and **Show crossing plans** (outlined squares on the planned ends of each road and on the waypoints of its crossings: cyan where the road turns onto and off the straight run, yellow at both banks), the last two fed by `trace`. The stats line gives the attempts, the failures and how many roads, streams, bridges, clearings and templates there are, and the failures are listed under the map; a template that finds no room is an easy way to see a retry. The planted tile of `plantTrees` and the base tile can be tree, wall, floor or grass, so a steppe of rocks on floor is a click away. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
 
 The cave page has a control for every `CaveOptions` and `NoiseCaveOptions` field. Its **Generator** select switches between the automaton and the [noise cave](#noise-caves); the controls that belong to one generator only are marked "(automaton)" or "(noise)", and the others (connection, symmetry, exits, border walls) apply to both. The limits are blank by default, which means the defaults of the chosen neighborhood. The stats line shows the number of floor tiles, regions and exits, and **Mark region centers** highlights the `center` of every region, which makes it easy to see what `connect` and `minRegionSize` do to the caverns.
 

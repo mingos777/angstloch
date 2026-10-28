@@ -6,13 +6,7 @@ import type { StreamOptions } from './stream-options';
 
 /** Throws a `RangeError` unless the stream options are valid. */
 export function assertStreamOptions(options: StreamOptions): void {
-  const {
-    angle = 'random',
-    windiness,
-    width,
-    shoreWidth,
-    bridgeAngle,
-  } = options;
+  const { angle = 'random', windiness, width, shoreWidth } = options;
   if (angle !== 'random' && !Number.isFinite(angle)) {
     throw new RangeError(
       `streams.angle must be a finite number or 'random', got ${String(angle)}`,
@@ -38,13 +32,7 @@ export function assertStreamOptions(options: StreamOptions): void {
   if (options.tributaryAngle) {
     assertDegrees('streams.tributaryAngle', options.tributaryAngle);
   }
-  if (options.bridges !== undefined) {
-    assertWholeNumber('streams.bridges', options.bridges, 0);
-  }
   if (shoreWidth !== undefined) {
     assertWholeNumber('streams.shoreWidth', shoreWidth, 0);
-  }
-  if (bridgeAngle) {
-    assertDegrees('streams.bridgeAngle', bridgeAngle);
   }
 }

@@ -87,23 +87,33 @@ canvas {
   font-family: monospace;
   box-sizing: border-box;
 }
-#clearings {
-  grid-column: 1 / -1;
-}
-fieldset.clearing {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.5rem;
-  margin: 0 0 0.5rem;
+.step {
+  max-width: 60rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
   border: 1px solid #444;
 }
-fieldset.clearing label {
-  width: 5rem;
+.step header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
 }
-fieldset.clearing label.inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.25rem;
-  width: auto;
+.step header span {
+  flex: 1;
+  color: #999;
+}
+.step .fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.5rem;
+}
+.step label.wide {
+  grid-column: 1 / -1;
+}
+.step textarea {
+  font-family: monospace;
+  box-sizing: border-box;
+  width: 100%;
 }
