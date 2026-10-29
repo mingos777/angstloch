@@ -26,10 +26,13 @@ import { TemplateCell } from './templates/template-cell';
  * the corridor as a stand-in through the entrance, and `digVeins` enters the
  * block there too.
  *
- * With `guardRoom`, a block gets a guard room by its chance, beside a tunnel
- * that runs from the end of the corridor past the guard room's door. The wall
- * between the corridor and the tunnel becomes a door, and the entrance is the
- * wall at the far end of the tunnel instead.
+ * With `guardRoom`, a block gets a guard room by its chance. Beside the block,
+ * it stands by a tunnel that runs from the end of the corridor past the guard
+ * room's door. The wall between the corridor and the tunnel becomes a door,
+ * and the entrance is the wall at the far end of the tunnel instead. With the
+ * placement `'through'`, it stands against the end of the block, its door in
+ * the end wall, and the entrance is in its far wall, a potential exit of its
+ * shape: `digCorridors` joins the block, its cells and the guard room as one.
  *
  * Every cell is a room of kind `'cell'` in `rooms`, and a guard room one of
  * kind `'guardRoom'`, each with its shape in `roomShapes` and its door in
@@ -38,7 +41,9 @@ import { TemplateCell } from './templates/template-cell';
  * its guard room point to with `Room.group`. It appends all four to the ones
  * of the steps before it, with ids that follow on. A block
  * that finds no free spot throws an ordinary `Error`, which `pipeline` answers
- * with a new map. The map has to start as wall, which `pipeline` checks before
+ * with a new map. With `placement: 'lattice'` the block's walls fall on even
+ * coordinates and its floors on odd ones, entrance included, so that lattice
+ * corridors reach it. The map has to start as wall, which `pipeline` checks before
  * the first attempt. Throws a `RangeError` at once for a bad option.
  */
 export function placeCellBlocks(
@@ -49,6 +54,7 @@ export function placeCellBlocks(
     blocks = { min: 1, max: 1 },
     area = {},
     count = { min: 1, max: 1 },
+    placement = 'free',
   } = options;
   const settings: CellBlockSettings = {
     cellWidth: options.cellSize?.width ?? { min: 3, max: 3 },
@@ -58,9 +64,11 @@ export function placeCellBlocks(
     corridorWidth: options.corridorWidth ?? { min: 1, max: 1 },
     orientation: options.orientation ?? 'any',
     cellDoors: options.cellDoors ?? 'centered',
+    placement,
     ...(options.guardRoom && {
       guardRoom: {
         chance: options.guardRoom.chance ?? 1,
+        placement: options.guardRoom.placement ?? 'beside',
         width: options.guardRoom.size?.width ?? { min: 5, max: 5 },
         depth: options.guardRoom.size?.depth ?? { min: 3, max: 3 },
         tunnel: options.guardRoom.tunnel ?? { min: 2, max: 4 },
@@ -82,7 +90,9 @@ export function placeCellBlocks(
       const roomShapes = [...(state.roomShapes ?? [])];
       const roomExits = [...(state.roomExits ?? [])];
       const roomGroups = [...(state.roomGroups ?? [])];
-      for (const box of placeAreas(state, random, area, count)) {
+      for (const box of placeAreas(state, random, area, count, {
+        lattice: placement === 'lattice',
+      })) {
         const laid = buildInArea(state, box, (scratch) =>
           Array.from(
             { length: randomInt(random, blocks.min, blocks.max) },
@@ -104,7 +114,12 @@ export function placeCellBlocks(
             entrance: shift(block.entrance),
             ...(block.tunnel && { tunnel: shift(block.tunnel) }),
           });
-          const add = (kind: RoomKind, local: Area, localDoor: Point) => {
+          const add = (
+            kind: RoomKind,
+            local: Area,
+            localDoor: Point,
+            entrance?: Point,
+          ) => {
             const floor = shift(local);
             const door = shift(localDoor);
             const id = rooms.length;
@@ -118,13 +133,21 @@ export function placeCellBlocks(
               group,
             });
             roomExits.push({ position: door, rooms: [id], door: true });
-            roomShapes.push(oneDoorShape(floor, door));
+            roomShapes.push(
+              oneDoorShape(floor, door, entrance && shift(entrance)),
+            );
           };
           block.cells.forEach((cell, index) => {
             add('cell', cell, block.doors[index] as Point);
           });
           if (block.guardRoom) {
-            add('guardRoom', block.guardRoom.floor, block.guardRoom.door);
+            // without a tunnel the block is entered through the guard room
+            add(
+              'guardRoom',
+              block.guardRoom.floor,
+              block.guardRoom.door,
+              block.tunnel ? undefined : block.entrance,
+            );
           }
         }
       }
@@ -133,13 +156,16 @@ export function placeCellBlocks(
   );
 }
 
-/** The shape of a cell or a guard room: its floor inside a ring of wall, with its door in the ring. */
-function oneDoorShape(floor: Area, door: Point): RoomShape {
+/** The shape of a cell or a guard room: its floor inside a ring of wall, with its door in the ring, and the entrance of the block as a potential exit for a guard room it is entered through. */
+function oneDoorShape(floor: Area, door: Point, entrance?: Point): RoomShape {
   const [x, y] = [floor.x - 1, floor.y - 1];
   const cells = Array.from({ length: floor.height + 2 }, (_, dy) =>
     Array.from({ length: floor.width + 2 }, (__, dx): TemplateCell => {
       if (x + dx === door.x && y + dy === door.y) {
         return TemplateCell.Door;
+      }
+      if (x + dx === entrance?.x && y + dy === entrance.y) {
+        return TemplateCell.OptionalExit;
       }
       const inside =
         dx > 0 && dy > 0 && dx <= floor.width && dy <= floor.height;

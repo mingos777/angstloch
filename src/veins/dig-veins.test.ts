@@ -10,6 +10,7 @@ import { Reserve } from '../pipeline/reserve';
 import { brushOffsets } from '../roads/brush-offsets';
 import { step } from '../pipeline/step';
 import { floorBeyondEntrances } from '../test-helpers/floor-beyond-entrances';
+import { cellBlocksOf } from '../test-helpers/cell-blocks-of';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { digFishbone } from '../mine/dig-fishbone';
 import { digPillarHalls } from '../mine/dig-pillar-halls';
@@ -417,7 +418,7 @@ describe('digVeins with rooms', () => {
     );
 
     // then
-    const { x, y } = roomGroups[0]?.entrance ?? { x: -1, y: -1 };
+    const { x, y } = cellBlocksOf(roomGroups)[0]?.entrance ?? { x: -1, y: -1 };
     expect(grid.get(x, y)).toBe(Tile.Floor);
     expect(findPieces(grid)).toHaveLength(1);
   });
@@ -435,7 +436,7 @@ describe('digVeins with rooms', () => {
 
     // then
     expect(findPieces(grid)).toHaveLength(1);
-    for (const { entrance, footprint } of roomGroups) {
+    for (const { entrance, footprint } of cellBlocksOf(roomGroups)) {
       expect(grid.get(entrance.x, entrance.y)).toBe(Tile.Floor);
       expect(reserved[entrance.y * grid.width + entrance.x]).toBe(
         Reserve.Solid,

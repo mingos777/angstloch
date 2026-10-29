@@ -67,6 +67,7 @@ import type {
 import { joinRooms } from '../src/dungeon/join-rooms';
 import type { JoinedRooms } from '../src/dungeon/join-rooms';
 import type { PlacedRooms } from '../src/dungeon/placed-rooms';
+import { isFeatureRoom } from '../src/rooms/is-feature-room';
 import { resolveCorridorSettings } from '../src/dungeon/resolve-corridor-settings';
 import { corridorTiles, deadEnds } from '../src/test-helpers/dungeon-checks';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
@@ -176,7 +177,13 @@ function buildSteps(
     { random, attempts: 1 },
   );
   const { rooms, roomExits } = result as unknown as JoinedRooms;
-  return { grid: result.grid, rooms, exits: roomExits, fill: 0 };
+  // the hall and the cavern are rooms too, but not ones the run counts
+  return {
+    grid: result.grid,
+    rooms: rooms.filter((room) => !isFeatureRoom(room)),
+    exits: roomExits,
+    fill: 0,
+  };
 }
 
 /** A pillar hall and a noise cavern, each in an area of its own. */

@@ -1,6 +1,9 @@
-import type { Area } from '../core/area';
+import type { Point } from '../core/point';
+import { Tile } from '../core/tile';
 import type { MapStep } from '../pipeline/map-step';
 import { step } from '../pipeline/step';
+import { addFeatureRoom } from '../rooms/add-feature-room';
+import type { FeatureRooms } from '../rooms/feature-rooms';
 import { assertDigArea } from './assert-dig-area';
 import { assertPillarOptions } from './assert-pillar-options';
 import type { DigPillarHallsOptions } from './dig-pillar-halls-options';
@@ -14,14 +17,18 @@ import { layPillars } from './lay-pillars';
  * covers a reserved tile. The halls are left apart; `digVeins` or
  * `digCorridors` joins them.
  *
- * It uses `halls`, from the steps before it, and adds `halls` again with its
- * own appended, shifted to the coordinates of the map. The map has to start as
- * wall, which `pipeline` checks before the first attempt. Throws a
+ * Every hall is a room of kind `'pillarHall'`, its box the rectangle it was
+ * dug in, whose corners may be wall, as its edges are ragged, and its shape
+ * its floor, which blocks nothing and
+ * reserves nothing. The halls of one area are a `'pillarHalls'` group. It uses
+ * `rooms`, `roomShapes` and `roomGroups` from the steps before it, and adds
+ * them again with its own appended, in the coordinates of the map. The map has
+ * to start as wall, which `pipeline` checks before the first attempt. Throws a
  * `RangeError` at once for a bad option.
  */
 export function digPillarHalls(
   options: DigPillarHallsOptions = {},
-): MapStep<Partial<{ halls: Area[] }>, { halls: Area[] }> {
+): MapStep<Partial<FeatureRooms>, FeatureRooms> {
   const {
     density = 0.35,
     halls = { min: 2, max: 4 },
@@ -36,17 +43,17 @@ export function digPillarHalls(
   } = options;
   assertPillarOptions(options);
 
-  return step<Partial<{ halls: Area[] }>, { halls: Area[] }>(
+  return step<Partial<FeatureRooms>, FeatureRooms>(
     'digPillarHalls',
     {
-      adds: ['halls'],
+      adds: ['rooms', 'roomShapes', 'roomGroups'],
       validate: (state) => {
         assertDigArea('digPillarHalls', state, area, count);
       },
     },
-    (state, { random }) => ({
-      halls: digInAreas(state, random, area, count, (scratch) =>
-        layPillars(scratch.grid, random, {
+    (state, { random }) => {
+      const { areas } = digInAreas(state, random, area, count, (scratch) => {
+        const laid = layPillars(scratch.grid, random, {
           density,
           halls,
           hallSize,
@@ -56,8 +63,38 @@ export function digPillarHalls(
           pillarRagged,
           pillarJitter,
           protect: scratch.reserved,
-        }),
-      ).halls,
-    }),
+        });
+        return {
+          passages: laid.passages,
+          halls: laid.halls.map((hall) => {
+            const tiles: Point[] = [];
+            for (let y = hall.y; y < hall.y + hall.height; ++y) {
+              for (let x = hall.x; x < hall.x + hall.width; ++x) {
+                if (scratch.grid.get(x, y) === Tile.Floor) {
+                  tiles.push({ x, y });
+                }
+              }
+            }
+            return { box: hall, tiles };
+          }),
+        };
+      });
+      const added: FeatureRooms = {
+        rooms: [...(state.rooms ?? [])],
+        roomShapes: [...(state.roomShapes ?? [])],
+        roomGroups: [...(state.roomGroups ?? [])],
+      };
+      // an area with no room for a hall makes no group
+      for (const { box, halls: dug } of areas.filter(
+        ({ halls: found }) => found.length > 0,
+      )) {
+        const group = added.roomGroups.length;
+        added.roomGroups.push({ kind: 'pillarHalls', area: box });
+        for (const { box: hall, tiles } of dug) {
+          addFeatureRoom(added, 'pillarHall', group, tiles, hall);
+        }
+      }
+      return added;
+    },
   );
 }

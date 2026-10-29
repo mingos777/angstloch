@@ -8,7 +8,7 @@ Design in progress, not started. Delete this file once the feature is done and d
 - **A tree layout**: a trunk with branches meeting it at right angles, straight canals, junction chambers where canals meet. Not tied to a street plan on another map.
 - **No flow direction**: the game decides which way the water runs.
 - **Cisterns are part of the step** (see Cisterns). Sluice gates and the like are separate steps, designed separately.
-- Builds on `Room.kind`, `roomGroups` and features as rooms from `designs/cell-blocks.md`.
+- Builds on `Room.kind`, `roomGroups` and halls and caverns as rooms, all done (see `Room`, `RoomGroup` and halls and caverns in the README).
 
 ## The map
 

@@ -386,7 +386,7 @@ describe('generateMine with ordinary rooms', () => {
     expect(listed).toBe(roomExits.length);
   });
 
-  it('never puts two openings of a room next to each other, diagonals included', () => {
+  it('never puts two openings of an ordinary room next to each other, diagonals included', () => {
     // given
     const layouts = ['fishbone', 'veins', 'pillars', 'rings'] as const;
     const seeds = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -411,7 +411,8 @@ describe('generateMine with ordinary rooms', () => {
     let crowded = 0;
     let checked = 0;
     for (const { rooms, roomExits } of mines) {
-      for (const room of rooms) {
+      // the ways into halls and caverns are wherever the veins reach them
+      for (const room of rooms.filter(({ kind }) => kind === 'room')) {
         const spots = room.exits.map((index) => roomExits[index]?.position);
         for (const [i, a] of spots.entries()) {
           for (const b of spots.slice(i + 1)) {

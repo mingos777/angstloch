@@ -7,6 +7,8 @@ import type { MapState } from '../pipeline/map-state';
 import { openReserved } from '../pipeline/open-reserved';
 import { Reserve } from '../pipeline/reserve';
 import type { Exit } from '../rooms/exit';
+import { isFeatureRoom } from '../rooms/is-feature-room';
+import { recordDugEntries } from '../rooms/record-dug-entries';
 import { reserveRoomShape } from '../rooms/reserve-room-shape';
 import type { Room } from '../rooms/room';
 import type { RoomShape } from '../rooms/room-shape';
@@ -56,14 +58,20 @@ type Routing =
  * `TemplatePlacementError`. `onTry` is called before each try, for
  * `check:dungeon` to count them.
  *
- * Every piece of floor outside the rooms (see `findStandIns`) is joined too,
- * as a stand-in room that is never dropped: one that is cut off fails like a
- * templated room, with a plain `Error`. A corridor that reaches a stand-in
- * opens its wall into floor, which is no exit of the result. Where that wall
- * was reserved `Openable`, the entrance of a cell block, it is opened through
- * `openReserved` and gets a door by `doorChance`. Such an entrance with the
- * floor of another piece right beyond it is opened first, the same way, with
- * no corridor (see `joinTouchingPieces`).
+ * Every piece of floor outside the rooms that are joined (see
+ * `findStandIns`) is joined too, as a stand-in room that is never dropped: one
+ * that is cut off fails like a templated room, with a plain `Error`. Rooms
+ * that have exits already count as one with the floor their doors open onto,
+ * so a stand-in may hold rooms, such as the cells and the guard room of a cell
+ * block with its corridor. A corridor that reaches a stand-in opens its wall
+ * into floor, which is no exit of the result. Where that wall was reserved
+ * `Openable`, the entrance of a cell block, it is opened through
+ * `openReserved` and gets a door by `doorChance`, and where it is in the shape
+ * of a room that had exits already, it becomes an exit of that room too. Such
+ * an entrance with the floor of another piece right beyond it is opened first,
+ * the same way, with no corridor (see `joinTouchingPieces`). Where a corridor
+ * or such an entrance enters a hall or a cavern, that is an exit of the hall or
+ * the cavern (see `recordDugEntries`).
  */
 export function joinRooms(
   given: MapState & Partial<PlacedRooms> & Partial<JoinedRooms>,
@@ -78,9 +86,19 @@ export function joinRooms(
     roomShapes: given.roomShapes ?? [],
   };
   const { width, height } = state.grid;
-  // an entrance that the floor beyond reaches already needs no corridor
+  // to tell where the corridors entered the halls and caverns
+  const before = state.grid.clone();
+  // halls and caverns are joined as stand-ins, on their floor
+  const joining = state.rooms.filter(
+    (room) =>
+      room.exitCount === 0 && !isFeatureRoom(room) && state.roomShapes[room.id],
+  );
+  const shapeOf = (room: Room): RoomShape =>
+    state.roomShapes[room.id] as RoomShape;
+  // an entrance that the floor beyond reaches already needs no corridor, but
+  // the rooms to join are entered through their own exits
   const covered = new Uint8Array(width * height);
-  for (const shape of state.roomShapes) {
+  for (const shape of joining.map(shapeOf)) {
     shape.cells.forEach((row, dy) => {
       row.forEach((cell, dx) => {
         if (cell !== TemplateCell.Unused) {
@@ -89,7 +107,8 @@ export function joinRooms(
       });
     });
   }
-  for (const { x, y } of joinTouchingPieces(state, covered)) {
+  const touched = joinTouchingPieces(state, covered);
+  for (const { x, y } of touched) {
     if (random() < settings.doorChance) {
       state.grid.set(x, y, Tile.Door);
     }
@@ -108,11 +127,6 @@ export function joinRooms(
     lattice,
     random,
   });
-  const joining = state.rooms.filter(
-    (room) => room.exitCount === 0 && state.roomShapes[room.id],
-  );
-  const shapeOf = (room: Room): RoomShape =>
-    state.roomShapes[room.id] as RoomShape;
 
   /** Routes the corridors once, on a copy of the map. */
   const route = (): Routing => {
@@ -124,13 +138,8 @@ export function joinRooms(
     };
     let kept = joining;
     for (;;) {
-      const keptIds = new Set(kept.map(({ id }) => id));
-      const standIns = findStandIns(
-        scratch,
-        state.rooms
-          .filter((room) => keptIds.has(room.id) || !joining.includes(room))
-          .flatMap((room) => state.roomShapes[room.id] ?? []),
-      );
+      // rooms with exits are part of the stand-in their doors open onto
+      const standIns = findStandIns(scratch, kept.map(shapeOf));
       const doors = new Map(
         kept
           .map(shapeOf)
@@ -254,7 +263,19 @@ export function joinRooms(
     onTry?.();
     const routed = route();
     if ('scratch' in routed) {
-      return finish(state, joining, routed);
+      const joined = finish(state, joining, routed, touched);
+      return {
+        ...joined,
+        ...recordDugEntries(
+          before,
+          state.grid,
+          state.base,
+          joined,
+          joined.roomShapes,
+          joined.rooms.filter(isFeatureRoom),
+          state.roomExits?.length ?? 0,
+        ),
+      };
     }
     if (tries === MAX_ROUTINGS) {
       throw routed.error;
@@ -309,12 +330,15 @@ function erase(state: MapState, shape: RoomShape): void {
 /**
  * Copies a routing that joined every room back into the map, opens its exits,
  * and returns the rooms without the dropped ones, renumbered together with
- * their shapes and the exits.
+ * their shapes and the exits. The walls opened into a stand-in, by a corridor
+ * or by `joinTouchingPieces` (`touched`), become exits of the rooms that had
+ * exits already and whose shapes hold them.
  */
 function finish(
   state: MapState & PlacedRooms & Partial<JoinedRooms>,
   joining: Room[],
   routed: Extract<Routing, { scratch: MapState }>,
+  touched: readonly Point[],
 ): JoinedRooms {
   const { grid, reserved } = state;
   for (let y = 0; y < grid.height; ++y) {
@@ -346,6 +370,21 @@ function finish(
   const joined = new Map(
     routed.kept.map((room, index) => [room.id, routed.rooms[index] as Room]),
   );
+  const entries = findEntries(
+    state,
+    state.rooms.filter(
+      (room) => !joining.includes(room) && !isFeatureRoom(room),
+    ),
+    [...touched, ...routed.entered],
+  );
+  const firstEntry = firstExit + routed.exits.length;
+  // the entries into each room, by their place in `entries`
+  const entered = new Map<number, number[]>();
+  entries.forEach((entry, index) => {
+    for (const id of entry.rooms) {
+      entered.set(id, [...(entered.get(id) ?? []), index]);
+    }
+  });
   return {
     rooms: state.rooms
       .filter(({ id }) => !dropped.has(id))
@@ -358,6 +397,17 @@ function finish(
             exits: done.exits.map((exit) => exit + firstExit),
             exitCount: done.exitCount,
             doorCount: done.doorCount,
+          }),
+          ...(entered.has(room.id) && {
+            exits: [
+              ...room.exits,
+              ...(entered.get(room.id) ?? []).map((i) => firstEntry + i),
+            ],
+            exitCount: room.exitCount + (entered.get(room.id) ?? []).length,
+            doorCount:
+              room.doorCount +
+              (entered.get(room.id) ?? []).filter((i) => entries[i]?.door)
+                .length,
           }),
         };
       }),
@@ -373,6 +423,35 @@ function finish(
           exit.rooms.map((local) => (routed.kept[local] as Room).id),
         ),
       })),
+      ...entries.map((exit) => ({ ...exit, rooms: renumber(exit.rooms) })),
     ],
   };
+}
+
+/** The exits of the opened walls that lie in the shapes of the rooms, each with the rooms that hold it, by their ids before renumbering. */
+function findEntries(
+  state: MapState & PlacedRooms,
+  rooms: readonly Room[],
+  walls: readonly Point[],
+): Exit[] {
+  return walls.flatMap((position) => {
+    const ids = rooms
+      .filter((room) => {
+        const shape = state.roomShapes[room.id];
+        const cell =
+          shape?.cells[position.y - shape.y]?.[position.x - shape.x] ??
+          TemplateCell.Unused;
+        return cell !== TemplateCell.Unused;
+      })
+      .map(({ id }) => id);
+    return ids.length > 0
+      ? [
+          {
+            position,
+            rooms: ids,
+            door: state.grid.get(position.x, position.y) === Tile.Door,
+          },
+        ]
+      : [];
+  });
 }

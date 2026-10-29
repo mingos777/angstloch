@@ -667,12 +667,18 @@ export const STEP_DEFS: StepDef[] = [
         ['centered', 'centered'],
         ['jittered', 'jittered'],
       ]),
+      select('placement', 'Placement', 'free', [
+        ['free', 'free'],
+        ['lattice', 'lattice'],
+      ]),
       check('guardRoom', 'Guard room', false),
       number('guardChance', 'Guard room chance', 1, FRACTION),
       ...pair('guardWidth', 'Guard room width', 5, 5, POSITIVE),
       ...pair('guardDepth', 'Guard room depth', 3, 3, POSITIVE),
       select('guardPlacement', 'Guard room placement', 'beside', [
         ['beside', 'beside'],
+        ['through', 'through'],
+        ['any', 'any'],
       ]),
       ...pair('guardTunnel', 'Tunnel past its door', 2, 4, { min: '0' }),
       ...areaFields(),
@@ -686,6 +692,7 @@ export const STEP_DEFS: StepDef[] = [
         corridorWidth: v.range('corridorWidth'),
         orientation: v.text('orientation') as 'horizontal' | 'vertical' | 'any',
         cellDoors: v.text('cellDoors') as 'centered' | 'jittered',
+        placement: v.text('placement') as Placement,
         ...(v.flag('guardRoom') && {
           guardRoom: {
             chance: v.number('guardChance'),
@@ -693,7 +700,7 @@ export const STEP_DEFS: StepDef[] = [
               width: v.range('guardWidth'),
               depth: v.range('guardDepth'),
             },
-            placement: v.text('guardPlacement') as 'beside',
+            placement: v.text('guardPlacement') as 'beside' | 'through' | 'any',
             tunnel: v.range('guardTunnel'),
           },
         }),

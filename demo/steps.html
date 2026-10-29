@@ -57,6 +57,9 @@
       </button>
       <button id="load-cave-rooms" type="button">Load a cave with rooms</button>
       <button id="load-prison" type="button">Load a prison</button>
+      <button id="load-lattice-prison" type="button">
+        Load a lattice prison
+      </button>
       <button id="clear-steps" type="button">Remove all</button>
     </div>
     <div id="steps"></div>
@@ -82,9 +85,6 @@
       <label>Outline halls <input name="showHalls" type="checkbox" /></label>
       <label
         >Outline caverns <input name="showCaverns" type="checkbox"
-      /></label>
-      <label
-        >Mark region centers <input name="showCenters" type="checkbox"
       /></label>
       <label>Outline rooms <input name="showRooms" type="checkbox" /></label>
       <label
@@ -118,6 +118,7 @@
       /></label>
     </form>
     <p id="distances"></p>
+    <p id="room"></p>
     <canvas id="map"></canvas>
     <p id="error"></p>
     <pre id="failures"></pre>

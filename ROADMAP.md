@@ -4,11 +4,7 @@ What is wanted next, roughly in the user's order, and what was rejected. Finishe
 
 ## Next up
 
-The prison, as the cell block step below; the sewers, also needed by the user's own game, come next under More generators, and the parallel adits of the fishbone are wanted under Mines, follow-ups.
-
-### Cell blocks
-
-The prison, as a `placeCellBlocks` step, with halls and caverns reported as rooms. Being designed in `designs/cell-blocks.md`.
+Walking distances, below; the sewers, also needed by the user's own game, come next under More generators, and the parallel adits of the fishbone are wanted under Mines, follow-ups.
 
 ### Walking distances
 
@@ -73,6 +69,14 @@ Decisions:
 Open questions:
 
 - **Ruins**: a "post-processor" would be a function or option that takes a finished map and changes it, such as breaking gaps in the walls with noise and scattering rubble or trees, instead of generating one from scratch. It would break the rule that results are composed by the caller, so the user is unsure about it. The alternative is a `ruined` option (with a decay amount) on the generators that make buildings.
+
+### Cell blocks, follow-ups
+
+`placeCellBlocks` is done and documented in the README. Optional follow-ups:
+
+- **A T-shaped block corridor**, with cells along three sides.
+- **Extra entrances**: an option for more than one entrance per block (default 1).
+- **Keeping the approach clear.** Nothing keeps a later step off the two tiles beyond a block's entrance. A later hall that reaches them is handled (`joinTouchingPieces` opens the entrance), but a later room whose wall lands there cuts the block off and the map is retried: with 1 to 2 blocks, `digPillarHalls`, `placeScatteredRooms` and `digCorridors` on 80 by 50, about one map in four is retried and 1 in 200 fails (5 in 200 with guard rooms the blocks are entered through); without the hall, one in ten and none. A fix needs a new kind of reservation (no step builds there, a joining step may dig), a change to `Reserve`.
 
 ### Dungeons, follow-ups
 

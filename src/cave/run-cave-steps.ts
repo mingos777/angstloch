@@ -4,9 +4,9 @@ import { Tile } from '../core/tile';
 import { emptyMap } from '../pipeline/empty-map';
 import { pipeline } from '../pipeline/pipeline';
 import type { AnyStep } from '../pipeline/pipeline-chain';
+import type { Exit } from '../rooms/exit';
+import type { FeatureRooms } from '../rooms/feature-rooms';
 import type { CaveResult } from './cave-result';
-import { describeCaveRegion } from './describe-cave-region';
-import { findCaveRegions } from './find-cave-regions';
 
 /** The size and randomness of a cave, which both cave presets share. */
 interface CaveSize {
@@ -16,9 +16,9 @@ interface CaveSize {
 }
 
 /**
- * Runs the steps of a cave preset on a map of wall and describes what they
- * made: the regions of the finished map, measured after the pipeline, and the
- * exits, empty when no step added them.
+ * Runs the steps of a cave preset on a map of wall and returns what they made:
+ * the caverns, with their shapes, groups and the ways in, and the exits, each empty when no
+ * step added it.
  */
 export function runCaveSteps(
   { width, height, random }: CaveSize,
@@ -28,10 +28,14 @@ export function runCaveSteps(
     random,
   });
   // a step that was left out added nothing
-  const extras: Partial<{ exits: Point[] }> = run as unknown as object;
+  const extras: Partial<FeatureRooms & { roomExits: Exit[]; exits: Point[] }> =
+    run as unknown as object;
   return {
     grid: run.grid,
-    regions: findCaveRegions(run.grid).map(describeCaveRegion),
+    rooms: extras.rooms ?? [],
+    roomShapes: extras.roomShapes ?? [],
+    roomGroups: extras.roomGroups ?? [],
+    roomExits: extras.roomExits ?? [],
     exits: extras.exits ?? [],
     attempts: run.attempts,
     failures: run.failures,

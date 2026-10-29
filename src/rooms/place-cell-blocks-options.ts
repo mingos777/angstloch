@@ -1,5 +1,6 @@
 import type { Range } from '../core/range';
 import type { AreaSize } from '../pipeline/area-size';
+import type { Placement } from './dungeon-options';
 
 /** Options of the guard room of a cell block. */
 export interface GuardRoomOptions {
@@ -7,9 +8,9 @@ export interface GuardRoomOptions {
   chance?: number;
   /** The size of its floor in whole tiles of at least 1: `width` along the tunnel and `depth` away from it. Defaults to `{ width: { min: 5, max: 5 }, depth: { min: 3, max: 3 } }`. */
   size?: { width?: Range; depth?: Range };
-  /** Where it stands: `'beside'`, next to a tunnel that leads from the end of the block corridor past its door, on either side. Defaults to `'beside'`. */
-  placement?: 'beside';
-  /** How many tiles the tunnel runs past the door of the guard room before the entrance, a `Range` of whole numbers of at least 0. Defaults to `{ min: 2, max: 4 }`. */
+  /** Where it stands: `'beside'`, next to a tunnel that leads from the end of the block corridor past its door, on either side, or `'through'`, against the end of the block, with its door at the end of the corridor and the entrance opposite in its far wall, its floor centered on that row, or `'any'`, either of them drawn for each guard room. Defaults to `'beside'`. */
+  placement?: 'beside' | 'through' | 'any';
+  /** How many tiles the tunnel runs past the door of the guard room before the entrance, a `Range` of whole numbers of at least 0. Only for a guard room beside the block. Defaults to `{ min: 2, max: 4 }`. */
   tunnel?: Range;
 }
 
@@ -29,6 +30,8 @@ export interface PlaceCellBlocksOptions {
   orientation?: 'horizontal' | 'vertical' | 'any';
   /** Where the door of a cell sits along its front: `'centered'`, or `'jittered'`, at a spot drawn once per block that all its cells share. Defaults to `'centered'`. */
   cellDoors?: 'centered' | 'jittered';
+  /** `'free'`, or `'lattice'`, which puts the walls of a block, its guard room and its tunnel on even coordinates and their floors on odd ones, the tile beyond the entrance included, so that the corridors of a lattice dungeon reach it: the cell sizes, the corridor width, the guard room's size and the tunnel's length are narrowed to odd numbers (an even-only range is rounded up), and the guard room shares the block's end wall. Takes nothing from the other steps: give it to every step of a lattice dungeon. Defaults to `'free'`. */
+  placement?: Placement;
   /** A guard room for each block, a room of kind `'guardRoom'` in the group of its block. Absent means none. */
   guardRoom?: GuardRoomOptions;
   /** The size of the part of the map to place blocks in. Defaults to the whole map. A smaller area goes on a random free spot. */

@@ -34,6 +34,7 @@ import {
   touchingExits,
 } from '../test-helpers/dungeon-checks';
 import { floorBeyondEntrances } from '../test-helpers/floor-beyond-entrances';
+import { cellBlocksOf } from '../test-helpers/cell-blocks-of';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { digCorridors } from './dig-corridors';
 import type { DigCorridorsOptions } from './dig-corridors-options';
@@ -225,7 +226,10 @@ describe('digCorridors', () => {
 
       // when
       const [door, gap] = [always, never].map(({ grid, roomGroups }) => {
-        const { x, y } = roomGroups[0]?.entrance ?? { x: -1, y: -1 };
+        const { x, y } = cellBlocksOf(roomGroups)[0]?.entrance ?? {
+          x: -1,
+          y: -1,
+        };
         return grid.get(x, y);
       });
 
@@ -239,7 +243,10 @@ describe('digCorridors', () => {
       const { grid, reserved, roomGroups } = prison();
 
       // when
-      const { x, y } = roomGroups[0]?.entrance ?? { x: -1, y: -1 };
+      const { x, y } = cellBlocksOf(roomGroups)[0]?.entrance ?? {
+        x: -1,
+        y: -1,
+      };
 
       // then
       expect(reserved[y * grid.width + x]).toBe(Reserve.Solid);
@@ -266,7 +273,7 @@ describe('digCorridors', () => {
         }
       }
       expect(changed).toEqual([
-        { ...roomGroups[0]?.entrance, tile: Tile.Door },
+        { ...cellBlocksOf(roomGroups)[0]?.entrance, tile: Tile.Door },
       ]);
     });
 
@@ -291,6 +298,88 @@ describe('digCorridors', () => {
 
       // then
       expect(cut).toEqual([]);
+    });
+
+    describe('entered through its guard room', () => {
+      /** A block entered through its guard room, rooms round it and the corridors. */
+      const through = (options: DigCorridorsOptions = {}, seed = 1) =>
+        pipeline(
+          emptyMap({ width: 60, height: 40, tile: Tile.Wall }),
+          [
+            placeCellBlocks({ guardRoom: { placement: 'through' } }),
+            placeScatteredRooms(),
+            digCorridors(options),
+          ],
+          { random: mulberry32(seed) },
+        );
+
+      it('joins the block, its guard room and the rooms into one dungeon', () => {
+        // given
+        const results = SEEDS.map((seed) => through({}, seed));
+
+        // when
+        const cut = results.filter(
+          (result) =>
+            !isConnected({ ...result, exits: result.roomExits, fill: 0 }),
+        );
+
+        // then
+        expect(cut).toEqual([]);
+      });
+
+      it('opens the entrance in the far wall of the guard room', () => {
+        // given
+        const { grid, reserved, roomGroups } = through();
+
+        // when
+        const { x, y } = cellBlocksOf(roomGroups)[0]?.entrance ?? {
+          x: -1,
+          y: -1,
+        };
+
+        // then
+        expect(grid.get(x, y)).toBe(Tile.Door);
+        expect(reserved[y * grid.width + x]).toBe(Reserve.Solid);
+      });
+
+      it('makes the entrance a second exit of the guard room', () => {
+        // given
+        const { rooms, roomExits, roomGroups } = through({ doorChance: 0 });
+
+        // when
+        const guard = rooms.find(({ kind }) => kind === 'guardRoom');
+
+        // then
+        const entrance = roomExits[guard?.exits[1] ?? -1];
+        expect([guard?.exitCount, guard?.doorCount]).toEqual([2, 1]);
+        expect(entrance).toEqual({
+          position: cellBlocksOf(roomGroups)[0]?.entrance,
+          rooms: [guard?.id],
+          door: false,
+        });
+      });
+
+      it('makes an entrance opened with no corridor an exit of the guard room', () => {
+        // given
+        const steps = [
+          placeCellBlocks({ guardRoom: { placement: 'through' } }),
+          floorBeyondEntrances(),
+          digCorridors(),
+        ] as const;
+
+        // when
+        const { rooms, roomExits, roomGroups } = pipeline(
+          emptyMap({ width: 60, height: 40, tile: Tile.Wall }),
+          steps,
+          { random: mulberry32(1) },
+        );
+
+        // then
+        const guard = rooms.find(({ kind }) => kind === 'guardRoom');
+        expect(roomExits[guard?.exits[1] ?? -1]?.position).toEqual(
+          cellBlocksOf(roomGroups)[0]?.entrance,
+        );
+      });
     });
 
     it('leaves the cells with the one door they have', () => {
@@ -1308,7 +1397,7 @@ describe('digCorridors', () => {
       expect(grid.get(30, 35)).toBe(Tile.Floor);
     });
 
-    it('leaves rooms that have exits alone and appends to roomExits', () => {
+    it('keeps the exits of rooms that have exits and appends to roomExits', () => {
       // given
       const earlier: Exit = {
         position: { x: 7, y: 4 },
@@ -1341,11 +1430,8 @@ describe('digCorridors', () => {
       );
 
       // then
-      expect(rooms[0]?.exits).toEqual([0]);
+      expect(rooms[0]?.exits[0]).toBe(0);
       expect(roomExits[0]).toEqual(earlier);
-      expect(
-        roomExits.slice(1).every(({ rooms: ids }) => !ids.includes(0)),
-      ).toBe(true);
       expect(rooms[1]?.exits.every((index) => index >= 1)).toBe(true);
     });
   });

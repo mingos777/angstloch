@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { Grid } from '../core/grid';
 import { Tile } from '../core/tile';
 import { countAsymmetry } from '../test-helpers/count-asymmetry';
+import { TemplateCell } from '../rooms/templates/template-cell';
 import { mulberry32 } from '../test-helpers/mulberry32';
+import { findCaveRegions } from './find-cave-regions';
 import { generateNoiseCave } from './generate-noise-cave';
 import type { NoiseCaveOptions } from './noise-cave-options';
 
@@ -72,11 +74,11 @@ describe('generateNoiseCave', () => {
       const separate = cave({ cave: SMALL, tunnels: false }, seed);
 
       // when
-      const { regions } = cave({ cave: SMALL }, seed);
+      const { grid } = cave({ cave: SMALL }, seed);
 
       // then
-      expect(separate.regions.length).toBeGreaterThan(1);
-      expect(regions).toHaveLength(1);
+      expect(findCaveRegions(separate.grid).length).toBeGreaterThan(1);
+      expect(findCaveRegions(grid)).toHaveLength(1);
     },
   );
 
@@ -85,11 +87,11 @@ describe('generateNoiseCave', () => {
     const options = { cave: { fill: 1 } };
 
     // when
-    const { grid, regions } = cave(options);
+    const { grid, rooms } = cave(options);
 
     // then
     expect(count(grid, Tile.Floor)).toBe(0);
-    expect(regions).toEqual([]);
+    expect(rooms).toEqual([]);
   });
 
   it('leaves out the caverns below minRegionSize', () => {
@@ -100,11 +102,15 @@ describe('generateNoiseCave', () => {
     } as const;
 
     // when
-    const { regions } = cave(options);
+    const { roomShapes } = cave(options);
 
     // then
-    expect(regions.length).toBeGreaterThan(0);
-    expect(regions.every(({ size }) => size >= 20)).toBe(true);
+    const sizes = roomShapes.map(
+      ({ cells }) =>
+        cells.flat().filter((cell) => cell === TemplateCell.Floor).length,
+    );
+    expect(sizes.length).toBeGreaterThan(0);
+    expect(sizes.every((size) => size >= 20)).toBe(true);
   });
 
   it('carves the exits that were asked for into the border', () => {

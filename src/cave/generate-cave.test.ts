@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Grid } from '../core/grid';
 import { Tile } from '../core/tile';
+import type { RoomShape } from '../rooms/room-shape';
+import { TemplateCell } from '../rooms/templates/template-cell';
 import { countAsymmetry } from '../test-helpers/count-asymmetry';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import type { CaveOptions } from './cave-options';
+import { findCaveRegions } from './find-cave-regions';
 import { generateCave } from './generate-cave';
 
 function cave(options: Partial<CaveOptions> = {}, seed = 1) {
@@ -13,6 +16,13 @@ function cave(options: Partial<CaveOptions> = {}, seed = 1) {
     random: mulberry32(seed),
     ...options,
   });
+}
+
+/** The floor tiles of the shapes, all told. */
+function floorOf(shapes: readonly RoomShape[]) {
+  return shapes
+    .flatMap(({ cells }) => cells.flat())
+    .filter((cell) => cell === TemplateCell.Floor).length;
 }
 
 function count(grid: Grid, tile: Tile) {
@@ -89,11 +99,11 @@ describe('generateCave', () => {
       const separate = cave({ tunnels: false }, seed);
 
       // when
-      const { regions } = cave({}, seed);
+      const { grid } = cave({}, seed);
 
       // then
-      expect(separate.regions.length).toBeGreaterThan(1);
-      expect(regions).toHaveLength(1);
+      expect(findCaveRegions(separate.grid).length).toBeGreaterThan(1);
+      expect(findCaveRegions(grid)).toHaveLength(1);
     },
   );
 
@@ -115,11 +125,11 @@ describe('generateCave', () => {
     const options = { cave: { fillChance: 1, iterations: 0 } };
 
     // when
-    const { grid, regions } = cave(options);
+    const { grid, rooms } = cave(options);
 
     // then
     expect(count(grid, Tile.Floor)).toBe(0);
-    expect(regions).toEqual([]);
+    expect(rooms).toEqual([]);
   });
 
   it('keeps only the largest cavern with largestOnly and no tunnels', () => {
@@ -127,53 +137,87 @@ describe('generateCave', () => {
     const loose = cave({ tunnels: false }, 2);
 
     // when
-    const { grid, regions } = cave(
+    const { grid, rooms, roomShapes } = cave(
       { cave: { largestOnly: true }, tunnels: false },
       2,
     );
 
     // then
-    expect(regions).toHaveLength(1);
-    expect(regions[0]?.size).toBe(loose.regions[0]?.size);
-    expect(count(grid, Tile.Floor)).toBe(regions[0]?.size);
+    const [largest] = findCaveRegions(loose.grid);
+    expect(rooms).toHaveLength(1);
+    expect(floorOf(roomShapes)).toBe(largest?.length);
+    expect(count(grid, Tile.Floor)).toBe(largest?.length);
   });
 
-  it('reports the regions of the map, largest first', () => {
+  it('lists every cavern as a room of kind cavern in the one cave group', () => {
     // given
     const options = { tunnels: false } as const;
 
     // when
-    const { regions } = cave(options, 2);
+    const { grid, rooms, roomGroups } = cave(options, 2);
 
     // then
-    const sizes = regions.map(({ size }) => size);
-    expect(sizes.length).toBeGreaterThan(1);
-    expect(sizes).toEqual([...sizes].sort((a, b) => b - a));
+    expect(rooms).toHaveLength(findCaveRegions(grid).length);
+    expect(
+      rooms.every(({ kind, group }) => kind === 'cavern' && group === 0),
+    ).toBe(true);
+    expect(roomGroups).toEqual([
+      { kind: 'cave', area: { x: 0, y: 0, width: 60, height: 40 } },
+    ]);
   });
 
-  it('reports regions that add up to every floor tile', () => {
+  it('lists caverns whose shapes hold every floor tile', () => {
     // given
     const options = { tunnels: false } as const;
 
     // when
-    const { grid, regions } = cave(options, 2);
+    const { grid, roomShapes } = cave(options, 2);
 
     // then
-    const total = regions.reduce((sum, { size }) => sum + size, 0);
-    expect(total).toBe(count(grid, Tile.Floor));
+    expect(floorOf(roomShapes)).toBe(count(grid, Tile.Floor));
   });
 
-  it('reports a floor tile as the center of every region', () => {
+  it('lists the caverns as they were dug, before the tunnels joined them', () => {
     // given
-    const options = { tunnels: false } as const;
+    const loose = cave({ tunnels: false }, 2);
 
     // when
-    const { grid, regions } = cave(options, 2);
+    const { rooms } = cave({}, 2);
 
     // then
-    for (const { center } of regions) {
-      expect(grid.get(center.x, center.y)).toBe(Tile.Floor);
+    const boxes = (list: typeof rooms) =>
+      list.map(({ x, y, width, height }) => ({ x, y, width, height }));
+    expect(rooms.length).toBeGreaterThan(1);
+    expect(boxes(rooms)).toEqual(boxes(loose.rooms));
+  });
+
+  it('records where the tunnels enter the caverns', () => {
+    // given
+    const options = {};
+
+    // when
+    const { rooms, roomExits } = cave(options, 2);
+
+    // then
+    expect(roomExits.length).toBeGreaterThan(0);
+    for (const room of rooms) {
+      expect(room.exitCount).toBeGreaterThan(0);
+      for (const index of room.exits) {
+        expect(roomExits[index]?.rooms).toContain(room.id);
+      }
     }
+  });
+
+  it('records no ways in without tunnels', () => {
+    // given
+    const options = { tunnels: false } as const;
+
+    // when
+    const { rooms, roomExits } = cave(options, 2);
+
+    // then
+    expect(roomExits).toEqual([]);
+    expect(rooms.every(({ exitCount }) => exitCount === 0)).toBe(true);
   });
 
   it('adds no exits by default', () => {

@@ -27,8 +27,9 @@ import { resolveCorridorSettings } from './resolve-corridor-settings';
  * Every exit goes through `openReserved`. It uses `rooms`, `roomShapes` and
  * `roomExits` from the steps before it, if any, and adds all three again, with
  * the dropped rooms left out and the rest renumbered. It needs no rooms: with
- * none, it joins the pieces of floor that other steps dug, such as the halls
- * of `digPillarHalls`, and the three come back empty. The map has to start as
+ * none to join, it joins the pieces of floor that other steps dug. The halls of
+ * `digPillarHalls` and the caverns of the cave steps are rooms by their kind,
+ * but are joined as such pieces, and never dropped. The map has to start as
  * wall, which `pipeline` checks before the first attempt. Throws a
  * `RangeError` at once for a bad option.
  */

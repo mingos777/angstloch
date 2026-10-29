@@ -1,4 +1,11 @@
-import { Reserve, Tile, emptyMap, measureDistances, pipeline } from '../src';
+import {
+  Reserve,
+  Tile,
+  createRoomMap,
+  emptyMap,
+  measureDistances,
+  pipeline,
+} from '../src';
 import type {
   Area,
   CrossingPlan,
@@ -11,9 +18,10 @@ import type {
   Point,
   Room,
   RoomGroup,
+  RoomShape,
 } from '../src';
-import { describeCaveRegion } from '../src/cave/describe-cave-region';
 import { findCaveRegions } from '../src/cave/find-cave-regions';
+import { isFeatureRoom } from '../src/rooms/is-feature-room';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
 import { Color, drawGrid } from './draw-grid';
@@ -36,6 +44,7 @@ const error = document.querySelector<HTMLElement>('#error');
 const stats = document.querySelector<HTMLElement>('#stats');
 const failures = document.querySelector<HTMLElement>('#failures');
 const distanceLine = document.querySelector<HTMLElement>('#distances');
+const roomLine = document.querySelector<HTMLElement>('#room');
 const templatePanel = document.querySelector<HTMLElement>('#templates');
 const context = canvas?.getContext('2d');
 
@@ -52,11 +61,10 @@ interface Extras {
   junctions: Point[];
   exits: Point[];
   passages: MinePassage[];
-  halls: Area[];
-  caverns: Area[];
   rooms: Room[];
   roomExits: Exit[];
   roomGroups: RoomGroup[];
+  roomShapes: RoomShape[];
   start: Point;
 }
 
@@ -79,6 +87,78 @@ let traced: { grown: Point[][]; plans: CrossingPlan[] } | undefined;
 
 /** The place the walking distances are measured from, by its index in `placesOf`. */
 let picked = 0;
+
+/** The tile under the mouse, if it is over the map. */
+let pointed: Point | undefined;
+
+/** The room id of every tile of each snapshot, made when first needed. */
+const roomMaps = new WeakMap<Snapshot, Int32Array>();
+
+/** The room id of every tile of a snapshot, -1 for none. */
+function roomMapOf(shown: Snapshot): Int32Array {
+  let map = roomMaps.get(shown);
+  if (!map) {
+    map = createRoomMap({
+      grid: shown.grid,
+      roomShapes: shown.extras.roomShapes ?? [],
+    });
+    roomMaps.set(shown, map);
+  }
+  return map;
+}
+
+/** The id of the room under the mouse, -1 for none. */
+function pointedRoom(shown: Snapshot): number {
+  return pointed
+    ? (roomMapOf(shown)[pointed.y * shown.grid.width + pointed.x] ?? -1)
+    : -1;
+}
+
+/** Tints the floor of the room under the mouse, outlines its exits, and says what it is. */
+function paintPointedRoom(
+  context: CanvasRenderingContext2D,
+  shown: Snapshot,
+  tileSize: number,
+): void {
+  if (!roomLine) {
+    return;
+  }
+  const id = pointedRoom(shown);
+  const room = shown.extras.rooms?.[id];
+  if (!room) {
+    roomLine.textContent = 'Point at a room, hall or cavern to see what it is.';
+    return;
+  }
+  const map = roomMapOf(shown);
+  context.globalAlpha = 0.35;
+  context.fillStyle = Color.BrightMagenta;
+  map.forEach((owner, tile) => {
+    if (owner === id) {
+      context.fillRect(
+        (tile % shown.grid.width) * tileSize,
+        Math.floor(tile / shown.grid.width) * tileSize,
+        tileSize,
+        tileSize,
+      );
+    }
+  });
+  context.globalAlpha = 1;
+  const exits = room.exits.map((index) => shown.extras.roomExits?.[index]);
+  for (const exit of exits) {
+    if (exit) {
+      mark(context, exit.position, Color.BrightMagenta, tileSize);
+    }
+  }
+  const group =
+    room.group === undefined
+      ? 'no group'
+      : `group ${String(room.group)} (${shown.extras.roomGroups?.[room.group]?.kind ?? '?'})`;
+  const shared = exits.filter((exit) => (exit?.rooms.length ?? 0) > 1).length;
+  roomLine.textContent = [
+    `${room.kind} ${String(room.id)}, ${group}, at (${String(room.x)}, ${String(room.y)}), ${String(room.width)} by ${String(room.height)}:`,
+    `${String(room.exitCount)} exit(s), ${String(room.doorCount)} with a door, ${String(shared)} shared with another room (outlined).`,
+  ].join(' ');
+}
 
 function newCard(
   name: string,
@@ -206,6 +286,16 @@ const PRISON: CardSpec[] = [
   'digCorridors',
 ];
 
+/** The prison on the lattice, which every step is given, on a map of odd size. */
+const LATTICE_PRISON: CardSpec[] = [
+  [
+    'placeCellBlocks',
+    { blocksMin: '1', blocksMax: '2', guardRoom: true, placement: 'lattice' },
+  ],
+  ['placeScatteredRooms', { placement: 'lattice' }],
+  ['digCorridors', { placement: 'lattice' }],
+];
+
 /** Outlines a tile. */
 function mark(
   context: CanvasRenderingContext2D,
@@ -250,20 +340,14 @@ function pointPlace(name: string, point: Point): Place {
 
 /**
  * The places the steps reported, to measure the walk between: rooms, halls
- * and caverns by their boxes (the rock in a box is left out by
+ * and caverns included, by their boxes (the rock in a box is left out by
  * `measureDistances`, though a tunnel through it counts), clearings by their
  * centers, and exits.
  */
 function placesOf(extras: Partial<Extras>): Place[] {
   return [
     ...(extras.rooms ?? []).map((room) =>
-      boxPlace(`room ${String(room.id)}`, room),
-    ),
-    ...(extras.halls ?? []).map((hall, index) =>
-      boxPlace(`hall ${String(index)}`, hall),
-    ),
-    ...(extras.caverns ?? []).map((cavern, index) =>
-      boxPlace(`cavern ${String(index)}`, cavern),
+      boxPlace(`${room.kind} ${String(room.id)}`, room),
     ),
     ...(extras.clearings ?? []).map(({ x, y }, index) =>
       pointPlace(`clearing ${String(index)}`, { x, y }),
@@ -422,15 +506,6 @@ function paint(): void {
       mark(context, center, Color.BrightYellow, tileSize);
     }
   }
-  if (show.has('showCenters')) {
-    // an outlined square on the center of every region of floor, as the cave
-    // presets report them
-    for (const { center } of findCaveRegions(shown.grid).map(
-      describeCaveRegion,
-    )) {
-      mark(context, center, Color.BrightRed, tileSize);
-    }
-  }
   if (show.has('showTemplates')) {
     // an outline round the box of every template
     context.strokeStyle = Color.BrightMagenta;
@@ -463,7 +538,9 @@ function paint(): void {
     // an outline round the box of every hall
     context.strokeStyle = Color.BrightYellow;
     context.lineWidth = Math.max(1, tileSize / 6);
-    for (const { x, y, width, height } of extras.halls ?? []) {
+    for (const { x, y, width, height } of (extras.rooms ?? []).filter(
+      ({ kind }) => kind === 'pillarHall',
+    )) {
       context.strokeRect(
         x * tileSize,
         y * tileSize,
@@ -476,7 +553,9 @@ function paint(): void {
     // an outline round the area of every cave
     context.strokeStyle = Color.BrightCyan;
     context.lineWidth = Math.max(1, tileSize / 6);
-    for (const { x, y, width, height } of extras.caverns ?? []) {
+    for (const { x, y, width, height } of (extras.roomGroups ?? []).flatMap(
+      (group) => (group.kind === 'cave' ? [group.area] : []),
+    )) {
       context.strokeRect(
         x * tileSize,
         y * tileSize,
@@ -486,10 +565,13 @@ function paint(): void {
     }
   }
   if (show.has('showRooms')) {
-    // an outline round the floor of every room
+    // an outline round the floor of every room, but the halls and caverns,
+    // which have overlays of their own
     context.strokeStyle = Color.BrightGreen;
     context.lineWidth = Math.max(1, tileSize / 6);
-    for (const { x, y, width, height } of extras.rooms ?? []) {
+    for (const { x, y, width, height } of (extras.rooms ?? []).filter(
+      (room) => !isFeatureRoom(room),
+    )) {
       context.strokeRect(
         x * tileSize,
         y * tileSize,
@@ -503,6 +585,9 @@ function paint(): void {
     // guard room, walls included, and a mark on its entrance
     context.strokeStyle = Color.BrightMagenta;
     context.lineWidth = Math.max(1, tileSize / 6);
+    const blocks = (extras.roomGroups ?? []).flatMap((group) =>
+      group.kind === 'cellBlock' ? [group] : [],
+    );
     const guards = (extras.rooms ?? [])
       .filter(({ kind }) => kind === 'guardRoom')
       .map(({ x, y, width, height }) => ({
@@ -511,7 +596,7 @@ function paint(): void {
         width: width + 2,
         height: height + 2,
       }));
-    const tunnels = (extras.roomGroups ?? []).flatMap(({ tunnel }) =>
+    const tunnels = blocks.flatMap(({ tunnel }) =>
       // between its walls, across a tunnel that is one tile wide
       tunnel
         ? [
@@ -522,7 +607,7 @@ function paint(): void {
         : [],
     );
     for (const box of [
-      ...(extras.roomGroups ?? []).map(({ footprint }) => footprint),
+      ...blocks.map(({ footprint }) => footprint),
       ...guards,
       ...tunnels,
     ]) {
@@ -533,7 +618,7 @@ function paint(): void {
         box.height * tileSize,
       );
     }
-    for (const { entrance } of extras.roomGroups ?? []) {
+    for (const { entrance } of blocks) {
       mark(context, entrance, Color.BrightYellow, tileSize);
     }
   }
@@ -589,6 +674,7 @@ function paint(): void {
     }
   }
   paintDistances(context, shown, tileSize, show);
+  paintPointedRoom(context, shown, tileSize);
 }
 
 /** Runs the steps in the list and shows the last attempt. */
@@ -648,11 +734,10 @@ function render(): void {
               junctions: extras.junctions,
               exits: extras.exits,
               passages: extras.passages,
-              halls: extras.halls,
-              caverns: extras.caverns,
               rooms: extras.rooms,
               roomExits: extras.roomExits,
               roomGroups: extras.roomGroups,
+              roomShapes: extras.roomShapes,
               start: extras.start,
             },
           });
@@ -667,15 +752,13 @@ function render(): void {
       'clearings',
       'templates',
       'passages',
-      'halls',
-      'caverns',
       'rooms',
       'roomExits',
       'roomGroups',
     ]
       .filter((name) => done[name])
       .map((name) => `${String(done[name]?.length)} ${name}`);
-    // the regions of floor, which the cave presets report
+    // the regions of floor of the finished map, which says whether it is in one piece
     const regions = findCaveRegions(run.grid).length;
     // the rooms by kind, which tells apart what the room steps made
     const kinds = new Map<string, number>();
@@ -879,6 +962,12 @@ document.querySelector('#load-cave-rooms')?.addEventListener('click', () => {
 document.querySelector('#load-prison')?.addEventListener('click', () => {
   setWallCards(PRISON);
 });
+document
+  .querySelector('#load-lattice-prison')
+  ?.addEventListener('click', () => {
+    setDungeonSize();
+    setWallCards(LATTICE_PRISON);
+  });
 // the room cards take the templates as JSON, which the editor exports
 if (templatePanel) {
   createTemplateEditor(templatePanel, () => undefined);
@@ -935,24 +1024,52 @@ form?.addEventListener('input', render);
 after?.addEventListener('input', paint);
 display?.addEventListener('input', paint);
 overlays?.addEventListener('input', paint);
+/** The tile of the map under the mouse. */
+function tileAt(event: MouseEvent, grid: Grid): Point | undefined {
+  if (!canvas) {
+    return undefined;
+  }
+  const bounds = canvas.getBoundingClientRect();
+  const x = Math.floor(
+    ((event.clientX - bounds.left) / bounds.width) * grid.width,
+  );
+  const y = Math.floor(
+    ((event.clientY - bounds.top) / bounds.height) * grid.height,
+  );
+  return grid.inBounds(x, y) ? { x, y } : undefined;
+}
 // a click on a place measures the walking distances from it
 canvas?.addEventListener('click', (event) => {
+  const shown = snapshots[Number(after?.value)];
+  const tile = shown && tileAt(event, shown.grid);
+  if (!shown || !tile) {
+    return;
+  }
+  const index = placesOf(shown.extras).findIndex(({ tiles }) =>
+    tiles.some(({ x, y }) => tile.x === x && tile.y === y),
+  );
+  if (index !== -1) {
+    picked = index;
+    paint();
+  }
+});
+// the room under the mouse is painted again only when it changes
+canvas?.addEventListener('mousemove', (event) => {
   const shown = snapshots[Number(after?.value)];
   if (!shown) {
     return;
   }
-  const bounds = canvas.getBoundingClientRect();
-  const x = Math.floor(
-    ((event.clientX - bounds.left) / bounds.width) * shown.grid.width,
-  );
-  const y = Math.floor(
-    ((event.clientY - bounds.top) / bounds.height) * shown.grid.height,
-  );
-  const index = placesOf(shown.extras).findIndex(({ tiles }) =>
-    tiles.some((tile) => tile.x === x && tile.y === y),
-  );
-  if (index !== -1) {
-    picked = index;
+  const was = pointedRoom(shown);
+  pointed = tileAt(event, shown.grid);
+  if (pointedRoom(shown) !== was) {
+    paint();
+  }
+});
+canvas?.addEventListener('mouseleave', () => {
+  const shown = snapshots[Number(after?.value)];
+  const was = shown ? pointedRoom(shown) : -1;
+  pointed = undefined;
+  if (was !== -1) {
     paint();
   }
 });

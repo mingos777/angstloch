@@ -8,7 +8,6 @@ export type {
   NoiseCaveOptions,
   NoiseCaveStepOptions,
 } from './cave/noise-cave-options';
-export type { CaveRegion } from './cave/cave-region';
 export type { CaveResult } from './cave/cave-result';
 export type { CorridorSymmetry } from './rooms/corridor-symmetry';
 export type {
@@ -93,12 +92,15 @@ export type { Room } from './rooms/room';
 export type { RoomKind } from './rooms/room-kind';
 export type { RoomGroup } from './rooms/room-group';
 export type { CellBlockGroup } from './rooms/cell-block-group';
+export type { CaveGroup } from './rooms/cave-group';
+export type { PillarHallsGroup } from './rooms/pillar-halls-group';
 export { placeCellBlocks } from './rooms/place-cell-blocks';
 export type {
   GuardRoomOptions,
   PlaceCellBlocksOptions,
 } from './rooms/place-cell-blocks-options';
 export type { RoomShape } from './rooms/room-shape';
+export { createRoomMap } from './rooms/create-room-map';
 export type { RoomConnection } from './dungeon/room-connection';
 export type {
   RoomDungeonOptions,

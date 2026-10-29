@@ -6,6 +6,7 @@ import { Reserve } from '../pipeline/reserve';
 import { step } from '../pipeline/step';
 import type { Exit } from '../rooms/exit';
 import type { MazeOpening } from '../rooms/maze-opening';
+import { isFeatureRoom } from '../rooms/is-feature-room';
 import type { Room } from '../rooms/room';
 import type { RoomShape } from '../rooms/room-shape';
 import { findTemplateOpenings } from '../rooms/templates/find-template-openings';
@@ -65,7 +66,7 @@ export function openMazeRooms(
       const openings: MazeOpening[] = [];
       for (const room of state.rooms) {
         const shape = state.roomShapes[room.id];
-        if (room.exitCount > 0 || !shape) {
+        if (room.exitCount > 0 || !shape || isFeatureRoom(room)) {
           continue;
         }
         const copy: Room = { ...room, exits: [] };

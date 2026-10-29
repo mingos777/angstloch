@@ -1,6 +1,6 @@
 # Walking distances
 
-Task 1/2 done; 2/2 waits for `createRoomMap`. Delete this file once the feature is done and documented in the README.
+Task 1/2 done; 2/2 can start, now that `createRoomMap` exists. Delete this file once the feature is done and documented in the README.
 
 ## Why
 
@@ -10,7 +10,7 @@ The game wants to put the stairs up and down in two rooms far apart, so that the
 
 - **Plain functions the game calls on request**, on a finished map. They are not steps, and no step uses them.
 - **`measureDistances(grid, places, options)`**: `places` is a list of tile sets (rooms, clearings, exits, anything). The result is a places by places matrix, row by row, -1 where there is no way. Each entry is the cheapest walk between the nearest tiles of two places. One search per place, from all its tiles at once.
-- **`measureRoomDistances(result, options)`**: the same for the rooms of a result, through `createRoomMap` (from `designs/cell-blocks.md`), so every room of every kind (cells, guard rooms, halls, caverns) is a place.
+- **`measureRoomDistances(result, options)`**: the same for the rooms of a result, through `createRoomMap` (done, see the README), so every room of every kind (cells, guard rooms, halls, caverns) is a place.
 - **`costs`**: a cost factor per `Tile` value (`Partial<Record<Tile, number>>`), `Infinity` for a tile that cannot be entered. By default `Wall` and `DeepWater` are `Infinity` and every other tile is 1, doors included; a game that lets the player swim gives `DeepWater` 10, say. A given entry replaces the default for that tile only. A factor must be positive (`RangeError` otherwise); below 1 is fine (a road faster than grass).
 - **`metric`** (default `'euclidean'`):
   - `'manhattan'`: 4 directions, steps of 1.
@@ -22,7 +22,7 @@ The game wants to put the stairs up and down in two rooms far apart, so that the
 
 ## Where it lives
 
-`measureDistances` in `src/core/` (it only needs the grid), and `measureRoomDistances` next to `createRoomMap` in `src/rooms/`. `measureDistances` can be built at any time; `measureRoomDistances` waits for `createRoomMap`, task 7/8 of the cell blocks.
+`measureDistances` in `src/core/` (it only needs the grid), and `measureRoomDistances` next to `createRoomMap` in `src/rooms/`. `measureDistances` can be built at any time; `createRoomMap` is done, so `measureRoomDistances` can be built.
 
 ## Tasks
 

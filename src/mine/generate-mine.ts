@@ -1,10 +1,11 @@
-import type { Area } from '../core/area';
 import type { Point } from '../core/point';
 import { Tile } from '../core/tile';
 import { emptyMap } from '../pipeline/empty-map';
 import { pipeline } from '../pipeline/pipeline';
 import type { Exit } from '../rooms/exit';
 import type { Room } from '../rooms/room';
+import type { RoomGroup } from '../rooms/room-group';
+import type { RoomShape } from '../rooms/room-shape';
 import { createMineSteps } from './create-mine-steps';
 import type { MineOptions } from './mine-options';
 import type { MinePassage } from '../veins/mine-passage';
@@ -31,18 +32,18 @@ export function generateMine(options: MineOptions): MineResult {
   // a step that was left out added nothing
   const extras: Partial<{
     passages: MinePassage[];
-    halls: Area[];
-    caverns: Area[];
     rooms: Room[];
+    roomShapes: RoomShape[];
+    roomGroups: RoomGroup[];
     roomExits: Exit[];
     exits: Point[];
   }> = run as unknown as object;
   return {
     grid: run.grid,
     passages: extras.passages ?? [],
-    halls: extras.halls ?? [],
-    caverns: extras.caverns ?? [],
     rooms: extras.rooms ?? [],
+    roomShapes: extras.roomShapes ?? [],
+    roomGroups: extras.roomGroups ?? [],
     roomExits: extras.roomExits ?? [],
     exits: extras.exits ?? [],
     attempts: run.attempts,

@@ -9,7 +9,11 @@ export function floorBeyondEntrances() {
     'floorBeyondEntrances',
     { needs: ['roomGroups'] },
     ({ grid, roomGroups }) => {
-      for (const { entrance } of roomGroups) {
+      for (const group of roomGroups) {
+        if (group.kind !== 'cellBlock') {
+          continue;
+        }
+        const { entrance } = group;
         const inward = DIRECTIONS.find(
           ({ x, y }) => grid.get(entrance.x + x, entrance.y + y) !== Tile.Wall,
         );

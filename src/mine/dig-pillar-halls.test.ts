@@ -9,6 +9,11 @@ import { Reserve } from '../pipeline/reserve';
 import { step } from '../pipeline/step';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import type { Random } from '../core/random';
+import { addFeatureRoom } from '../rooms/add-feature-room';
+import type { FeatureRooms } from '../rooms/feature-rooms';
+import type { PillarHallsGroup } from '../rooms/pillar-halls-group';
+import type { Room } from '../rooms/room';
+import { TemplateCell } from '../rooms/templates/template-cell';
 import { digVeins } from '../veins/dig-veins';
 import { digPillarHalls } from './dig-pillar-halls';
 import type { DigPillarHallsOptions } from './dig-pillar-halls-options';
@@ -40,21 +45,39 @@ function apart(a: Area, b: Area): number {
   return Math.max(gapX, gapY);
 }
 
-/** A passage and a hall that an earlier step left behind. */
-const earlier = step<object, { passages: MinePassage[]; halls: Area[] }>(
+/** A passage, a room and its group that an earlier step left behind. */
+const earlier = step<object, FeatureRooms & { passages: MinePassage[] }>(
   'earlier',
-  { adds: ['passages', 'halls'] },
-  () => ({
-    passages: [{ kind: 'vein', tiles: [{ x: 0, y: 0 }], width: 1 }],
-    halls: [{ x: 0, y: 0, width: 1, height: 1 }],
-  }),
+  { adds: ['passages', 'rooms', 'roomShapes', 'roomGroups'] },
+  () => {
+    const added: FeatureRooms = { rooms: [], roomShapes: [], roomGroups: [] };
+    added.roomGroups.push({
+      kind: 'pillarHalls',
+      area: { x: 0, y: 0, width: 1, height: 1 },
+    });
+    addFeatureRoom(added, 'pillarHall', 0, [{ x: 0, y: 0 }]);
+    return {
+      ...added,
+      passages: [{ kind: 'vein', tiles: [{ x: 0, y: 0 }], width: 1 }],
+    };
+  },
 );
+
+/** The result with the boxes of its halls, the rooms of kind `'pillarHall'`, as `halls`. */
+function withHalls<T extends { rooms: Room[] }>(result: T) {
+  return {
+    ...result,
+    halls: result.rooms
+      .filter(({ kind }) => kind === 'pillarHall')
+      .map(({ x, y, width, height }): Area => ({ x, y, width, height })),
+  };
+}
 
 describe('digPillarHalls', () => {
   it('digs the same halls from the same seed', () => {
     // given
     const make = () =>
-      pipeline(base, [digPillarHalls()], { random: mulberry32(5) });
+      withHalls(pipeline(base, [digPillarHalls()], { random: mulberry32(5) }));
 
     // when
     const first = make();
@@ -70,11 +93,97 @@ describe('digPillarHalls', () => {
     const steps = [digPillarHalls({ halls: { min: 3, max: 3 } })] as const;
 
     // when
-    const result = pipeline(base, steps, { random: mulberry32(1) });
+    const result = withHalls(pipeline(base, steps, { random: mulberry32(1) }));
 
     // then
     expect(result.halls).toHaveLength(3);
     expect('passages' in result).toBe(false);
+  });
+
+  it('lists every hall as a room of kind pillarHall in one group', () => {
+    // given
+    const steps = [digPillarHalls({ halls: { min: 3, max: 3 } })] as const;
+
+    // when
+    const { rooms, roomGroups } = pipeline(base, steps, {
+      random: mulberry32(1),
+    });
+
+    // then
+    expect(rooms.map(({ kind, group }) => [kind, group])).toEqual([
+      ['pillarHall', 0],
+      ['pillarHall', 0],
+      ['pillarHall', 0],
+    ]);
+    expect(roomGroups).toEqual([
+      { kind: 'pillarHalls', area: { x: 0, y: 0, width: 100, height: 60 } },
+    ]);
+  });
+
+  it('gives every hall the floor it dug as its shape, and nothing else', () => {
+    // given
+    const steps = [digPillarHalls({ halls: { min: 3, max: 3 } })] as const;
+
+    // when
+    const { grid, roomShapes } = pipeline(base, steps, {
+      random: mulberry32(1),
+    });
+
+    // then
+    const shaped = roomShapes.flatMap((shape) =>
+      shape.cells.flatMap((row, dy) =>
+        row.flatMap((cell, dx) =>
+          cell === TemplateCell.Floor
+            ? [{ x: shape.x + dx, y: shape.y + dy }]
+            : [],
+        ),
+      ),
+    );
+    expect(shaped).toHaveLength(floorTiles(grid).length);
+    expect(shaped.every(({ x, y }) => grid.get(x, y) === Tile.Floor)).toBe(
+      true,
+    );
+    expect(roomShapes.every(({ exits }) => exits.length === 0)).toBe(true);
+  });
+
+  it('reserves no tile of its halls', () => {
+    // given
+    const steps = [digPillarHalls()] as const;
+
+    // when
+    const { reserved } = pipeline(base, steps, { random: mulberry32(1) });
+
+    // then
+    expect(reserved.every((value) => value === Reserve.None)).toBe(true);
+  });
+
+  it('makes a group for each area', () => {
+    // given
+    const steps = [
+      digPillarHalls({
+        halls: { min: 1, max: 1 },
+        area: { width: { min: 30, max: 30 }, height: { min: 30, max: 30 } },
+        count: { min: 2, max: 2 },
+      }),
+    ] as const;
+
+    // when
+    const { rooms, roomGroups } = pipeline(base, steps, {
+      random: mulberry32(4),
+    });
+
+    // then
+    expect(roomGroups).toHaveLength(2);
+    expect(rooms.map(({ group }) => group)).toEqual([0, 1]);
+    for (const room of rooms) {
+      const { area } = roomGroups[room.group ?? -1] as PillarHallsGroup;
+      expect(
+        room.x >= area.x &&
+          room.y >= area.y &&
+          room.x + room.width <= area.x + area.width &&
+          room.y + room.height <= area.y + area.height,
+      ).toBe(true);
+    }
   });
 
   it('leaves the halls apart, one piece of floor for each', () => {
@@ -82,7 +191,9 @@ describe('digPillarHalls', () => {
     const steps = [digPillarHalls({ halls: { min: 3, max: 3 } })] as const;
 
     // when
-    const { grid } = pipeline(base, steps, { random: mulberry32(1) });
+    const { grid } = withHalls(
+      pipeline(base, steps, { random: mulberry32(1) }),
+    );
 
     // then
     expect(findCaveRegions(grid)).toHaveLength(3);
@@ -93,7 +204,9 @@ describe('digPillarHalls', () => {
     const steps = [digPillarHalls({ density: 0.6 })] as const;
 
     // when
-    const { grid } = pipeline(base, steps, { random: mulberry32(3) });
+    const { grid } = withHalls(
+      pipeline(base, steps, { random: mulberry32(3) }),
+    );
 
     // then
     for (const { x, y } of floorTiles(grid)) {
@@ -106,7 +219,9 @@ describe('digPillarHalls', () => {
     const steps = [digPillarHalls({ halls: { min: 4, max: 4 } })] as const;
 
     // when
-    const { halls } = pipeline(base, steps, { random: mulberry32(2) });
+    const { halls } = withHalls(
+      pipeline(base, steps, { random: mulberry32(2) }),
+    );
 
     // then
     for (const [i, hall] of halls.entries()) {
@@ -131,7 +246,9 @@ describe('digPillarHalls', () => {
     ] as const;
 
     // when
-    const { grid, halls } = pipeline(base, steps, { random: mulberry32(1) });
+    const { grid, halls } = withHalls(
+      pipeline(base, steps, { random: mulberry32(1) }),
+    );
 
     // then
     const [hall] = halls;
@@ -156,7 +273,9 @@ describe('digPillarHalls', () => {
     ] as const;
 
     // when
-    const { grid, halls } = pipeline(base, steps, { random: mulberry32(3) });
+    const { grid, halls } = withHalls(
+      pipeline(base, steps, { random: mulberry32(3) }),
+    );
 
     // then
     const [hall] = halls;
@@ -179,7 +298,9 @@ describe('digPillarHalls', () => {
     ] as const;
 
     // when
-    const { halls } = pipeline(base, steps, { random: mulberry32(4) });
+    const { halls } = withHalls(
+      pipeline(base, steps, { random: mulberry32(4) }),
+    );
 
     // then
     expect(halls).toHaveLength(4);
@@ -190,23 +311,30 @@ describe('digPillarHalls', () => {
     const steps = [digPillarHalls({ count: { min: 0, max: 0 } })] as const;
 
     // when
-    const { grid, halls } = pipeline(base, steps, { random: mulberry32(1) });
+    const { grid, halls } = withHalls(
+      pipeline(base, steps, { random: mulberry32(1) }),
+    );
 
     // then
     expect(floorTiles(grid)).toEqual([]);
     expect(halls).toEqual([]);
   });
 
-  it('appends to the halls of an earlier step', () => {
+  it('appends its halls and their group to those of an earlier step', () => {
     // given
     const steps = [earlier, digPillarHalls()] as const;
 
     // when
-    const { halls } = pipeline(base, steps, { random: mulberry32(1) });
+    const { rooms, roomShapes, roomGroups } = pipeline(base, steps, {
+      random: mulberry32(1),
+    });
 
     // then
-    expect(halls[0]).toEqual({ x: 0, y: 0, width: 1, height: 1 });
-    expect(halls.length).toBeGreaterThan(1);
+    expect(rooms.map(({ id }) => id)).toEqual(rooms.map((_, i) => i));
+    expect(rooms.length).toBeGreaterThan(1);
+    expect(roomShapes).toHaveLength(rooms.length);
+    expect(rooms.slice(1).every(({ group }) => group === 1)).toBe(true);
+    expect(roomGroups).toHaveLength(2);
   });
 
   it('never digs a hall through a reserved tile', () => {
@@ -373,10 +501,12 @@ function dig({
   height?: number;
   random?: Random;
 } = {}) {
-  return pipeline(
-    emptyMap({ width, height, tile: Tile.Wall }),
-    [digPillarHalls(options), digVeins({ density: 0 })],
-    { random },
+  return withHalls(
+    pipeline(
+      emptyMap({ width, height, tile: Tile.Wall }),
+      [digPillarHalls(options), digVeins({ density: 0 })],
+      { random },
+    ),
   );
 }
 

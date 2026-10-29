@@ -2,11 +2,30 @@ import { createSimplexNoise } from '../noise/create-simplex-noise';
 import { assertWallBase } from '../pipeline/assert-wall-base';
 import type { MapStep } from '../pipeline/map-step';
 import { step } from '../pipeline/step';
+import type { Exit } from '../rooms/exit';
+import { recordDugEntries } from '../rooms/record-dug-entries';
+import type { Room } from '../rooms/room';
+import type { RoomShape } from '../rooms/room-shape';
 import { assertVeinOptions } from './assert-vein-options';
 import type { DigVeinsOptions } from './dig-veins-options';
 import { LANE_SPACING } from './dig-vein';
 import { growVeinNetwork } from './grow-vein-network';
 import type { MinePassage } from './mine-passage';
+
+/** The extras that `digVeins` uses. */
+interface VeinsIn {
+  passages: MinePassage[];
+  rooms: Room[];
+  roomShapes: RoomShape[];
+  roomExits: Exit[];
+}
+
+/** The extras that `digVeins` adds. */
+interface VeinsOut {
+  passages: MinePassage[];
+  rooms: Room[];
+  roomExits: Exit[];
+}
 
 /**
  * A step that digs a network of veins through the rock between the pieces of
@@ -32,13 +51,16 @@ import type { MinePassage } from './mine-passage';
  * the ones the vein joins, so a symmetric map gets a symmetric network.
  *
  * A piece that no vein can reach is left as it is. It adds `passages` to the
- * ones of the steps before it. The map has to start as wall, which `pipeline`
+ * ones of the steps before it. Every way into a room that it digs is an exit of
+ * that room, appended to `roomExits` (see `recordDugEntries`): the `Openable`
+ * tile it opens, or, for a hall or a cavern, the tiles where a vein reaches
+ * its floor. The map has to start as wall, which `pipeline`
  * checks before the first attempt. Throws a `RangeError` at once for a bad
  * option.
  */
 export function digVeins(
   options: DigVeinsOptions = {},
-): MapStep<Partial<{ passages: MinePassage[] }>, { passages: MinePassage[] }> {
+): MapStep<Partial<VeinsIn>, VeinsOut> {
   const {
     density = 0.15,
     veinWidth = { min: 1, max: 2 },
@@ -50,19 +72,17 @@ export function digVeins(
   } = options;
   assertVeinOptions(options);
 
-  return step<
-    Partial<{ passages: MinePassage[] }>,
-    { passages: MinePassage[] }
-  >(
+  return step<Partial<VeinsIn>, VeinsOut>(
     'digVeins',
     {
-      adds: ['passages'],
+      adds: ['passages', 'rooms', 'roomExits'],
       validate: (state) => {
         assertWallBase('digVeins', state);
       },
     },
     (state, { random }) => {
       const passages = state.passages ?? [];
+      const before = state.grid.clone();
       const dug = growVeinNetwork(state, random, createSimplexNoise(random), {
         density,
         veinWidth,
@@ -73,7 +93,19 @@ export function digVeins(
         symmetryChance,
         lane: 0.5 + passages.length * LANE_SPACING,
       });
-      return { passages: [...passages, ...dug] };
+      const rooms = state.rooms ?? [];
+      return {
+        passages: [...passages, ...dug],
+        ...recordDugEntries(
+          before,
+          state.grid,
+          state.base,
+          { rooms, roomExits: state.roomExits ?? [] },
+          state.roomShapes ?? [],
+          rooms,
+          state.roomExits?.length ?? 0,
+        ),
+      };
     },
   );
 }

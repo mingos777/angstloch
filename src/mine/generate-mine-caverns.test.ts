@@ -3,9 +3,16 @@ import { findCaveRegions } from '../cave/find-cave-regions';
 import type { Grid } from '../core/grid';
 import { Tile } from '../core/tile';
 import { mulberry32 } from '../test-helpers/mulberry32';
+import { withCaves } from '../test-helpers/with-caves';
 import { generateMine } from './generate-mine';
+import type { MineOptions } from './mine-options';
 
 const base = { width: 80, height: 50 };
+
+/** Generates a mine, with the boxes of its caves as `caverns`. */
+function mine(options: MineOptions) {
+  return withCaves(generateMine(options));
+}
 
 function floorTiles(grid: Grid): Set<number> {
   const tiles = new Set<number>();
@@ -25,7 +32,7 @@ describe('generateMine with caverns', () => {
     const options = { ...base, random: mulberry32(1) };
 
     // when
-    const { caverns } = generateMine(options);
+    const { caverns } = mine(options);
 
     // then
     expect(caverns).toEqual([]);
@@ -36,10 +43,38 @@ describe('generateMine with caverns', () => {
     const options = { ...base, caverns: {}, random: mulberry32(1) };
 
     // when
-    const { caverns } = generateMine(options);
+    const { caverns } = mine(options);
 
     // then
     expect(caverns).toHaveLength(1);
+  });
+
+  it('lists the caverns as rooms after the halls, each cave a group of its own', () => {
+    // given
+    const options = {
+      width: 100,
+      height: 60,
+      pillars: { halls: { min: 2, max: 2 }, density: 0.2 },
+      caverns: { count: { min: 2, max: 2 } },
+      random: mulberry32(2),
+    };
+
+    // when
+    const { rooms, roomShapes, roomGroups } = mine(options);
+
+    // then
+    expect(rooms.map(({ kind, group }) => [kind, group])).toEqual([
+      ['pillarHall', 0],
+      ['pillarHall', 0],
+      ['cavern', 1],
+      ['cavern', 2],
+    ]);
+    expect(roomShapes).toHaveLength(4);
+    expect(roomGroups.map(({ kind }) => kind)).toEqual([
+      'pillarHalls',
+      'cave',
+      'cave',
+    ]);
   });
 
   it('digs as many caverns as the count says', () => {
@@ -51,7 +86,7 @@ describe('generateMine with caverns', () => {
     };
 
     // when
-    const { caverns } = generateMine(options);
+    const { caverns } = mine(options);
 
     // then
     expect(caverns).toHaveLength(2);
@@ -63,7 +98,7 @@ describe('generateMine with caverns', () => {
 
     // when
     const mines = seeds.map((seed) =>
-      generateMine({ ...base, caverns: {}, random: mulberry32(seed) }),
+      mine({ ...base, caverns: {}, random: mulberry32(seed) }),
     );
 
     // then
@@ -82,7 +117,7 @@ describe('generateMine with caverns', () => {
     const area = { width: { min: 10, max: 10 }, height: { min: 8, max: 8 } };
 
     // when
-    const { caverns } = generateMine({
+    const { caverns } = mine({
       ...base,
       caverns: { area },
       random: mulberry32(1),
@@ -96,10 +131,10 @@ describe('generateMine with caverns', () => {
 
   it('only adds floor to the mine', () => {
     // given
-    const plain = generateMine({ ...base, random: mulberry32(3) });
+    const plain = mine({ ...base, random: mulberry32(3) });
 
     // when
-    const { grid } = generateMine({
+    const { grid } = mine({
       ...base,
       caverns: { count: { min: 2, max: 2 } },
       random: mulberry32(3),
@@ -121,7 +156,7 @@ describe('generateMine with caverns', () => {
     };
 
     // when
-    const { grid } = generateMine(options);
+    const { grid } = mine(options);
 
     // then
     for (let x = 0; x < grid.width; ++x) {
@@ -144,7 +179,7 @@ describe('generateMine with caverns', () => {
 
     // when
     const mines = [1, 2, 3].map((seed) =>
-      generateMine({ ...options, random: mulberry32(seed) }),
+      mine({ ...options, random: mulberry32(seed) }),
     );
 
     // then
@@ -159,7 +194,7 @@ describe('generateMine with caverns', () => {
 
     // when
     const mines = layouts.map((layout, i) =>
-      generateMine({
+      mine({
         ...base,
         [layout]: {},
         caverns: { count: { min: 0, max: 2 } },
@@ -176,7 +211,7 @@ describe('generateMine with caverns', () => {
   it('digs larger caverns in a larger area', () => {
     // given
     const make = (size: number) =>
-      generateMine({
+      mine({
         ...base,
         caverns: {
           area: {
@@ -207,7 +242,7 @@ describe('generateMine with caverns', () => {
     };
 
     // when
-    const generate = () => generateMine(options);
+    const generate = () => mine(options);
 
     // then
     expect(generate).toThrow('No spot beside the dug ground');
@@ -223,7 +258,7 @@ describe('generateMine with caverns', () => {
     };
 
     // when
-    const { caverns, attempts } = generateMine(options);
+    const { caverns, attempts } = mine(options);
 
     // then
     expect(caverns).toEqual([]);
@@ -240,7 +275,7 @@ describe('generateMine with caverns', () => {
     } as const;
 
     // when
-    const { grid, caverns } = generateMine(options);
+    const { grid, caverns } = mine(options);
 
     // then
     expect(caverns).toHaveLength(1);
@@ -256,7 +291,7 @@ describe('generateMine with caverns', () => {
 
     // when
     const mines = sizes.map(([width, height]) =>
-      generateMine({
+      mine({
         width,
         height,
         caverns: { count: { min: 0, max: 2 } },
@@ -277,7 +312,7 @@ describe('generateMine with caverns', () => {
     const options = { ...base, caverns };
 
     // when
-    const generate = () => generateMine(options);
+    const generate = () => mine(options);
 
     // then
     expect(generate).toThrow(RangeError);

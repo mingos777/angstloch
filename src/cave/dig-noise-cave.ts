@@ -1,4 +1,3 @@
-import type { Area } from '../core/area';
 import { assertFraction } from '../core/assert-fraction';
 import { assertWholeNumber } from '../core/assert-whole-number';
 import { createFractalNoise } from '../noise/create-fractal-noise';
@@ -8,6 +7,7 @@ import { assertAreaSize } from '../pipeline/assert-area-size';
 import { assertWallBase } from '../pipeline/assert-wall-base';
 import type { MapStep } from '../pipeline/map-step';
 import { step } from '../pipeline/step';
+import type { FeatureRooms } from '../rooms/feature-rooms';
 import { assertCaveAreaOptions } from './assert-cave-area-options';
 import { CAVE_DEFAULT_LIMITS } from './cave-default-limits';
 import { carveCaveInAreas } from './carve-cave-in-areas';
@@ -25,14 +25,17 @@ import { smoothCave } from './smooth-cave';
  * A smaller `area` goes where `placement` says: on a free spot, beside the
  * dug ground with a wall between, or over what is there.
  *
- * It uses `caverns`, from the steps before it, and adds it again with the box
- * of each new cave appended. The map has to start as wall, which `pipeline`
+ * Every cavern is a room of kind `'cavern'`, its box the smallest rectangle
+ * that holds its floor and its shape that floor, which blocks nothing and
+ * reserves nothing; the caverns of one cave are a `'cave'` group with the box
+ * the cave was dug in. It uses `rooms`, `roomShapes` and `roomGroups` from the
+ * steps before it, and adds them again with its own appended. The map has to start as wall, which `pipeline`
  * checks before the first attempt. Throws a `RangeError` at once for a bad
  * option.
  */
 export function digNoiseCave(
   options: DigNoiseCaveOptions = {},
-): MapStep<Partial<{ caverns: Area[] }>, { caverns: Area[] }> {
+): MapStep<Partial<FeatureRooms>, FeatureRooms> {
   const {
     shape = 'blobs',
     fill = 0.45,
@@ -73,10 +76,10 @@ export function digNoiseCave(
     borderWalls,
   } as const;
 
-  return step<Partial<{ caverns: Area[] }>, { caverns: Area[] }>(
+  return step<Partial<FeatureRooms>, FeatureRooms>(
     'digNoiseCave',
     {
-      adds: ['caverns'],
+      adds: ['rooms', 'roomShapes', 'roomGroups'],
       validate: (state) => {
         assertWallBase('digNoiseCave', state);
         assertAreaSize(area, count, state.grid.width, state.grid.height);
@@ -93,7 +96,7 @@ export function digNoiseCave(
         { scaleX, scaleY, rotation },
       );
       return {
-        caverns: carveCaveInAreas(
+        ...carveCaveInAreas(
           state,
           random,
           { area, count, minRegionSize, largestOnly, placement },

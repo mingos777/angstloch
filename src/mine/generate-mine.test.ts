@@ -112,12 +112,12 @@ describe('generateMine', () => {
     const options = { ...base, veins: {}, random: mulberry32(1) };
 
     // when
-    const { passages, halls } = generateMine(options);
+    const { passages, rooms } = generateMine(options);
 
     // then
     expect(passages.length).toBeGreaterThan(0);
     expect(passages.every(({ kind }) => kind === 'vein')).toBe(true);
-    expect(halls).toEqual([]);
+    expect(rooms).toEqual([]);
   });
 
   it('digs pillar halls with the pillars key', () => {
@@ -130,10 +130,15 @@ describe('generateMine', () => {
     };
 
     // when
-    const { halls } = generateMine(options);
+    const { rooms, roomGroups } = generateMine(options);
 
     // then
-    expect(halls).toHaveLength(3);
+    expect(rooms.map(({ kind }) => kind)).toEqual([
+      'pillarHall',
+      'pillarHall',
+      'pillarHall',
+    ]);
+    expect(roomGroups.map(({ kind }) => kind)).toEqual(['pillarHalls']);
   });
 
   it('joins the pillar halls with the veins of the hall veins key', () => {
@@ -186,8 +191,8 @@ describe('generateMine', () => {
     );
 
     // then
-    for (const { halls } of mines) {
-      expect(halls).toEqual([]);
+    for (const { rooms } of mines) {
+      expect(rooms).toEqual([]);
     }
   });
 

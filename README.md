@@ -15,6 +15,7 @@ Currently available:
 - [`pipeline`](#composing-maps): builds a map from an empty base and a list of steps, with retries. The generators are being rebuilt on it, one at a time.
 - [`placeCellBlocks`](#placecellblocks): the cell blocks of a prison, rows of cells along a corridor, for a dungeon of your own.
 - [`measureDistances`](#walking-distances): the walk between rooms or any other places of a finished map, for putting the stairs far apart.
+- [`createRoomMap`](#createroommap): the room each tile of a finished map belongs to, halls and caverns included.
 
 ## Concepts
 
@@ -184,15 +185,15 @@ Templated rooms are in `rooms`, listed before the ordinary ones, with `template`
 ```ts
 import { generateCave } from 'angstloch';
 
-const { grid, regions } = generateCave({ width: 60, height: 30 });
+const { grid, rooms } = generateCave({ width: 60, height: 30 });
 console.log(grid.toString());
-console.log(`the largest cavern has ${String(regions[0]?.size)} tiles`);
+console.log(`the automaton left ${String(rooms.length)} caverns`);
 ```
 
 `generateCave` is a ready-made composition of [steps](#composing-maps) on a map of wall: [`digCellularCave`](#digcellularcave) grows the caverns, [`digVeins`](#digveins) joins them into one with tunnels, and [`openExits`](#openexits) carves exits into the border. Its options are nested, one key per step, each holding the options of that step: `cave`, `tunnels` and `exits`. Every key is optional, and the steps' defaults apply. A step that is left out adds nothing: `tunnels: false` leaves the caverns apart, and without `exits` there are none. The `tunnels` key takes the options of `digVeins`, with two defaults of the preset: `veinWidth` is `{ min: 1, max: 1 }` and `density` is 0, so the veins only join the caverns. For other compositions, such as a cave in part of a map or beside a mine, run the steps with `pipeline`.
 
 ```ts
-const { grid, regions, exits } = generateCave({
+const { grid, rooms, exits } = generateCave({
   width: 60,
   height: 30,
   cave: { fillChance: 0.48, minRegionSize: 20 },
@@ -266,25 +267,23 @@ Every option is checked before the cave is made: a non-positive or non-integer s
 ### `CaveResult`
 
 - `grid`: the map, made of `Wall` and `Floor` tiles, and a `Door` tile for each exit.
-- `regions`: the caverns of the finished map, sorted from the largest to the smallest, so `regions[0]` is the largest and a good place for the player to start. They are measured once all the steps have run. Each has:
-  - `size`: the number of floor tiles.
-  - `center`: the floor tile nearest to the cavern's center of mass. A bent cavern's middle may be rock, so this is always a floor tile.
-  - `bounds`: the smallest `Area` (`x`, `y`, `width`, `height`) that holds the cavern.
-
-  Caverns that `minRegionSize` or `largestOnly` filled in are not listed, and caverns joined by tunnels are listed as one, so with the tunnels there is one region. The list is empty when the map has no floor. `findCaveRegions` and `describeCaveRegion` give the same for a cave of your own composition.
+- `rooms`: the caverns, as the cave step dug them ([`digCellularCave`](#digcellularcave), or [`digNoiseCave`](#dignoisecave) for a [noise cave](#noise-caves)), before the tunnels joined them: a [`Room`](#room) of kind `'cavern'` each, its `x`, `y`, `width` and `height` the smallest rectangle that holds its floor, and its `exits` the places where the tunnels enter it. Caverns that `minRegionSize` or `largestOnly` filled in are not listed. The list is empty when the map has no floor.
+- `roomShapes`: the shape of every cavern, by its id: its floor tiles are `Floor` cells, every other cell of its box `Unused`.
+- `roomGroups`: the `'cave'` [group](#roomgroup) of the caverns, with the box the cave was dug in, the whole map. Empty when there are no caverns.
+- `roomExits`: where the tunnels enter the caverns, an [`Exit`](#exit) each (see [ways into halls and caverns](#ways-into-halls-and-caverns)); a tunnel that ends on another tunnel makes none. Empty without `tunnels`. They are not the `exits` on the map border.
 
 - `exits`: the door tiles on the map border, one per exit. Empty without `exits`.
 - `attempts`: how many times the cave was built. A cave's steps do not fail, so it is 1.
 - `failures`: one entry per failed attempt, as [`pipeline`](#pipeline) reports them. Empty for a cave.
 
 ```ts
-const { grid, regions } = generateCave({
+const { grid, rooms } = generateCave({
   width: 60,
   height: 30,
   cave: { largestOnly: true },
   tunnels: false,
 });
-const spawn = regions[0]?.center;
+const [cavern] = rooms; // the one cavern left, with its box
 ```
 
 ### Noise caves
@@ -292,7 +291,7 @@ const spawn = regions[0]?.center;
 ```ts
 import { generateNoiseCave } from 'angstloch';
 
-const { grid, regions } = generateNoiseCave({ width: 60, height: 30 });
+const { grid, rooms } = generateNoiseCave({ width: 60, height: 30 });
 const { grid: tunnels } = generateNoiseCave({
   width: 60,
   height: 30,
@@ -824,7 +823,7 @@ The veins have no main shaft: `passages` lists the veins in the order they were 
 ### The pillars layout
 
 ```ts
-const { grid, halls } = generateMine({ width: 80, height: 50, pillars: {} });
+const { grid, rooms } = generateMine({ width: 80, height: 50, pillars: {} });
 ```
 
 Pillars are how a coal seam is mined, with room and pillar: large halls are dug out, and islands of untouched rock are left standing in them to hold up the roof, which gives a pattern of polka dots. The result is a few big halls joined by winding tunnels. Two steps make it, as two keys of the preset: `pillars` digs the halls and the pillars ([`digPillarHalls`](#digpillarhalls)), and `hallVeins` joins the halls ([`digVeins`](#digveins)), with the defaults of that step when it is left out, a `density` of 0.15 among them, so the web grows some junctions of its own in the rock round the halls. A `density` of 0 joins the halls and digs nothing else. The veins are dug after the pillars, so a vein starts only from the outer boundary of a hall.
@@ -853,7 +852,7 @@ generateMine({
 
 Here `density` only sizes the halls, with its default raised to 0.35, since a hall needs room to show its pillars. The halls together fill about that share of the map once the pillars are taken out, as far as the pillars can be estimated in advance, so the share of floor you get is approximate, and the veins add to it. It does nothing when you give a `hallSize`.
 
-`halls` in the result lists the halls: see [`MineResult`](#mineresult).
+Every hall is a [`Room`](#room) of kind `'pillarHall'` in the result's `rooms`, with its shape and its group: see [`MineResult`](#mineresult).
 
 ### The rings layout
 
@@ -884,7 +883,7 @@ const { grid } = generateMine({
 ### Caverns
 
 ```ts
-const { grid, caverns } = generateMine({
+const { grid, rooms, roomGroups } = generateMine({
   width: 80,
   height: 50,
   caverns: { count: { min: 1, max: 2 } },
@@ -906,7 +905,7 @@ The rest are the step's defaults: `count` is 1 to 1, so `caverns: {}` digs one c
 
 **A cavern that finds no spot.** A layout that fills the map leaves no room: a `rings` mine has none for a cavern of the default size, and a dense `veins` mine little. The caverns up to `count.min` fail the map, which is built again up to 3 times in all, and then the error is thrown. The caverns above `count.min` are left out. So `count: { min: 0, max: 2 }` never fails, and `placement: 'overlap'` puts a cavern into the tunnels instead, like a cave-in.
 
-`caverns` in the result lists the caverns, each as an `Area`, the box that it was made in: see [`MineResult`](#mineresult). The corners of a box are usually wall.
+Every cavern is a [`Room`](#room) of kind `'cavern'` in the result's `rooms`, in a `'cave'` group of its own with the box it was made in: see [`MineResult`](#mineresult).
 
 ### Rooms and templates
 
@@ -974,17 +973,17 @@ The options of each step are in its section, with their defaults: [`digFishbone`
 
 ### `MineResult`
 
-| Field       | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `grid`      | The map.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `passages`  | The tunnels of the layout in the order they were dug, the main shaft first, then the tunnels that join the rooms, as `MinePassage` objects: `kind` (`'shaft'` or `'adit'` for a fishbone, `'vein'` for veins and for the veins between halls, `'ring'` and `'spoke'` for rings, `'tunnel'` for a tunnel that joins a room), `width` and `tiles`, the tiles along the middle of the tunnel from where it starts to where it ends, each touching the one before along an edge. An adit starts at the tunnel it leaves, and a vein runs from one junction to another. The tunnels that join the caverns are not listed. |
-| `halls`     | The halls of a `pillars` mine, each as an `Area`: the smallest rectangle that holds it. Its edges are ragged, so a corner may be wall. Empty for the other layouts.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `caverns`   | The box of every cavern, an `Area`. Empty without `caverns`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `rooms`     | The rooms, templated ones first, as [`Room`](#room) objects. Empty without `rooms`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `roomExits` | The openings of the rooms, as [`Exit`](#exit) objects, with `door` saying whether each got a door. They are not the `exits` on the border.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `exits`     | The door tiles on the map border, one per exit. Empty without `exits`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `attempts`  | How many times the mine was built, 1 or more: a map is built again when a step throws, up to 3 in all.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `failures`  | One entry per failed attempt, as for [`pipeline`](#pipeline), also when a later attempt succeeded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Field        | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grid`       | The map.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `passages`   | The tunnels of the layout in the order they were dug, the main shaft first, then the tunnels that join the rooms, as `MinePassage` objects: `kind` (`'shaft'` or `'adit'` for a fishbone, `'vein'` for veins and for the veins between halls, `'ring'` and `'spoke'` for rings, `'tunnel'` for a tunnel that joins a room), `width` and `tiles`, the tiles along the middle of the tunnel from where it starts to where it ends, each touching the one before along an edge. An adit starts at the tunnel it leaves, and a vein runs from one junction to another. The tunnels that join the caverns are not listed. |
+| `rooms`      | The rooms, as [`Room`](#room) objects, with ids in this order: the halls of a `pillars` mine (kind `'pillarHall'`), then the caverns (kind `'cavern'`), then the rooms of `rooms` (kind `'room'`), templated ones first. A hall's box is the rectangle it was dug in and a cavern's the smallest one that holds its floor, so their corners may be wall; their exits are where the veins and tunnels enter them. Empty when the mine has none of them.                                                                                                                                                               |
+| `roomShapes` | The shape of every room, by its id. A hall's or cavern's is its floor, as `Floor` cells, every other cell of its box `Unused`; see [`RoomShape`](#placeminerooms) for the rest.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `roomGroups` | The [groups](#roomgroup) of the rooms: a `'pillarHalls'` group for the halls, and a `'cave'` group for each cavern.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `roomExits`  | The openings of the rooms, as [`Exit`](#exit) objects, with `door` saying whether each got a door, the places where a vein or a tunnel enters a hall or a cavern included. They are not the `exits` on the border.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `exits`      | The door tiles on the map border, one per exit. Empty without `exits`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `attempts`   | How many times the mine was built, 1 or more: a map is built again when a step throws, up to 3 in all.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `failures`   | One entry per failed attempt, as for [`pipeline`](#pipeline), also when a later attempt succeeded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## Dungeons
 
@@ -1256,35 +1255,45 @@ The fields that every dungeon reports; the generators return a [`RoomDungeonResu
 
 ### `Room`
 
-| Field             | Description                                                                                                                                                                                                                           |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`              | The room's index in `rooms`.                                                                                                                                                                                                          |
-| `kind`            | What the room is (`RoomKind`): `'room'` for the rooms of every room placement step, templated rooms included, `'cell'` for a cell of [`placeCellBlocks`](#placecellblocks) and `'guardRoom'` for a [guard room](#guard-rooms) of one. |
-| `group`           | The index in `roomGroups` of the group the room belongs to, such as the cell block of a cell (see [`RoomGroup`](#roomgroup)). Absent for a room of no group.                                                                          |
-| `x`, `y`          | Position of the room's top-left floor tile. The room's wall is not included.                                                                                                                                                          |
-| `width`, `height` | Dimensions of the room's floor in tiles.                                                                                                                                                                                              |
-| `exits`           | Indices into `DungeonResult#exits` (or `MazeResult#roomExits`) of the room's exits.                                                                                                                                                   |
-| `exitCount`       | Number of exits of the room.                                                                                                                                                                                                          |
-| `doorCount`       | Number of exits of the room that have a door.                                                                                                                                                                                         |
-| `template`        | Templated rooms only: the index of the room's template in `templates`.                                                                                                                                                                |
-| `rotation`        | Templated rooms only: the clockwise rotation the template was placed in.                                                                                                                                                              |
-| `mirrored`        | Templated rooms only: whether the template was placed mirrored.                                                                                                                                                                       |
+| Field             | Description                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`              | The room's index in `rooms`.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `kind`            | What the room is (`RoomKind`): `'room'` for the rooms of every room placement step, templated rooms included, `'cell'` for a cell of [`placeCellBlocks`](#placecellblocks), `'guardRoom'` for a [guard room](#guard-rooms) of one, `'pillarHall'` for a hall of [`digPillarHalls`](#digpillarhalls) and `'cavern'` for a cavern of [`digCellularCave`](#digcellularcave) or [`digNoiseCave`](#dignoisecave). |
+| `group`           | The index in `roomGroups` of the group the room belongs to, such as the cell block of a cell (see [`RoomGroup`](#roomgroup)). Absent for a room of no group.                                                                                                                                                                                                                                                 |
+| `x`, `y`          | Position of the room's top-left floor tile. The room's wall is not included.                                                                                                                                                                                                                                                                                                                                 |
+| `width`, `height` | Dimensions of the room's floor in tiles.                                                                                                                                                                                                                                                                                                                                                                     |
+| `exits`           | Indices into `DungeonResult#exits` (or the `roomExits` of the other results and of the steps) of the room's exits. A hall's or cavern's are the places where a corridor, a vein or a tunnel enters it.                                                                                                                                                                                                       |
+| `exitCount`       | Number of exits of the room.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `doorCount`       | Number of exits of the room that have a door.                                                                                                                                                                                                                                                                                                                                                                |
+| `template`        | Templated rooms only: the index of the room's template in `templates`.                                                                                                                                                                                                                                                                                                                                       |
+| `rotation`        | Templated rooms only: the clockwise rotation the template was placed in.                                                                                                                                                                                                                                                                                                                                     |
+| `mirrored`        | Templated rooms only: whether the template was placed mirrored.                                                                                                                                                                                                                                                                                                                                              |
 
 For a templated room, `x`, `y`, `width` and `height` describe the template's bounding box, walls included, as the floor of such a room need not be a rectangle. Ordinary rooms have no `template`, `rotation` or `mirrored`; whether a room is templated is told by `template`, not by `kind`.
 
+**Halls and caverns are rooms too.** A hall of `digPillarHalls` and a cavern of the cave steps are listed in `rooms`, so the game finds every place of the map in one list, but the steps treat them as [features](#features), by their `kind`: they reserve nothing, their shape in `roomShapes` is their floor alone (the rest of the box `Unused`, with no potential exits), which blocks nothing, a later room placement step ignores it, [`digCorridors`](#digcorridors) joins them on their boundary like any other piece of floor and never drops them, and [`openMazeRooms`](#openmazerooms) leaves them alone. A hall's `x`, `y`, `width` and `height` are the rectangle it was dug in, and a cavern's the smallest rectangle that holds its floor, so either may have wall in its corners, and the pillars of a hall are rock inside it.
+
+#### Ways into halls and caverns
+
+A hall or a cavern has no walls of its own to open, so the joining steps record where they reach its floor: every tile that [`digCorridors`](#digcorridors), [`digVeins`](#digveins) or [`placeMineRooms`](#placeminerooms) digs beside the floor of a hall or a cavern is a way into it, and the tiles of one way that touch along an edge are one [`Exit`](#exit), at their middle tile, so a vein two tiles wide makes one exit. A tile that is the exit of a room too, or that touches the floor of two halls or caverns, is one exit of both. `digVeins` records its ways into every other room the same way: the `Openable` tile it opens. Floor that a hall or a cavern was dug into, or that a later step digs right up to it, is no exit, since no joining step dug it.
+
 ### `RoomGroup`
 
-Rooms that one copy of a step built together form a group, listed in the `roomGroups` extra, and each of them points to its group with `Room.group`. Groups never move, so `group` stays right when `digCorridors` drops and renumbers rooms. A group says what it is in `kind`; the only kind so far is `'cellBlock'` (`CellBlockGroup`), a block of [`placeCellBlocks`](#placecellblocks):
+Rooms that one copy of a step built together form a group, listed in the `roomGroups` extra, and each of them points to its group with `Room.group`. Groups never move, so `group` stays right when `digCorridors` drops and renumbers rooms. A group says what it is in `kind`: `'cellBlock'`, `'cave'` or `'pillarHalls'`.
 
-| Field       | Description                                                                                                                                          |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kind`      | `'cellBlock'`.                                                                                                                                       |
-| `footprint` | The box of the block's cells and corridor, its outer walls included. A guard room and its tunnel lie outside it.                                     |
-| `corridor`  | The floor of the block corridor, which the doors of the cells open onto.                                                                             |
-| `entrance`  | The wall tile through which the block is entered, at an end of the corridor or beyond the tunnel, a door or a gap once a joining step has opened it. |
-| `tunnel`    | The floor of the tunnel from the end of the corridor past the guard room's door to the entrance. Absent without a guard room.                        |
+A `'cellBlock'` group (`CellBlockGroup`) is a block of [`placeCellBlocks`](#placecellblocks):
+
+| Field       | Description                                                                                                                                                                                                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`      | `'cellBlock'`.                                                                                                                                                                                                      |
+| `footprint` | The box of the block's cells and corridor, its outer walls included. A guard room and its tunnel lie outside it.                                                                                                    |
+| `corridor`  | The floor of the block corridor, which the doors of the cells open onto.                                                                                                                                            |
+| `entrance`  | The wall tile through which the block is entered, at an end of the corridor, beyond the tunnel, or in the far wall of a guard room the block is entered through, a door or a gap once a joining step has opened it. |
+| `tunnel`    | The floor of the tunnel from the end of the corridor past the guard room's door to the entrance. Absent without a guard room beside the block.                                                                      |
 
 Two blocks themed differently, one for prisoners and one for monsters, say, are told apart by their groups.
+
+A `'cave'` group (`CaveGroup`) is one cave of [`digCellularCave`](#digcellularcave) or [`digNoiseCave`](#dignoisecave), in one area, and its rooms are its caverns. A `'pillarHalls'` group (`PillarHallsGroup`) is the halls that [`digPillarHalls`](#digpillarhalls) dug in one area. Both have one more field, `area`: the box the cave or the halls were dug in, in the coordinates of the map. A cave or an area that got no floor makes no group.
 
 ### `Exit`
 
@@ -1293,6 +1302,23 @@ Two blocks themed differently, one for prisoners and one for monsters, say, are 
 | `position` | The wall tile of the gap, as a `Point`.                                                                                    |
 | `rooms`    | Ids of the rooms the exit belongs to: one, or two when a single door joins two rooms that face each other across one wall. |
 | `door`     | Whether a door was placed.                                                                                                 |
+
+For a hall or a cavern, `position` is the first tile dug beside its floor (see [ways into halls and caverns](#ways-into-halls-and-caverns)), and `rooms` may list two halls or caverns that a single tile joins, or a room and the hall or cavern its exit opens onto.
+
+### `createRoomMap`
+
+`createRoomMap(result)` tells which room each tile of a finished map belongs to: an `Int32Array` with one number per tile, row by row (`y * width + x`), the id of the room whose floor holds it, or -1. It takes anything with a `grid` and `roomShapes`, the result of a generator or of [`pipeline`](#pipeline). Every room counts, of every kind, through the `Floor` cells of its shape: an ordinary room's floor, a templated room's floor cells, a hall's floor without its pillars, a cavern's floor. Walls, exits and doors belong to no room, since an exit may belong to two, and neither do corridors, veins, tunnels or any floor outside the rooms.
+
+```ts
+const result = pipeline(
+  emptyMap({ width: 80, height: 50, tile: Tile.Wall }),
+  [digPillarHalls(), placeScatteredRooms(), digCorridors()],
+  { random: mulberry32(42) },
+);
+const roomMap = createRoomMap(result);
+const id = roomMap[player.y * result.grid.width + player.x] ?? -1;
+const room = result.rooms[id]; // undefined in a corridor
+```
 
 ### Room templates
 
@@ -1463,12 +1489,12 @@ Every ready-made step, grouped by the map it was made for, though any of them ma
 | [`layClearingPaths`](#layclearingpaths)           | lays paths from the roads to the clearings that ask for one     | `clearings`           | `roads`, `junctions`, `exits`, `bridges`         |      |             |
 | [`layFootbridges`](#layfootbridges)               | joins the land that streams cut apart                           | `streams`             | `bridges`                                        |      |             |
 | [`digFishbone`](#digfishbone)                     | a main shaft with adits off it                                  |                       | `passages`                                       | yes  | area, count |
-| [`digVeins`](#digveins)                           | veins that join every piece of floor, and a web of their own    |                       | `passages`                                       | yes  |             |
-| [`digPillarHalls`](#digpillarhalls)               | halls with pillars                                              |                       | `halls`                                          | yes  | area, count |
+| [`digVeins`](#digveins)                           | veins that join every piece of floor, and a web of their own    |                       | `passages`, `rooms`, `roomExits`                 | yes  |             |
+| [`digPillarHalls`](#digpillarhalls)               | halls with pillars                                              |                       | `rooms`, `roomShapes`, `roomGroups`              | yes  | area, count |
 | [`digRings`](#digrings)                           | rings joined by spokes                                          |                       | `passages`                                       | yes  | area, count |
 | [`placeMineRooms`](#placeminerooms)               | rooms in the rock, each joined to the nearest floor by a tunnel |                       | `passages`, `rooms`, `roomExits`, `roomShapes`   | yes  |             |
-| [`digCellularCave`](#digcellularcave)             | a cave from a cellular automaton                                |                       | `caverns`                                        | yes  | area, count |
-| [`digNoiseCave`](#dignoisecave)                   | a cave from thresholded noise                                   |                       | `caverns`                                        | yes  | area, count |
+| [`digCellularCave`](#digcellularcave)             | a cave from a cellular automaton                                |                       | `rooms`, `roomShapes`, `roomGroups`              | yes  | area, count |
+| [`digNoiseCave`](#dignoisecave)                   | a cave from thresholded noise                                   |                       | `rooms`, `roomShapes`, `roomGroups`              | yes  | area, count |
 | [`placeMazeRooms`](#placemazerooms)               | rooms on the maze lattice, not opened yet                       |                       | `rooms`, `roomShapes`                            | yes  | area        |
 | [`digMaze`](#digmaze)                             | a maze by the recursive backtracker, round whatever is there    |                       | `start`                                          | yes  | area, count |
 | [`openMazeRooms`](#openmazerooms)                 | opens the maze rooms into the maze                              | `rooms`, `roomShapes` | `rooms`, `roomExits`                             |      |             |
@@ -1819,7 +1845,7 @@ The options are those of the fishbone layout of [`generateMine`](#mineoptions), 
 - **A piece that cannot be reached** (sealed in, or walled in by reserved tiles) is left as it is.
 - **Cell blocks.** A [cell block](#placecellblocks) is one piece, its cells and corridor joined by their doors, and its only potential exit is its entrance, so a vein enters it there, as it enters a room, and nowhere else.
 - **Touching pieces.** An `Openable` tile with the floor of two different pieces on opposite sides, such as a block entrance that a later hall reaches, is opened as floor, before the veins are dug and again after, since no vein through rock can reach it. Once two pieces are joined that way, no other such tile between them is opened.
-- **Uses** `passages`, and **adds** it again with its own `vein` entries appended. It does not touch `rooms` or `roomExits`.
+- **Uses** `passages`, `rooms`, `roomShapes` and `roomExits`, and **adds** `passages`, `rooms` and `roomExits` again: its own `vein` entries appended to `passages`, and every way into a room that it digs as an [`Exit`](#exit) appended to `roomExits` and listed in the room's `exits`: the `Openable` tile it opens into a room, and where a vein reaches the floor of a hall or a cavern (see [ways into halls and caverns](#ways-into-halls-and-caverns)). Without rooms, `rooms` and `roomExits` are empty.
 - **Speed.** About 25 ms on an 80 by 50 map for the default density, 40 ms with two or three halls to join, and up to 200 ms for a `density` that asks for more than the map has room for.
 
 ```ts
@@ -1847,7 +1873,7 @@ const { grid } = pipeline(
 `digPillarHalls(options?)` is a step that digs a room-and-pillar mine (see [the pillars layout](#the-pillars-layout)): a few large halls placed apart from one another, with pillars of wall left standing in them. It digs no veins: [`digVeins`](#digveins) joins the halls. Like `digFishbone` it needs a map that starts as wall, takes `area` and `count`, and checks every option when it is made.
 
 ```ts
-const { grid, halls } = pipeline(
+const { grid, rooms } = pipeline(
   emptyMap({ width: 80, height: 50, tile: Tile.Wall }),
   [
     digFishbone(),
@@ -1878,7 +1904,8 @@ A pillar hall on its own is this step with `halls: 1` in a small area. It is not
 
 - **Density is a share of the area**, as for `digFishbone`.
 - **Reserved ground.** No hall covers a [reserved](#mapstate) tile.
-- **Uses** `halls`, from the steps before it, and **adds** it again with its own appended: the box of every hall (an `Area`), in the coordinates of the map, whatever the area.
+- **Halls are rooms.** Every hall is a [`Room`](#room) of kind `'pillarHall'`, its box the rectangle it was dug in, in the coordinates of the map, and its shape in `roomShapes` its floor, which blocks nothing and reserves nothing (see [halls and caverns](#room)). The halls of one area are a `'pillarHalls'` [group](#roomgroup) with the box of the area.
+- **Uses** `rooms`, `roomShapes` and `roomGroups`, from the steps before it, and **adds** all three again with its own appended, the ids following on.
 
 ### `digRings`
 
@@ -1946,7 +1973,7 @@ const { grid, rooms, roomExits, roomShapes } = pipeline(
 - **Templates.** A template that cannot be placed, or cannot be joined to the floor, throws a [`TemplatePlacementError`](#room-templates), which [`pipeline`](#pipeline) answers with a new map, up to its `attempts`. A map with no floor at all cannot join a template, and always fails. `Room.template` is an index into the `templates` of the step that placed the room.
 - **Reserved ground.** No room and no tunnel is built on a [reserved](#mapstate) tile, and the floor of a reserved tile, such as an earlier room's, is not floor to join, so a tunnel never ends in another room.
 - **What it reserves.** Every room reserves its footprint: its walls, its floor and its inner doorways are `Reserve.Solid`, and its potential exits, the `OptionalExit` cells and the `Exit` and `Door` cells that lead outside, are `Reserve.Openable`. Every opening it makes goes through `openReserved`, so the opening and the potential exits around it become `Solid`. An ordinary room's unopened wall stays `Openable`, which later steps can open as an exit.
-- **Uses** `passages`, `rooms`, `roomExits` and `roomShapes`, from the steps before it, and **adds** all four again with its own appended: `tunnel` entries in `passages`, and rooms whose ids, and exits whose indices, follow on from the ones there are. Its rooms are templated ones first, then ordinary ones.
+- **Uses** `passages`, `rooms`, `roomExits` and `roomShapes`, from the steps before it, and **adds** all four again with its own appended: `tunnel` entries in `passages`, and rooms whose ids, and exits whose indices, follow on from the ones there are. Its rooms are templated ones first, then ordinary ones. A tunnel that ends in a hall or a cavern gives it an exit too (see [ways into halls and caverns](#ways-into-halls-and-caverns)), appended after the exits of the new rooms.
 - **`roomShapes`** holds a `RoomShape` for every room, by id: the cells of the room as placed on the map (`x`, `y`, `width`, `height`, `cells`, `exits`, `rotation` and `mirrored`, as a `TemplatePlacement`), plus `doors`, a list of `{ x, y, door }` that says, in the coordinates of the map, whether each `Exit` and `Door` cell got a door. A templated room's shape is its placement. An ordinary room's is a ring of `OptionalExit` round its floor, with wall corners, and has no `doors`. Steps that work with rooms read their walls, floors and potential exits from it.
 
 ### `digCellularCave`
@@ -1962,7 +1989,7 @@ import {
   Tile,
 } from 'angstloch';
 
-const { grid, caverns } = pipeline(
+const { grid, rooms, roomGroups } = pipeline(
   emptyMap({ width: 80, height: 50, tile: Tile.Wall }),
   [
     digFishbone({ density: 0.1 }),
@@ -1999,7 +2026,8 @@ const { grid, caverns } = pipeline(
   - `'beside'` puts a cave beside what is there, as the [caverns](#caverns) of a mine are. The cave is grown, and culled by `minRegionSize` and `largestOnly`, on its own first, and then up to 100 random spots are tried. A spot fits when every floor tile of the cave, and the 8 tiles round it, is free, so the cave's floor keeps a wall between it and anything on the map, while its box may overlap tunnels. Of the spots that fit, the one whose floor comes nearest the dug ground (any tile that is not the base) wins; on a map with nothing dug, the first that fits. When no spot fits, the copies up to `count.min` fail the attempt, with an ordinary `Error` that `pipeline` answers with a new map, and the copies above it are left out, so a `count` with a `min` of 0 never fails. A cave with no floor left after culling is left out, and is not listed in `caverns`.
   - `'overlap'` puts the box on any random spot, clear only of the other copies of the step, and lays the cave over what is there: it runs into the tunnels and floor it meets, like a cave-in, and its caverns are measured with that floor, as above.
 - **Caverns and the floor that was there.** `minRegionSize` and `largestOnly` measure the caverns after that: unreserved floor that was there already counts as part of a cavern it touches, so a cavern cut in two by an earlier tunnel is still one cavern, and reserved tiles count as wall. Floor that no new floor touches is never left out, whatever its size.
-- **Uses** `caverns`, from the steps before it, and **adds** `caverns` again with the box of each new cave appended (an `Area` in the coordinates of the map). The caverns' regions are not reported, since a later step would change them; `findCaveRegions` and `describeCaveRegion` work on the finished grid.
+- **Caverns are rooms.** Every cavern that is kept is a [`Room`](#room) of kind `'cavern'`, its box the smallest rectangle that holds its floor and its shape in `roomShapes` that floor, which blocks nothing and reserves nothing (see [halls and caverns](#room)). It holds only the floor this cave dug, not the floor that was there. The caverns of one copy are a `'cave'` [group](#roomgroup) with the box the copy was grown in. They are the caverns as the step dug them: a later step that joins them, or digs into them, does not change them.
+- **Uses** `rooms`, `roomShapes` and `roomGroups`, from the steps before it, and **adds** all three again with its own appended, the ids following on.
 
 ### `digNoiseCave`
 
@@ -2286,19 +2314,54 @@ o...................#
 | `corridorWidth` | `{ 1, 1 }`                             | The width of the block corridor, drawn once per block.                                                                                                               |
 | `orientation`   | `'any'`                                | Which way the corridor runs: `'horizontal'`, `'vertical'`, or `'any'`, drawn for each block.                                                                         |
 | `cellDoors`     | `'centered'`                           | Where the door of a cell sits along its front: `'centered'`, or `'jittered'`, at a spot drawn once per block that all its cells share.                               |
+| `placement`     | `'free'`                               | `'free'`, or `'lattice'` to keep the block on the lattice of a lattice dungeon (see [on the lattice](#cell-blocks-on-the-lattice)).                                  |
 | `guardRoom`     | none                                   | A guard room for each block (`GuardRoomOptions`, see [guard rooms](#guard-rooms)). Absent means none.                                                                |
 | `area`, `count` | the whole map, `{ 1, 1 }`              | The [areas](#areas) to place blocks in, and how many. A smaller area goes on a random free spot.                                                                     |
 
 - **Where a block goes.** On a random spot of its area where the block and a ring of one tile round it are free (see [`isFree`](#mapstate)), with two more free tiles beyond the entrance, so a corridor or a vein can reach it. Blocks of one area keep a tile apart. A block that finds no spot in 100 tries throws an ordinary `Error`, which [`pipeline`](#pipeline) answers with a new map. The entrance is at either end of the corridor, on a row (or column) of it picked at random.
 - **What it reserves.** The whole block, walls and floor, is `Reserve.Solid`, but for the entrance, which is `Reserve.Openable`: no step digs into the block, and the only way in is the entrance. Rooms placed afterwards keep clear of it.
-- **Rooms and groups.** Every cell is a [`Room`](#room) of kind `'cell'` in `rooms`, with its shape in `roomShapes` (its floor and the walls round it, its door a `Door` cell) and its door in `roomExits` (with `door: true`), so it has its exit already and [`digCorridors`](#digcorridors) leaves it alone. The cells come side by side along the corridor, one side after the other. Each block adds a `'cellBlock'` [group](#roomgroup) to `roomGroups`, with its footprint, corridor and entrance, and its cells point to it with `group`. The corridor is no room: `digCorridors` joins it as a [feature](#features), through the entrance, which gets a door by its `doorChance`; [`digVeins`](#digveins) enters it there too. A block that cannot be reached fails the map like any feature.
+- **Rooms and groups.** Every cell is a [`Room`](#room) of kind `'cell'` in `rooms`, with its shape in `roomShapes` (its floor and the walls round it, its door a `Door` cell) and its door in `roomExits` (with `door: true`), so it has its exit already and [`digCorridors`](#digcorridors) leaves it alone. The cells come side by side along the corridor, one side after the other. Each block adds a `'cellBlock'` [group](#roomgroup) to `roomGroups`, with its footprint, corridor and entrance, and its cells point to it with `group`. The corridor is no room: `digCorridors` joins it, with the cells whose doors open onto it, as one [feature](#features), through the entrance, which gets a door by its `doorChance`; [`digVeins`](#digveins) enters it there too. A block that cannot be reached fails the map like any feature.
 - **Uses** `rooms`, `roomShapes`, `roomExits` and `roomGroups` from the steps before it, if any, and **adds** all four again with its own appended, the ids following on. It needs a map that starts as wall, and it checks every option when it is made.
-- **Over 200 seeds** of the run above on 80 by 50, no map failed and every map came out in one piece; 22 needed a second map. With a pillar hall and `digVeins` instead, none needed one.
-- **Steps after the block.** A step after the block may build right up to its reserved ring, so a later hall can reach the tile beyond the entrance. [`digCorridors`](#digcorridors) and [`digVeins`](#digveins) then open the entrance with no corridor or vein. A later room can take that tile too, which leaves the block cut off and the map is retried: on 80 by 50 with 1 to 2 blocks, then `digPillarHalls`, `placeScatteredRooms` and `digCorridors`, about one map in four needed another, and 2 in 200 failed all three attempts. Without the hall, about one in ten needed another and none failed.
+- **Over 200 seeds** of the run above on 80 by 50, no map failed and every map came out in one piece; 20 needed a second map. With a pillar hall and `digVeins` instead, none needed one.
+- **Steps after the block.** A step after the block may build right up to its reserved ring, so a later hall can reach the tile beyond the entrance. [`digCorridors`](#digcorridors) and [`digVeins`](#digveins) then open the entrance with no corridor or vein. A later room can take that tile too, which leaves the block cut off and the map is retried: on 80 by 50 with 1 to 2 blocks, then `digPillarHalls`, `placeScatteredRooms` and `digCorridors`, about one map in four needed another, and 1 in 200 failed all three attempts (5 in 200 with guard rooms the blocks are entered through). Without the hall, about one in ten needed another and none failed.
 
 #### Guard rooms
 
-With `guardRoom`, a block gets a guard room by its `chance`. With the `placement` `'beside'`, the only one so far, the block gets a tunnel, one tile wide, that runs on from the end of its corridor, and the guard room stands beside the tunnel, on either side at random, its door centered on the wall it shares with the tunnel. The wall between the corridor and the tunnel becomes a door, and the entrance moves to the wall beyond the far end of the tunnel, which runs `tunnel` tiles past the guard room's door. The guard room is a [`Room`](#room) of kind `'guardRoom'` in the block's group, with its shape and its door in `roomExits` (with `door: true`), like a cell. The guard room and the tunnel, each with the walls round it, are reserved `Solid` and need a free ring of one tile too; they lie outside the block's `footprint`, and the group's `tunnel` is the tunnel's floor.
+With `guardRoom`, a block gets a guard room by its `chance`, beside the block or with the block entered through it. With the `placement` `'beside'`, the block gets a tunnel, one tile wide, that runs on from the end of its corridor, and the guard room stands beside the tunnel, on either side at random, its door centered on the wall it shares with the tunnel. The wall between the corridor and the tunnel becomes a door, and the entrance moves to the wall beyond the far end of the tunnel, which runs `tunnel` tiles past the guard room's door. The guard room is a [`Room`](#room) of kind `'guardRoom'` in the block's group, with its shape and its door in `roomExits` (with `door: true`), like a cell. The guard room and the tunnel, each with the walls round it, are reserved `Solid` and need a free ring of one tile too; they lie outside the block's `footprint`, and the group's `tunnel` is the tunnel's floor.
+
+With the `placement` `'through'`, the guard room stands against the end of the block, sharing its end wall, with its door in that wall at the end of the corridor (on the entrance row), and the entrance opposite, in its far wall. Its floor is `size.width` along the corridor and `size.depth` across it, centered on the entrance row, so it may be shallower than the block or reach past it. There is no tunnel, and `tunnel` is not used. With `'any'`, each guard room is beside its block or the block is entered through it, at even odds. The entrance is a potential exit (`OptionalExit`) of the guard room's shape, and the only `Openable` tile of the block. Its door is an [`Exit`](#exit) of the guard room, as for `'beside'`. [`digCorridors`](#digcorridors) joins the guard room, the corridor and the cells as one [feature](#features) through the entrance, and lists the entrance as a second exit of the guard room. [`digVeins`](#digveins) enters there too, and also records the entrance as an exit of the guard room.
+
+A two-sided block entered through a guard room of 5 by 9 (`o` is the entrance):
+
+```
+#######################
+#.....#...#...#...#...#
+#.....#...#...#...#...#
+#.....#...#...#...#...#
+#.....##+###+###+###+##
+o.....+...............#
+#.....##+###+###+###+##
+#.....#...#...#...#...#
+#.....#...#...#...#...#
+#.....#...#...#...#...#
+#######################
+```
+
+With the default size of 5 by 3 it is a vestibule in the middle of the end wall:
+
+```
+      #################
+      #...#...#...#...#
+      #...#...#...#...#
+#######...#...#...#...#
+#.....##+###+###+###+##
+o.....+...............#
+#.....##+###+###+###+##
+#######...#...#...#...#
+      #...#...#...#...#
+      #...#...#...#...#
+      #################
+```
 
 A one-sided block with a guard room beside it (`o` is the entrance):
 
@@ -2312,18 +2375,49 @@ o......+.......................#
 ################################
 ```
 
-| Option      | Default                                | Meaning                                                                                                     |
-| ----------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `chance`    | 1                                      | The chance that a block gets a guard room, from 0 to 1.                                                     |
-| `size`      | `{ width: { 5, 5 }, depth: { 3, 3 } }` | The floor of the guard room in whole tiles of at least 1: `width` along the tunnel, `depth` away from it.   |
-| `placement` | `'beside'`                             | Where it stands: `'beside'` the tunnel.                                                                     |
-| `tunnel`    | `{ 2, 4 }`                             | How many tiles the tunnel runs past the guard room's door before the entrance, whole numbers of at least 0. |
+| Option      | Default                                | Meaning                                                                                                                          |
+| ----------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `chance`    | 1                                      | The chance that a block gets a guard room, from 0 to 1.                                                                          |
+| `size`      | `{ width: { 5, 5 }, depth: { 3, 3 } }` | The floor of the guard room in whole tiles of at least 1: `width` along the tunnel, `depth` away from it.                        |
+| `placement` | `'beside'`                             | Where it stands: `'beside'` the tunnel, `'through'`, the block entered through it, or `'any'`, either drawn for each guard room. |
+| `tunnel`    | `{ 2, 4 }`                             | How many tiles the tunnel runs past the guard room's door before the entrance, whole numbers of at least 0. Only for `'beside'`. |
 
-Over 200 seeds on 80 by 50 with 1 to 2 blocks, all with a guard room, then `placeScatteredRooms` and `digCorridors`, no map failed and every map came out in one piece; 19 needed a second map. With the blocks, `digPillarHalls` and `digVeins`, none needed one and none was split.
+Over 200 seeds on 80 by 50 with 1 to 2 blocks, all with a guard room beside them, then `placeScatteredRooms` and `digCorridors`, no map failed and every map came out in one piece; 17 needed a second map. With the guard room `'through'`, none failed and 12 needed a second map. With the blocks, `digPillarHalls` and `digVeins`, none needed one and none was split, for either placement. With `'through'` on the lattice (81 by 51, every step on the lattice), none failed and none needed a second map.
+
+#### Cell blocks on the lattice
+
+In a lattice dungeon a corridor of [`digCorridors`](#digcorridors) leaves a room only toward a tile with odd coordinates, so a block of the free placement is reached only when its entrance lands there by chance. With `placement: 'lattice'` the walls of the block fall on even coordinates and its floors on odd ones:
+
+- The footprint starts on even coordinates and has odd sides, and its area goes on the lattice as the [areas](#areas) of the other lattice steps do.
+- The cell width and depth, the corridor width and the guard room's size are narrowed to odd numbers, as the sizes of lattice rooms are (a range of even sizes only, such as `{ 4, 4 }`, is rounded up to 5).
+- The entrance sits on an odd row (or column) of the corridor, so the tile beyond it is odd on both axes.
+- A guard room beside the block shares the block's end wall instead of standing a wall apart, its floor starting on the first odd column out, and the tunnel's length is made odd (by the length it runs past the door, rounded up when its `tunnel` range has no length that fits), so that the entrance at its far end is on the lattice too.
+- A guard room the block is entered through shares the end wall in either placement. On the lattice its floor starts on an odd row, so when centering it on the entrance row would start it on an even one, it moves a tile to either side at random.
+- The doors inside stay where they are: a cell door and the guard room's door open onto the block corridor and the tunnel, which no outside corridor touches, so a 3-wide cell keeps its door in the middle, on an even tile.
+
+The option takes nothing from the other steps: give `placement: 'lattice'` to every step of a lattice dungeon, on a map of odd size.
+
+```ts
+const { grid } = pipeline(
+  emptyMap({ width: 81, height: 51, tile: Tile.Wall }),
+  [
+    placeCellBlocks({
+      blocks: { min: 1, max: 2 },
+      placement: 'lattice',
+      guardRoom: {},
+    }),
+    placeScatteredRooms({ placement: 'lattice' }),
+    digCorridors({ placement: 'lattice' }),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
+Over 200 seeds of that run, with and without guard rooms, no map failed and none needed a second map; with the free placement of the blocks, 131 of 200 failed.
 
 ### `digCorridors`
 
-`digCorridors(options?)` is a step that joins the rooms of a dungeon with corridors and doors, the second step of [`generateRoomDungeon`](#dungeons) (see [connections](#connections)): the rooms of [`placeScatteredRooms`](#placescatteredrooms), [`placePartitionedRooms`](#placepartitionedrooms) or [`placeClusteredRooms`](#placeclusteredrooms), or of a step of your own that adds `rooms` and `roomShapes`. Only rooms that have no exits yet are joined, so rooms opened by another step are left alone. It needs a map that starts as wall, and it checks every option when it is made.
+`digCorridors(options?)` is a step that joins the rooms of a dungeon with corridors and doors, the second step of [`generateRoomDungeon`](#dungeons) (see [connections](#connections)): the rooms of [`placeScatteredRooms`](#placescatteredrooms), [`placePartitionedRooms`](#placepartitionedrooms) or [`placeClusteredRooms`](#placeclusteredrooms), or of a step of your own that adds `rooms` and `roomShapes`. Only rooms that have no exits yet are joined by their own exits; a room opened by another step counts as one with the floor its doors open onto, and is joined with it as a [feature](#features). It needs a map that starts as wall, and it checks every option when it is made.
 
 ```ts
 import {
@@ -2363,14 +2457,14 @@ const { grid, rooms, roomExits } = pipeline(
 - **Symmetry is per step.** The rooms are mirrored by the step that places them, the corridors by this one, so a symmetric dungeon passes the same `symmetry`, `symmetryChance` and `placement` to both. Symmetric rooms with free corridors, or the other way round, are fine.
 - **Where a room opens.** Exits come from each room's shape in `roomShapes`, at the potential exits that are still `Reserve.Openable`. Two ordinary rooms that share a wall (`roomSpacing` 1) are joined by one door in it, which both rooms count. Every fixed exit of a template gets a corridor.
 - **What is in the way.** Corridors keep off every tile that is not free (see [`isFree`](#mapstate)): reserved tiles, and the floor, roads or water of earlier steps, so they route round them.
-- **Features join too.** Every piece of floor outside the rooms' shapes is joined as well, as a stand-in room: a cavern of [`digNoiseCave`](#dignoisecave) or [`digCellularCave`](#digcellularcave), a hall of [`digPillarHalls`](#digpillarhalls), a whole mine, a maze, or the corridors of an earlier `digCorridors` (see [features](#features)).
+- **Features join too.** Every piece of floor outside the shapes of the rooms it joins is joined as well, as a stand-in room: a cavern of [`digNoiseCave`](#dignoisecave) or [`digCellularCave`](#digcellularcave), a hall of [`digPillarHalls`](#digpillarhalls), a whole mine, a maze, or the corridors of an earlier `digCorridors` (see [features](#features)). Where a corridor enters a hall or a cavern, that is an exit of it (see [ways into halls and caverns](#ways-into-halls-and-caverns)); where it enters any other stand-in, it is a plain opening and no exit.
 - **Rooms that cannot be joined.** An ordinary room that cannot be joined is dropped, with its mirror images: its tiles go back to the base tile and its reservation is cleared. A templated room is never dropped: the corridors are routed again with new draws, up to 3 times in all, and then the step throws a [`TemplatePlacementError`](#room-templates), which [`pipeline`](#pipeline) answers with a new map, rooms included.
 - **What it reserves.** Every exit of a room goes through [`openReserved`](#mapstate), so it and the potential exits round it become `Reserve.Solid`. Corridors reserve nothing.
-- **Needs no rooms.** It **uses** `rooms`, `roomShapes` and `roomExits` from the steps before it, if any, and **adds** all three again: the dropped rooms left out, the rest renumbered with their shapes and the exits, and the new exits appended to `roomExits` (an [`Exit`](#exit) each, listed on its rooms). With no rooms at all, it joins the [features](#features) alone, such as the halls of [`digPillarHalls`](#digpillarhalls), and the three come back empty.
+- **Needs no rooms.** It **uses** `rooms`, `roomShapes` and `roomExits` from the steps before it, if any, and **adds** all three again: the dropped rooms left out, the rest renumbered with their shapes and the exits, and the new exits appended to `roomExits` (an [`Exit`](#exit) each, listed on its rooms). With no rooms to join, it joins the [features](#features) alone, such as the halls of [`digPillarHalls`](#digpillarhalls).
 
 #### Features
 
-Any tile outside the shapes of the rooms that is not the base tile is floor of a feature, and the pieces it makes, joined along edges, are joined like rooms. A feature need not be a room or say what it is: whatever made it, `digCorridors` finds it on the map. This makes "rooms round a cavern and a pillar hall" a list of steps:
+Any tile outside the shapes of the rooms that have no exits yet that is not the base tile is floor of a feature, and the pieces it makes, joined along edges, are joined like rooms. A room that has exits already, such as a cell of a [cell block](#placecellblocks) or a room of [`openMazeRooms`](#openmazerooms), is part of the piece its doors open onto: rooms and floor joined by open doors count as one thing to join. A feature need not say what it is: whatever made it, `digCorridors` finds it on the map. The halls of `digPillarHalls` and the caverns of the cave steps are listed in `rooms` all the same, by their kinds `'pillarHall'` and `'cavern'`, but are joined as features, on their floor (see [halls and caverns](#room)), and get an exit wherever a corridor enters them (see [ways into halls and caverns](#ways-into-halls-and-caverns)). This makes "rooms round a cavern and a pillar hall" a list of steps:
 
 ```ts
 import {
@@ -2401,15 +2495,15 @@ const { grid, rooms } = pipeline(
 );
 ```
 
-- **The shape of a feature.** Its floor, and the walls that touch it from outside, which are its potential exits: a wall of rock that is free (not reserved), or one reserved `Openable` that no room's shape holds, such as the entrance of a [cell block](#placecellblocks). Rock that the feature encloses and that nothing else reaches, such as a pillar, is no exit, and corridors stay out of it. The distance to a feature, which orders the links, is measured to its nearest wall, not to the box round it, since the box of a whole mine covers the map.
+- **The shape of a feature.** Its floor, and the walls that touch it from outside, which are its potential exits: a wall of rock that is free (not reserved), or one reserved `Openable` that the shape of no room to join holds, such as the entrance of a [cell block](#placecellblocks), or a potential exit of a room that has exits already, such as the entrance in the far wall of a [guard room](#guard-rooms) the block is entered through. Rock that the feature encloses and that nothing else reaches, such as a pillar, is no exit, and corridors stay out of it. The distance to a feature, which orders the links, is measured to its nearest wall, not to the box round it, since the box of a whole mine covers the map.
 - **How it is joined.** Like a templated room: corridors route round its floor and walls, never through it, and it gets the exits that `exitsPerRoom` draws, loops and dead ends like any room. It is never joined by a door in a shared wall.
-- **Where a corridor reaches it,** the wall turns into floor: no door, whatever `doorChance` says, and no entry in `roomExits`, which stays about rooms. Nothing is reserved there, since features reserve nothing. A wall that was reserved `Openable` is the exception: it is an entrance that a step left on purpose, so it gets a door by `doorChance` and is opened through [`openReserved`](#mapstate), though it still gets no entry in `roomExits`.
-- **It is never dropped, and never a room.** A feature that cannot be joined to the largest group of rooms fails like a templated room: the corridors are routed again, up to 3 times, and then the step throws an `Error` that names a tile of its floor, which [`pipeline`](#pipeline) answers with a new map. `rooms` and `roomShapes` never hold a feature.
-- **Over 200 seeds** of the run above with 0, 2 and 5 templated rooms (`npm run check:dungeon`), no map failed; at 2 and 5 templated rooms, 3 and 5 seeds needed a second map, and a map took 5 to 20 ms on average.
+- **Where a corridor reaches it,** the wall turns into floor: no door, whatever `doorChance` says, and no entry in `roomExits`, which stays about rooms. Nothing is reserved there, since features reserve nothing. A wall that was reserved `Openable` is the exception: it is an entrance that a step left on purpose, so it gets a door by `doorChance` and is opened through [`openReserved`](#mapstate). It gets no entry in `roomExits`, unless it is in the shape of a room that had exits already: then it is an [`Exit`](#exit) of that room, appended to `roomExits` and listed on the room, so the room keeps a list of all its ways in. The same holds for such a wall opened with no corridor, because floor reaches it from beyond.
+- **It is never dropped.** A feature that cannot be joined to the largest group of rooms fails like a templated room: the corridors are routed again, up to 3 times, and then the step throws an `Error` that names a tile of its floor, which [`pipeline`](#pipeline) answers with a new map. `digCorridors` adds no feature to `rooms`; the halls and caverns that are there already stay there, with their shapes, their ids following the renumbering.
+- **Over 200 seeds** of the run above with 0, 2 and 5 templated rooms (`npm run check:dungeon`), no map failed; at 5 templated rooms, 3 seeds needed a second map, and a map took 5 to 21 ms on average.
 
 ## Walking distances
 
-`measureDistances` measures the walk between every two places of a finished map, so that a game can put the stairs up and down far apart. It is a plain function, not a step: call it on the `grid` of any result. A place is a list of tiles: a room, a clearing, an exit, anything. The library only measures; which places to pick is up to the game.
+`measureDistances` measures the walk between every two places of a finished map, so that a game can put the stairs up and down far apart. It is a plain function, not a step: call it on the `grid` of any result. A place is a list of tiles: a room, a clearing, an exit, anything. The library only measures; which places to pick is up to the game. [`createRoomMap`](#createroommap) gives the floor of every room, halls and caverns included, without the rock in their boxes.
 
 ```ts
 import { Tile, generateRoomDungeon, measureDistances } from 'angstloch';
@@ -2450,7 +2544,7 @@ The **Download PNG** button next to the switch saves the map as currently displa
 
 The noise page paints a `NoiseFunction` as gray squares, black for -1 and white for 1, with controls for the size, the seed, the fractal options and the transform: `scaleX`, `scaleY` and `rotation`. The fractal controls start at the defaults of `createFractalNoise`, and the scales start at 40, which is a size that shows a few features on the default map. The stats line shows the lowest, highest and mean value.
 
-The steps page is where every map is made: a page with no fixed generator, but a list of steps that you add, order and configure one by one. The form at the top sets the size, the seed, the base tile and the number of attempts. **Add a step** picks any of [`plantTrees`](#planttrees), [`layStreams`](#laystreams), [`layRoads`](#layroads), [`placeClearings`](#placeclearings), [`placeTemplates`](#placetemplates), [`layClearingPaths`](#layclearingpaths), [`layFootbridges`](#layfootbridges), [`digFishbone`](#digfishbone), [`digVeins`](#digveins), [`digPillarHalls`](#digpillarhalls), [`digRings`](#digrings), [`placeMineRooms`](#placeminerooms), [`digCellularCave`](#digcellularcave), [`digNoiseCave`](#dignoisecave), [`placeMazeRooms`](#placemazerooms), [`digMaze`](#digmaze), [`openMazeRooms`](#openmazerooms), [`placeScatteredRooms`](#placescatteredrooms), [`placePartitionedRooms`](#placepartitionedrooms), [`placeClusteredRooms`](#placeclusteredrooms), [`placeCellBlocks`](#placecellblocks), [`digCorridors`](#digcorridors) and [`openExits`](#openexits) and appends a card with a control for each of its options (a blank angle means a random one, ranges are a min and a max, the road and clearing cards take exact roads and clearings as JSON, the `placeMineRooms`, `placeMazeRooms`, `placeScatteredRooms`, `placePartitionedRooms` and `placeClusteredRooms` cards take templates as JSON, as the template editor exports them). A card has buttons to move it up or down and to remove it, **Load a forest** starts from the steps of a forest, **Load a mine** sets the base tile to wall and starts from the step of [`generateMine`](#mines) with its defaults (`digFishbone`), **Load a mine with caverns** adds `digNoiseCave` with the defaults of the preset's [caverns](#caverns) (`'beside'`, sides of 12 to 24, scales of 7, the largest cavern only) and `digVeins`, **Load a cave** and **Load a noise cave** set it to wall too and start from the steps of [`generateCave`](#caves) (`digCellularCave` and `digVeins`) and of [`generateNoiseCave`](#noise-caves) (`digNoiseCave` and `digVeins`) with their defaults, **Load a maze** sets it to wall and starts from the step of [`generateMaze`](#mazes) with its defaults (`digMaze`), **Load a maze with rooms** from `placeMazeRooms` (3 to 5 rooms), `digMaze`, `openMazeRooms` and `openExits` on the lattice, **Load a dungeon** sets it to wall and starts from `placeScatteredRooms` and `digCorridors` with their defaults, **Load a grown dungeon** sets it to wall and the size to 61 by 41 and starts from the steps of [`generateDigDungeon`](#grown-dungeons) with their defaults (`placeClusteredRooms` and `digCorridors`), **Load a dungeon with a hall and a cavern** sets it to wall and 61 by 41 and starts from a pillar hall of 16 by 12, a noise cavern of 14 to 18 by 10 to 14 (largest piece only), `placeScatteredRooms` and `digCorridors`, which joins the hall and the cavern as [features](#features), **Load a cave with rooms** from a `digCellularCave` cavern of 24 by 16, 4 to 6 rooms of `placeScatteredRooms` and `digVeins`, which enters the rooms through their potential exits, **Load a prison** sets it to wall and starts from 1 to 2 blocks of [`placeCellBlocks`](#placecellblocks) with a guard room, `placeScatteredRooms` and `digCorridors`, and **Remove all** starts from nothing. Every change runs the pipeline again, so a step put in the wrong order shows the error of [`pipeline`](#pipeline) under the map, and a bad option shows its `RangeError`. **Show after step** picks the map after any step of the last attempt, starting with the base, through `onStep`. It shows the last step by default and keeps following it as steps are added, moved or removed, until you pick an earlier one; picking the last again makes it follow again. The overlays, drawn from what the steps reported up to the chosen step, are **Mark clearing centers**, **Outline templates**, **Outline halls** (the box of every hall of `digPillarHalls`, in yellow), **Outline caverns** (the area of every cave of `digCellularCave` and `digNoiseCave`, in cyan), **Mark tunnels** (a small square on the middle line of every passage of the mine steps, red for a main shaft and blue for the rest), **Mark region centers** (the `center` of every region of floor on the shown map, as the cave presets report it, in red), **Outline rooms** (the floor of every room, cells included, in green), **Outline cell blocks** (the footprint of every cell block, its tunnel and its guard room in magenta, and its entrance in yellow, on by default), **Show room gaps** (the openings of rooms that got no door, as a floor with a potential exit), **Mark maze start** (a green square on the `start` of `digMaze`), **Mark junctions**, **Show reserved** (the [reserved](#mapstate) tiles, red where `Solid` and cyan where `Openable`), **Mark road exits**, **Show grown roads** (a small magenta dot on every tile of a road as it was grown, before the streams bent it) and **Show crossing plans** (outlined squares on the planned ends of each road and on the waypoints of its crossings: cyan where the road turns onto and off the straight run, yellow at both banks), the last two fed by `trace`. **Show walking distances** writes the walk of [`measureDistances`](#walking-distances) from a picked place to the center of every other place the steps reported up to the chosen step: rooms, halls and caverns by their boxes, clearings by their centers, and exits. Click a place on the map to measure from it; it is outlined in white, the farthest place is written in red, the places at least 70% as far in yellow, and `×` marks a place with no way to it. **Distance metric** and **Distance costs** (JSON keyed by tile number, such as `{"7": 10}` to swim deep water, and `1e999` for `Infinity`) are its options, and the line above the map names the farthest places and how long the measuring took. The stats line gives the attempts, the failures and how many roads, streams, bridges, clearings, templates, passages, halls, caverns, rooms, room exits and room groups there are, the rooms counted by `kind`, and the regions of floor of the finished map when it has floor, and the failures are listed under the map; a template that finds no room is an easy way to see a retry. The planted tile of `plantTrees` and the base tile can be tree, wall, floor or grass, so a steppe of rocks on floor is a click away. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
+The steps page is where every map is made: a page with no fixed generator, but a list of steps that you add, order and configure one by one. The form at the top sets the size, the seed, the base tile and the number of attempts. **Add a step** picks any of [`plantTrees`](#planttrees), [`layStreams`](#laystreams), [`layRoads`](#layroads), [`placeClearings`](#placeclearings), [`placeTemplates`](#placetemplates), [`layClearingPaths`](#layclearingpaths), [`layFootbridges`](#layfootbridges), [`digFishbone`](#digfishbone), [`digVeins`](#digveins), [`digPillarHalls`](#digpillarhalls), [`digRings`](#digrings), [`placeMineRooms`](#placeminerooms), [`digCellularCave`](#digcellularcave), [`digNoiseCave`](#dignoisecave), [`placeMazeRooms`](#placemazerooms), [`digMaze`](#digmaze), [`openMazeRooms`](#openmazerooms), [`placeScatteredRooms`](#placescatteredrooms), [`placePartitionedRooms`](#placepartitionedrooms), [`placeClusteredRooms`](#placeclusteredrooms), [`placeCellBlocks`](#placecellblocks), [`digCorridors`](#digcorridors) and [`openExits`](#openexits) and appends a card with a control for each of its options (a blank angle means a random one, ranges are a min and a max, the road and clearing cards take exact roads and clearings as JSON, the `placeMineRooms`, `placeMazeRooms`, `placeScatteredRooms`, `placePartitionedRooms` and `placeClusteredRooms` cards take templates as JSON, as the template editor exports them). A card has buttons to move it up or down and to remove it, **Load a forest** starts from the steps of a forest, **Load a mine** sets the base tile to wall and starts from the step of [`generateMine`](#mines) with its defaults (`digFishbone`), **Load a mine with caverns** adds `digNoiseCave` with the defaults of the preset's [caverns](#caverns) (`'beside'`, sides of 12 to 24, scales of 7, the largest cavern only) and `digVeins`, **Load a cave** and **Load a noise cave** set it to wall too and start from the steps of [`generateCave`](#caves) (`digCellularCave` and `digVeins`) and of [`generateNoiseCave`](#noise-caves) (`digNoiseCave` and `digVeins`) with their defaults, **Load a maze** sets it to wall and starts from the step of [`generateMaze`](#mazes) with its defaults (`digMaze`), **Load a maze with rooms** from `placeMazeRooms` (3 to 5 rooms), `digMaze`, `openMazeRooms` and `openExits` on the lattice, **Load a dungeon** sets it to wall and starts from `placeScatteredRooms` and `digCorridors` with their defaults, **Load a grown dungeon** sets it to wall and the size to 61 by 41 and starts from the steps of [`generateDigDungeon`](#grown-dungeons) with their defaults (`placeClusteredRooms` and `digCorridors`), **Load a dungeon with a hall and a cavern** sets it to wall and 61 by 41 and starts from a pillar hall of 16 by 12, a noise cavern of 14 to 18 by 10 to 14 (largest piece only), `placeScatteredRooms` and `digCorridors`, which joins the hall and the cavern as [features](#features), **Load a cave with rooms** from a `digCellularCave` cavern of 24 by 16, 4 to 6 rooms of `placeScatteredRooms` and `digVeins`, which enters the rooms through their potential exits, **Load a prison** sets it to wall and starts from 1 to 2 blocks of [`placeCellBlocks`](#placecellblocks) with a guard room, `placeScatteredRooms` and `digCorridors`, **Load a lattice prison** does the same on the lattice, every step with `placement: 'lattice'`, and sets the size to 61 by 41, and **Remove all** starts from nothing. Every change runs the pipeline again, so a step put in the wrong order shows the error of [`pipeline`](#pipeline) under the map, and a bad option shows its `RangeError`. **Show after step** picks the map after any step of the last attempt, starting with the base, through `onStep`. It shows the last step by default and keeps following it as steps are added, moved or removed, until you pick an earlier one; picking the last again makes it follow again. The overlays, drawn from what the steps reported up to the chosen step, are **Mark clearing centers**, **Outline templates**, **Outline halls** (the box of every room of kind `'pillarHall'`, in yellow), **Outline caverns** (the area of every `'cave'` group of `digCellularCave` and `digNoiseCave`, in cyan), **Mark tunnels** (a small square on the middle line of every passage of the mine steps, red for a main shaft and blue for the rest), **Outline rooms** (the floor of every room, cells included, but the halls and caverns, in green), **Outline cell blocks** (the footprint of every cell block, its tunnel and its guard room in magenta, and its entrance in yellow, on by default), **Show room gaps** (the openings of rooms that got no door, as a floor with a potential exit), **Mark maze start** (a green square on the `start` of `digMaze`), **Mark junctions**, **Show reserved** (the [reserved](#mapstate) tiles, red where `Solid` and cyan where `Openable`), **Mark road exits**, **Show grown roads** (a small magenta dot on every tile of a road as it was grown, before the streams bent it) and **Show crossing plans** (outlined squares on the planned ends of each road and on the waypoints of its crossings: cyan where the road turns onto and off the straight run, yellow at both banks), the last two fed by `trace`. **Show walking distances** writes the walk of [`measureDistances`](#walking-distances) from a picked place to the center of every other place the steps reported up to the chosen step: rooms, halls and caverns included, by their boxes, clearings by their centers, and exits. Click a place on the map to measure from it; it is outlined in white, the farthest place is written in red, the places at least 70% as far in yellow, and `×` marks a place with no way to it. **Distance metric** and **Distance costs** (JSON keyed by tile number, such as `{"7": 10}` to swim deep water, and `1e999` for `Infinity`) are its options, and the line above the map names the farthest places and how long the measuring took. Point at a room, a hall or a cavern on the map and the line right above the map says what it is, from [`createRoomMap`](#createroommap): its kind, id, group, box, and how many exits and doors it has, and how many of them it shares with another room; its floor is tinted and its exits outlined in magenta. The stats line gives the attempts, the failures and how many roads, streams, bridges, clearings, templates, passages, rooms, room exits and room groups there are, the rooms counted by `kind`, and the regions of floor of the finished map when it has floor, and the failures are listed under the map; a template that finds no room is an easy way to see a retry. The planted tile of `plantTrees` and the base tile can be tree, wall, floor or grass, so a steppe of rocks on floor is a click away. In the `roguelike` display, grass is a green `.` and a tree a darker green `T`.
 
 ## Development
 

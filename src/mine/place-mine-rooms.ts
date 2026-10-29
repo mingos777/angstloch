@@ -3,6 +3,8 @@ import { createSimplexNoise } from '../noise/create-simplex-noise';
 import type { MapStep } from '../pipeline/map-step';
 import { openReserved } from '../pipeline/open-reserved';
 import { step } from '../pipeline/step';
+import { isFeatureRoom } from '../rooms/is-feature-room';
+import { recordDugEntries } from '../rooms/record-dug-entries';
 import { reserveRoomShape } from '../rooms/reserve-room-shape';
 import type { Room } from '../rooms/room';
 import type { RoomShape } from '../rooms/room-shape';
@@ -32,7 +34,8 @@ interface MineRooms {
  * The rooms reserve their footprint (see `reserveRoomShape`), and every exit
  * they open goes through `openReserved`. No room or tunnel is built on a
  * reserved tile, and the floor of a reserved tile, such as an earlier room's,
- * is not floor to join. It uses `passages`, `rooms`, `roomExits` and
+ * is not floor to join. A tunnel that ends in a hall or a cavern is an exit
+ * of it too (see `recordDugEntries`). It uses `passages`, `rooms`, `roomExits` and
  * `roomShapes` from the steps before it, and adds them again with its own
  * appended: the ids of its rooms and the indices of their exits follow on.
  * The map has to start as wall, which `pipeline` checks before the first
@@ -67,6 +70,7 @@ export function placeMineRooms(
       const rooms = [...(state.rooms ?? [])];
       const roomExits = [...(state.roomExits ?? [])];
       const roomShapes = [...(state.roomShapes ?? [])];
+      const before = state.grid.clone();
       const laid = layRooms(
         state.grid,
         random,
@@ -111,7 +115,19 @@ export function placeMineRooms(
       }
       passages.push(...laid.passages);
       roomShapes.push(...laid.roomShapes);
-      return { passages, rooms, roomExits, roomShapes };
+      return {
+        passages,
+        ...recordDugEntries(
+          before,
+          state.grid,
+          state.base,
+          { rooms, roomExits },
+          roomShapes,
+          rooms.filter(isFeatureRoom),
+          firstExit,
+        ),
+        roomShapes,
+      };
     },
   );
 }

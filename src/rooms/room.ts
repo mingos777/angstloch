@@ -15,7 +15,7 @@ export interface Room {
   width: number;
   /** Height in tiles. */
   height: number;
-  /** Indices into `DungeonResult#exits` (or `MazeResult#roomExits`) of the room's exits, doors or not. */
+  /** Indices into `DungeonResult#exits` (or the `roomExits` of the other results and of the steps) of the room's exits, doors or not. A hall's or cavern's are the places where a corridor, a vein or a tunnel enters it. */
   exits: number[];
   /** Number of exits, which is `exits.length`. */
   exitCount: number;

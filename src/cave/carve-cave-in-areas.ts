@@ -14,6 +14,8 @@ import { placeAreas } from '../pipeline/place-areas';
 import { placeBeside } from '../pipeline/place-beside';
 import { Reserve } from '../pipeline/reserve';
 import { stampTile } from '../pipeline/stamp-tile';
+import { addFeatureRoom } from '../rooms/add-feature-room';
+import type { FeatureRooms } from '../rooms/feature-rooms';
 import type { CavePlacement } from './cave-placement';
 import { findCaveRegions } from './find-cave-regions';
 
@@ -37,6 +39,22 @@ function cull(
   );
 }
 
+/** Adds a cave's group and a room of kind `'cavern'` for each of its caverns, given by their tiles on the map. A cave with no caverns adds nothing. */
+function addCave(
+  into: FeatureRooms,
+  area: Area,
+  caverns: readonly (readonly Point[])[],
+): void {
+  if (caverns.length === 0) {
+    return;
+  }
+  const group = into.roomGroups.length;
+  into.roomGroups.push({ kind: 'cave', area });
+  for (const tiles of caverns) {
+    addFeatureRoom(into, 'cavern', group, tiles);
+  }
+}
+
 /**
  * Carves every copy with `placement: 'beside'`: the cave is made and culled on
  * its own grid, its noise sampled at a random spot of the map, and `placeBeside`
@@ -49,10 +67,10 @@ function carveBeside(
   random: Random,
   settings: CaveAreaSettings,
   make: (box: Area) => Grid,
-): Area[] {
+  into: FeatureRooms,
+): void {
   const { width, height } = state.grid;
   const { area, count } = settings;
-  const boxes: Area[] = [];
   const copies = randomInt(random, count.min, count.max);
   for (let copy = 0; copy < copies; ++copy) {
     const size = {
@@ -64,7 +82,8 @@ function carveBeside(
       y: randomInt(random, 0, height - size.height),
       ...size,
     });
-    const floor = cull(findCaveRegions(cave), settings).flat();
+    const caverns = cull(findCaveRegions(cave), settings);
+    const floor = caverns.flat();
     if (floor.length === 0) {
       continue;
     }
@@ -80,15 +99,22 @@ function carveBeside(
     for (const { x, y } of floor) {
       stampTile(state, box.x + x, box.y + y, Tile.Floor);
     }
-    boxes.push(box);
+    addCave(
+      into,
+      box,
+      caverns.map((tiles) =>
+        tiles.map(({ x, y }) => ({ x: x + box.x, y: y + box.y })),
+      ),
+    );
   }
-  return boxes;
 }
 
 /**
  * Carves a cave once in every area that `placement` picks, and returns the
- * caverns of the state, if any, followed by the box of each new copy. `make`
- * returns the walls and floors of a cave the size of the box.
+ * rooms, shapes and groups of the state, if any, followed by a `'cave'` group
+ * for each new copy, with the box it was carved in, and a room of kind
+ * `'cavern'` for each of its caverns (see `addFeatureRoom`). `make` returns
+ * the walls and floors of a cave the size of the box.
  *
  * With `free` and `overlap`, the boxes come from `placeAreas` and the cave is
  * laid over what the box holds: a tile that is not free keeps what it has.
@@ -97,25 +123,29 @@ function carveBeside(
  * one cavern; reserved tiles and any other tile count as wall. Then the caverns
  * below `minRegionSize`, and all but the largest with `largestOnly`, are left
  * out, and the rest is stamped as floor on the free tiles. A piece of old floor
- * that no new floor touches is not a cavern of this cave. With `beside`, see
- * `carveBeside`.
+ * that no new floor touches is not a cavern of this cave, and the room of a
+ * cavern holds only the floor this cave dug. With `beside`, see `carveBeside`.
  */
 export function carveCaveInAreas(
-  state: MapState & { caverns?: Area[] },
+  state: MapState & Partial<FeatureRooms>,
   random: Random,
   settings: CaveAreaSettings,
   make: (box: Area) => Grid,
-): Area[] {
-  const caverns = [...(state.caverns ?? [])];
+): FeatureRooms {
+  const added: FeatureRooms = {
+    rooms: [...(state.rooms ?? [])],
+    roomShapes: [...(state.roomShapes ?? [])],
+    roomGroups: [...(state.roomGroups ?? [])],
+  };
   if (settings.placement === 'beside') {
-    caverns.push(...carveBeside(state, random, settings, make));
-    return caverns;
+    carveBeside(state, random, settings, make, added);
+    return added;
   }
   const boxes = placeAreas(state, random, settings.area, settings.count, {
     overlap: settings.placement === 'overlap',
   });
   for (const box of boxes) {
-    buildInArea(state, box, (scratch) => {
+    const caverns = buildInArea(state, box, (scratch) => {
       const cave = make(box);
       for (let y = 0; y < box.height; ++y) {
         for (let x = 0; x < box.width; ++x) {
@@ -129,20 +159,20 @@ export function carveCaveInAreas(
           }
         }
       }
-      for (const tiles of cull(
+      return cull(
         findCaveRegions(cave).filter((region) =>
           region.some(({ x, y }) => isFree(scratch, x, y)),
         ),
         settings,
-      )) {
-        for (const { x, y } of tiles) {
-          if (isFree(scratch, x, y)) {
-            stampTile(scratch, x, y, Tile.Floor);
-          }
+      ).map((tiles) => {
+        const dug = tiles.filter(({ x, y }) => isFree(scratch, x, y));
+        for (const { x, y } of dug) {
+          stampTile(scratch, x, y, Tile.Floor);
         }
-      }
+        return dug.map(({ x, y }) => ({ x: x + box.x, y: y + box.y }));
+      });
     });
-    caverns.push(box);
+    addCave(added, box, caverns);
   }
-  return caverns;
+  return added;
 }

@@ -14,6 +14,7 @@ import { effectiveSpacing } from '../rooms/effective-spacing';
 import { findTakenTiles } from '../rooms/find-taken-tiles';
 import { listShapeDoors } from '../rooms/list-shape-doors';
 import { reserveRoomShape } from '../rooms/reserve-room-shape';
+import { isFeatureRoom } from '../rooms/is-feature-room';
 import type { Room } from '../rooms/room';
 import type { RoomPlacer } from '../rooms/room-plan';
 import type { RoomShape } from '../rooms/room-shape';
@@ -189,11 +190,14 @@ export function roomPlacementStep(
       const rooms = [...(state.rooms ?? [])];
       const roomShapes = [...(state.roomShapes ?? [])];
       for (const box of placeAreas(state, random, area, count, { lattice })) {
-        const earlier = roomShapes.map((shape) => ({
-          ...shape,
-          x: shape.x - box.x,
-          y: shape.y - box.y,
-        }));
+        // the shapes of halls and caverns block nothing
+        const earlier = roomShapes
+          .filter((_, id) => !isFeatureRoom(rooms[id] as Room))
+          .map((shape) => ({
+            ...shape,
+            x: shape.x - box.x,
+            y: shape.y - box.y,
+          }));
         const wholeMap =
           box.width === state.grid.width && box.height === state.grid.height;
         const placed = buildInArea(state, box, (scratch) =>

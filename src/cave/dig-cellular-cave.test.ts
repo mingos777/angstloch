@@ -7,6 +7,9 @@ import { Reserve } from '../pipeline/reserve';
 import { step } from '../pipeline/step';
 import { countAsymmetry } from '../test-helpers/count-asymmetry';
 import { mulberry32 } from '../test-helpers/mulberry32';
+import { withCaves } from '../test-helpers/with-caves';
+import type { RoomShape } from '../rooms/room-shape';
+import { TemplateCell } from '../rooms/templates/template-cell';
 import { findCaveRegions } from './find-cave-regions';
 import { digCellularCave } from './dig-cellular-cave';
 import type { DigCellularCaveOptions } from './dig-cellular-cave-options';
@@ -14,9 +17,11 @@ import type { DigCellularCaveOptions } from './dig-cellular-cave-options';
 const base = emptyMap({ width: 60, height: 40, tile: Tile.Wall });
 
 function cave(options: DigCellularCaveOptions = {}, seed = 1) {
-  return pipeline(base, [digCellularCave(options)], {
-    random: mulberry32(seed),
-  });
+  return withCaves(
+    pipeline(base, [digCellularCave(options)], {
+      random: mulberry32(seed),
+    }),
+  );
 }
 
 /** A step that reserves every tile of the map. */
@@ -245,7 +250,9 @@ describe('digCellularCave', () => {
     ] as const;
 
     // when
-    const { caverns } = pipeline(base, steps, { random: mulberry32(1) });
+    const { caverns } = withCaves(
+      pipeline(base, steps, { random: mulberry32(1) }),
+    );
 
     // then
     expect(caverns).toHaveLength(3);
@@ -294,6 +301,89 @@ describe('digCellularCave', () => {
     expect(findCaveRegions(grid)).toHaveLength(1);
   });
 
+  describe('caverns as rooms', () => {
+    /** The floor tiles of a shape, in the coordinates of the map. */
+    const floorOf = (shape: RoomShape) =>
+      shape.cells.flatMap((row, dy) =>
+        row.flatMap((cell, dx) =>
+          cell === TemplateCell.Floor
+            ? [`${String(shape.x + dx)},${String(shape.y + dy)}`]
+            : [],
+        ),
+      );
+
+    it('lists one room of kind cavern for each cavern, in the group of its cave', () => {
+      // given
+      const options = { minRegionSize: 10 };
+
+      // when
+      const { grid, rooms, roomGroups } = cave(options, 2);
+
+      // then
+      expect(rooms).toHaveLength(findCaveRegions(grid).length);
+      expect(
+        rooms.every(({ kind, group }) => kind === 'cavern' && group === 0),
+      ).toBe(true);
+      expect(roomGroups).toEqual([
+        { kind: 'cave', area: { x: 0, y: 0, width: 60, height: 40 } },
+      ]);
+    });
+
+    it('gives every cavern its floor as its shape and the bounds of that floor as its box', () => {
+      // given
+      const options = { minRegionSize: 10 };
+
+      // when
+      const { grid, rooms, roomShapes } = cave(options, 2);
+
+      // then
+      const regions = findCaveRegions(grid).map((tiles) =>
+        tiles.map(({ x, y }) => `${String(x)},${String(y)}`).sort(),
+      );
+      roomShapes.forEach((shape, id) => {
+        const floor = floorOf(shape).sort();
+        const xs = floor.map((key) => Number(key.split(',')[0]));
+        const ys = floor.map((key) => Number(key.split(',')[1]));
+        expect(regions).toContainEqual(floor);
+        expect(rooms[id]).toMatchObject({
+          x: Math.min(...xs),
+          y: Math.min(...ys),
+          width: Math.max(...xs) - Math.min(...xs) + 1,
+          height: Math.max(...ys) - Math.min(...ys) + 1,
+        });
+      });
+    });
+
+    it('reserves no tile of its caverns', () => {
+      // given
+      const options = {};
+
+      // when
+      const { reserved } = cave(options, 2);
+
+      // then
+      expect(reserved.every((value) => value === Reserve.None)).toBe(true);
+    });
+
+    it('leaves the floor that was there out of the shapes of its caverns', () => {
+      // given
+      const corridor = step('corridor', {}, ({ grid }) => {
+        for (let x = 1; x < 59; ++x) {
+          grid.set(x, 20, Tile.Floor);
+        }
+        return {};
+      });
+      const steps = [corridor, digCellularCave({ largestOnly: true })] as const;
+
+      // when
+      const { roomShapes } = pipeline(base, steps, { random: mulberry32(5) });
+
+      // then
+      const floor = roomShapes.flatMap(floorOf);
+      expect(floor.some((key) => key.endsWith(',20'))).toBe(false);
+    });
+  });
+
   describe('placement', () => {
     /** A corridor along row 20, from the left edge to the right. */
     const corridor = step('corridor', {}, ({ grid }) => {
@@ -315,7 +405,7 @@ describe('digCellularCave', () => {
 
       // when
       const runs = [1, 2, 3, 4].map((seed) =>
-        pipeline(base, steps, { random: mulberry32(seed) }),
+        withCaves(pipeline(base, steps, { random: mulberry32(seed) })),
       );
 
       // then
@@ -371,9 +461,11 @@ describe('digCellularCave', () => {
       ] as const;
 
       // when
-      const { caverns, attempts } = pipeline(base, steps, {
-        random: mulberry32(1),
-      });
+      const { caverns, attempts } = withCaves(
+        pipeline(base, steps, {
+          random: mulberry32(1),
+        }),
+      );
 
       // then
       expect(caverns).toEqual([]);
@@ -392,16 +484,18 @@ describe('digCellularCave', () => {
       ] as const;
 
       // when
-      const { grid, caverns } = pipeline(base, steps, {
-        random: mulberry32(2),
-      });
+      const { grid, caverns } = withCaves(
+        pipeline(base, steps, {
+          random: mulberry32(2),
+        }),
+      );
 
       // then
       expect(caverns).toHaveLength(1);
       expect(findCaveRegions(grid)).toHaveLength(1);
     });
 
-    it('carves no floor on a reserved tile with overlap', () => {
+    it('carves no floor on a reserved tile with overlap, and makes no cave', () => {
       // given
       const steps = [
         reserveAll,
@@ -409,12 +503,14 @@ describe('digCellularCave', () => {
       ] as const;
 
       // when
-      const { grid, caverns } = pipeline(base, steps, {
-        random: mulberry32(1),
-      });
+      const { grid, caverns } = withCaves(
+        pipeline(base, steps, {
+          random: mulberry32(1),
+        }),
+      );
 
       // then
-      expect(caverns).toHaveLength(1);
+      expect(caverns).toEqual([]);
       expect(grid.toString()).not.toContain('.');
     });
   });

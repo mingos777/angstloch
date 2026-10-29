@@ -4,7 +4,8 @@ import type { PlaceCellBlocksOptions } from './place-cell-blocks-options';
 
 const ORIENTATIONS: readonly string[] = ['horizontal', 'vertical', 'any'];
 const CELL_DOORS: readonly string[] = ['centered', 'jittered'];
-const GUARD_PLACEMENTS: readonly string[] = ['beside'];
+const PLACEMENTS: readonly string[] = ['free', 'lattice'];
+const GUARD_PLACEMENTS: readonly string[] = ['beside', 'through', 'any'];
 
 /** Throws a `RangeError` unless the options of `placeCellBlocks` are valid. The `area` is checked against the map later. */
 export function assertPlaceCellBlocksOptions(
@@ -45,6 +46,14 @@ export function assertPlaceCellBlocksOptions(
   ) {
     throw new RangeError(
       `cellDoors must be one of ${CELL_DOORS.join(', ')}, got ${options.cellDoors}`,
+    );
+  }
+  if (
+    options.placement !== undefined &&
+    !PLACEMENTS.includes(options.placement)
+  ) {
+    throw new RangeError(
+      `placement must be one of ${PLACEMENTS.join(', ')}, got ${options.placement}`,
     );
   }
   const guard = options.guardRoom;

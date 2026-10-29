@@ -7,7 +7,9 @@ import { pipeline } from '../pipeline/pipeline';
 import { Reserve } from '../pipeline/reserve';
 import { step } from '../pipeline/step';
 import { countAsymmetry } from '../test-helpers/count-asymmetry';
+import type { CaveGroup } from '../rooms/cave-group';
 import { mulberry32 } from '../test-helpers/mulberry32';
+import { withCaves } from '../test-helpers/with-caves';
 import { digNoiseCave } from './dig-noise-cave';
 import type { DigNoiseCaveOptions } from './dig-noise-cave-options';
 import { findCaveRegions } from './find-cave-regions';
@@ -15,9 +17,11 @@ import { findCaveRegions } from './find-cave-regions';
 const base = emptyMap({ width: 60, height: 40, tile: Tile.Wall });
 
 function cave(options: DigNoiseCaveOptions = {}, seed = 1) {
-  return pipeline(base, [digNoiseCave(options)], {
-    random: mulberry32(seed),
-  });
+  return withCaves(
+    pipeline(base, [digNoiseCave(options)], {
+      random: mulberry32(seed),
+    }),
+  );
 }
 
 /** A cave on a map of its own size. */
@@ -465,6 +469,39 @@ describe('digNoiseCave', () => {
     expect(run).toThrow(/digNoiseCave digs its floor out of rock/);
   });
 
+  it('lists the caverns of a cave placed beside as rooms inside its area', () => {
+    // given
+    const steps = [
+      digNoiseCave({
+        area: { width: { min: 14, max: 14 }, height: { min: 14, max: 14 } },
+      }),
+      digNoiseCave({
+        area: { width: { min: 14, max: 14 }, height: { min: 14, max: 14 } },
+        placement: 'beside',
+        largestOnly: true,
+      }),
+    ] as const;
+
+    // when
+    const { rooms, roomGroups } = pipeline(base, steps, {
+      random: mulberry32(2),
+    });
+
+    // then
+    const beside = rooms.filter(({ group }) => group === 1);
+    const { area } = roomGroups[1] as CaveGroup;
+    expect(beside).toHaveLength(1);
+    for (const room of beside) {
+      expect(room.kind).toBe('cavern');
+      expect(
+        room.x >= area.x && room.x + room.width <= area.x + area.width,
+      ).toBe(true);
+      expect(
+        room.y >= area.y && room.y + room.height <= area.y + area.height,
+      ).toBe(true);
+    }
+  });
+
   it('places a cave beside the floor that was there, a wall away from it', () => {
     // given
     const corridor = step('corridor', {}, ({ grid }) => {
@@ -486,7 +523,7 @@ describe('digNoiseCave', () => {
 
     // when
     const runs = [1, 2, 3].map((seed) =>
-      pipeline(base, steps, { random: mulberry32(seed) }),
+      withCaves(pipeline(base, steps, { random: mulberry32(seed) })),
     );
 
     // then

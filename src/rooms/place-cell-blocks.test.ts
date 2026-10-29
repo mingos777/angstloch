@@ -1,23 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import type { Area } from '../core/area';
 import { Tile } from '../core/tile';
+import { digCorridors } from '../dungeon/dig-corridors';
 import { placeScatteredRooms } from '../dungeon/place-scattered-rooms';
 import { emptyMap } from '../pipeline/empty-map';
 import { pipeline } from '../pipeline/pipeline';
 import { Reserve } from '../pipeline/reserve';
+import { cellBlocksOf } from '../test-helpers/cell-blocks-of';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { placeCellBlocks } from './place-cell-blocks';
+import { TemplateCell } from './templates/template-cell';
 import type { PlaceCellBlocksOptions } from './place-cell-blocks-options';
 
 const SEEDS = Array.from({ length: 20 }, (_, i) => i + 1);
 
 /** Runs the step alone on a wall map of 60 by 40. */
 function place(options: PlaceCellBlocksOptions = {}, seed = 1) {
-  return pipeline(
+  const result = pipeline(
     emptyMap({ width: 60, height: 40, tile: Tile.Wall }),
     [placeCellBlocks(options)],
     { random: mulberry32(seed) },
   );
+  return { ...result, roomGroups: cellBlocksOf(result.roomGroups) };
 }
 
 const inside = (box: Area, x: number, y: number) =>
@@ -498,6 +502,333 @@ describe('placeCellBlocks', () => {
     });
   });
 
+  describe('with a guard room it is entered through', () => {
+    const through = (options: PlaceCellBlocksOptions = {}, seed = 1) =>
+      place(
+        {
+          orientation: 'horizontal',
+          ...options,
+          guardRoom: { placement: 'through', ...options.guardRoom },
+        },
+        seed,
+      );
+    const guardOf = (result: ReturnType<typeof through>) =>
+      result.rooms.find(({ kind }) => kind === 'guardRoom') as Area;
+
+    it('stands the guard room against the end wall of the block', () => {
+      // given
+      const runs = SEEDS.map((seed) => through({}, seed));
+
+      // when
+      const sides = runs.map((result) => {
+        const guard = guardOf(result);
+        const { x, width } = result.roomGroups[0]?.footprint as Area;
+        // the end walls are the first and the last column of the footprint
+        if (guard.x === x + width) {
+          return 'end';
+        }
+        return guard.x + guard.width === x ? 'start' : 'apart';
+      });
+
+      // then
+      expect(new Set(sides)).toEqual(new Set(['start', 'end']));
+    });
+
+    it('gives the guard room its door in the end wall, at the end of the corridor', () => {
+      // given
+      const result = through();
+
+      // when
+      const { grid, rooms, roomExits, roomGroups } = result;
+
+      // then
+      const guard = rooms.find(({ kind }) => kind === 'guardRoom');
+      const { corridor } = roomGroups[0] ?? {};
+      const c = corridor as Area;
+      const door = roomExits[guard?.exits[0] ?? -1]?.position;
+      expect([c.x - 1, c.x + c.width]).toContain(door?.x);
+      expect(door && door.y >= c.y && door.y < c.y + c.height).toBe(true);
+      expect(grid.get(door?.x ?? 0, door?.y ?? 0)).toBe(Tile.Door);
+    });
+
+    it('puts the entrance in the far wall, opposite the door', () => {
+      // given
+      const result = through({ corridorWidth: { min: 3, max: 3 } });
+
+      // when
+      const guard = guardOf(result);
+      const { rooms, roomExits, roomGroups, grid, reserved } = result;
+
+      // then
+      const room = rooms.find(({ kind }) => kind === 'guardRoom');
+      const door = roomExits[room?.exits[0] ?? -1]?.position;
+      const entrance = roomGroups[0]?.entrance;
+      const far = door?.x === guard.x - 1 ? guard.x + guard.width : guard.x - 1;
+      expect(entrance).toEqual({ x: far, y: door?.y });
+      expect(grid.get(far, door?.y ?? 0)).toBe(Tile.Wall);
+      expect(reserved[(door?.y ?? 0) * grid.width + far]).toBe(
+        Reserve.Openable,
+      );
+    });
+
+    it('centers the floor of the guard room on the entrance row', () => {
+      // given
+      const options = { guardRoom: { size: { depth: { min: 5, max: 5 } } } };
+
+      // when
+      const result = through(options);
+
+      // then
+      const guard = guardOf(result);
+      expect(guard.height).toBe(5);
+      expect(result.roomGroups[0]?.entrance.y).toBe(guard.y + 2);
+    });
+
+    it('makes the entrance a potential exit of the guard room shape', () => {
+      // given
+      const result = through();
+
+      // when
+      const room = result.rooms.find(({ kind }) => kind === 'guardRoom');
+      const shape = result.roomShapes[room?.id ?? -1];
+
+      // then
+      const { x, y } = result.roomGroups[0]?.entrance ?? { x: 0, y: 0 };
+      const cell = shape?.cells[y - shape.y]?.[x - shape.x];
+      expect(cell).toBe(TemplateCell.OptionalExit);
+    });
+
+    it('lays no tunnel', () => {
+      // given
+      const options = {};
+
+      // when
+      const { roomGroups } = through(options);
+
+      // then
+      expect(roomGroups[0]?.tunnel).toBeUndefined();
+    });
+
+    it('reserves the guard room with its walls solid, but for the entrance', () => {
+      // given
+      const result = through();
+
+      // when
+      const guard = guardOf(result);
+      const { grid, reserved, roomGroups } = result;
+
+      // then
+      const entrance = roomGroups[0]?.entrance ?? { x: -1, y: -1 };
+      for (let y = guard.y - 1; y <= guard.y + guard.height; ++y) {
+        for (let x = guard.x - 1; x <= guard.x + guard.width; ++x) {
+          const want =
+            x === entrance.x && y === entrance.y
+              ? Reserve.Openable
+              : Reserve.Solid;
+          expect(reserved[y * grid.width + x]).toBe(want);
+        }
+      }
+    });
+
+    it('keeps the guard room on the lattice', () => {
+      // given
+      const options = {
+        placement: 'lattice' as const,
+        corridorWidth: { min: 1, max: 5 },
+        guardRoom: {
+          size: { width: { min: 3, max: 7 }, depth: { min: 3, max: 9 } },
+        },
+      };
+
+      // when
+      const runs = SEEDS.map((seed) => through(options, seed));
+
+      // then
+      for (const result of runs) {
+        const guard = guardOf(result);
+        const { x, y } = result.roomGroups[0]?.entrance ?? { x: 0, y: 0 };
+        expect([guard.x % 2, guard.y % 2]).toEqual([1, 1]);
+        expect([guard.width % 2, guard.height % 2]).toEqual([1, 1]);
+        expect([x % 2, y % 2]).toEqual([0, 1]);
+      }
+    });
+  });
+
+  it('draws either placement of the guard room for each block with any', () => {
+    // given
+    const options = { guardRoom: { placement: 'any' as const } };
+
+    // when
+    const runs = SEEDS.map((seed) => place(options, seed));
+
+    // then
+    const tunnels = runs.map(({ roomGroups }) => roomGroups[0]?.tunnel);
+    expect(new Set(tunnels.map((tunnel) => tunnel !== undefined))).toEqual(
+      new Set([true, false]),
+    );
+  });
+
+  describe('on the lattice', () => {
+    const odd = (n: number) => n % 2 === 1;
+    const even = (n: number) => n % 2 === 0;
+    const onLattice = (options: PlaceCellBlocksOptions = {}, seed = 1) =>
+      place({ placement: 'lattice', ...options }, seed);
+
+    it('starts the footprint on even coordinates with odd sides', () => {
+      // given
+      const runs = SEEDS.map((seed) => onLattice({}, seed));
+
+      // when
+      const footprints = runs.map(({ roomGroups }) => roomGroups[0]?.footprint);
+
+      // then
+      for (const footprint of footprints) {
+        const { x, y, width, height } = footprint as Area;
+        expect([even(x), even(y), odd(width), odd(height)]).toEqual([
+          true,
+          true,
+          true,
+          true,
+        ]);
+      }
+    });
+
+    it('narrows the cell sizes and the corridor width to odd numbers', () => {
+      // given
+      const options = {
+        cellSize: { width: { min: 4, max: 4 }, depth: { min: 2, max: 2 } },
+        corridorWidth: { min: 2, max: 2 },
+        orientation: 'horizontal' as const,
+      };
+
+      // when
+      const { rooms, roomGroups } = onLattice(options);
+
+      // then
+      expect([rooms[0]?.width, rooms[0]?.height]).toEqual([5, 3]);
+      expect(roomGroups[0]?.corridor.height).toBe(3);
+    });
+
+    it('puts the floor of the cells and the corridor on odd coordinates', () => {
+      // given
+      const runs = SEEDS.map((seed) => onLattice({}, seed));
+
+      // when
+      const floors = runs.flatMap(({ rooms, roomGroups }) => [
+        ...rooms,
+        ...roomGroups.map(({ corridor }) => corridor),
+      ]);
+
+      // then
+      expect(floors.every(({ x, y }) => odd(x) && odd(y))).toBe(true);
+    });
+
+    it('puts the entrance on an odd row of the corridor, with the tile beyond odd on both axes', () => {
+      // given
+      const options = { corridorWidth: { min: 3, max: 5 } };
+
+      // when
+      const groups = SEEDS.map(
+        (seed) => onLattice(options, seed).roomGroups[0],
+      );
+
+      // then
+      for (const group of groups) {
+        const { entrance, footprint } = group ?? {};
+        const { x, y } = entrance ?? { x: 0, y: 0 };
+        const atSide =
+          x === footprint?.x ||
+          x === (footprint?.x ?? 0) + (footprint?.width ?? 0) - 1;
+        // the wall at an end of the corridor is even across it and odd along it
+        expect(atSide ? even(x) && odd(y) : odd(x) && even(y)).toBe(true);
+      }
+    });
+
+    it('keeps a one-sided block on the lattice whichever side its cells are on', () => {
+      // given
+      const options = { sides: { min: 1, max: 1 } };
+
+      // when
+      const runs = SEEDS.map((seed) => onLattice(options, seed));
+
+      // then
+      for (const { rooms, roomGroups } of runs) {
+        const { x, y } = roomGroups[0]?.corridor ?? { x: 0, y: 0 };
+        expect([odd(x), odd(y)]).toEqual([true, true]);
+        expect(rooms.every((room) => odd(room.x) && odd(room.y))).toBe(true);
+      }
+    });
+
+    it('stands the guard room against the end wall of the block', () => {
+      // given
+      const options = {
+        orientation: 'horizontal' as const,
+        guardRoom: {},
+      };
+
+      // when
+      const runs = SEEDS.map((seed) => onLattice(options, seed));
+
+      // then
+      for (const { rooms, roomGroups } of runs) {
+        const guard = rooms.find(({ kind }) => kind === 'guardRoom') as Area;
+        const { x, width } = roomGroups[0]?.footprint as Area;
+        expect([x - guard.width, x + width]).toContain(guard.x);
+        expect([odd(guard.x), odd(guard.y)]).toEqual([true, true]);
+        expect([odd(guard.width), odd(guard.height)]).toEqual([true, true]);
+      }
+    });
+
+    it('gives the tunnel an odd length, so the tile beyond the entrance is odd', () => {
+      // given
+      const options = {
+        orientation: 'horizontal' as const,
+        guardRoom: {
+          size: { width: { min: 3, max: 7 } },
+          tunnel: { min: 0, max: 4 },
+        },
+      };
+
+      // when
+      const groups = SEEDS.map(
+        (seed) => onLattice(options, seed).roomGroups[0],
+      );
+
+      // then
+      for (const group of groups) {
+        const { tunnel, entrance } = group ?? {};
+        expect(odd(tunnel?.width ?? 0)).toBe(true);
+        expect([even(entrance?.x ?? 1), odd(entrance?.y ?? 0)]).toEqual([
+          true,
+          true,
+        ]);
+      }
+    });
+
+    it('lets lattice corridors reach every block', () => {
+      // given
+      const steps = [
+        placeCellBlocks({
+          blocks: { min: 1, max: 2 },
+          placement: 'lattice',
+          guardRoom: { chance: 0.5 },
+        }),
+        placeScatteredRooms({ placement: 'lattice' }),
+        digCorridors({ placement: 'lattice' }),
+      ];
+
+      // when
+      const runs = SEEDS.map((seed) =>
+        pipeline(emptyMap({ width: 81, height: 51, tile: Tile.Wall }), steps, {
+          random: mulberry32(seed),
+        }),
+      );
+
+      // then
+      expect(runs.every(({ attempts }) => attempts === 1)).toBe(true);
+    });
+  });
+
   it('throws an error when no spot fits the block', () => {
     // given
     const state = emptyMap({ width: 12, height: 12, tile: Tile.Wall })();
@@ -532,6 +863,7 @@ describe('placeCellBlocks', () => {
     ['count', { count: { min: -1, max: 0 } }],
     ['orientation', { orientation: 'diagonal' as 'any' }],
     ['cellDoors', { cellDoors: 'random' as 'centered' }],
+    ['placement', { placement: 'grid' as 'free' }],
     ['guardRoom.chance', { guardRoom: { chance: 1.5 } }],
     [
       'guardRoom.size.width',
@@ -542,10 +874,7 @@ describe('placeCellBlocks', () => {
       { guardRoom: { size: { depth: { min: 3, max: 2 } } } },
     ],
     ['guardRoom.tunnel', { guardRoom: { tunnel: { min: -1, max: 2 } } }],
-    [
-      'guardRoom.placement',
-      { guardRoom: { placement: 'through' as 'beside' } },
-    ],
+    ['guardRoom.placement', { guardRoom: { placement: 'inside' as 'beside' } }],
   ])('rejects a bad %s', (_, options) => {
     // given
     const make = () => placeCellBlocks(options);
