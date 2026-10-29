@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Grid } from '../core/grid';
+import type { Point } from '../core/point';
 import { Tile } from '../core/tile';
 import { placeScatteredRooms } from '../dungeon/place-scattered-rooms';
 import { emptyMap } from '../pipeline/empty-map';
 import { pipeline } from '../pipeline/pipeline';
+import type { MapStep } from '../pipeline/map-step';
 import { Reserve } from '../pipeline/reserve';
+import { brushOffsets } from '../roads/brush-offsets';
 import { step } from '../pipeline/step';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { digFishbone } from '../mine/dig-fishbone';
@@ -44,6 +47,56 @@ function shutIn(grid: Grid): number {
     count += grid.get(x, y) === Tile.Wall && outside[at] === 0 ? 1 : 0;
   }
   return count;
+}
+
+/**
+ * Digs veins after the given step, and returns the ends of veins that lie in
+ * rock: an end that was free rock before `digVeins`, which no other vein
+ * reaches, by running over it or over a tile next to it.
+ */
+function rockEnds(
+  before: MapStep,
+  options: DigVeinsOptions,
+  seed: number,
+): Point[] {
+  let rock = new Uint8Array(0);
+  const { passages } = pipeline(base, [before, digVeins(options)] as const, {
+    random: mulberry32(seed),
+    onStep: (name, { grid, reserved }) => {
+      if (name !== 'digVeins') {
+        rock = reserved.map((mark, at) =>
+          mark === Reserve.None &&
+          grid.get(at % grid.width, Math.floor(at / grid.width)) === Tile.Wall
+            ? 1
+            : 0,
+        );
+      }
+    },
+  });
+  // every vein covers its brush, and the tiles next to that
+  const reach = passages.map(({ tiles, width }) => {
+    const covered = new Set<string>();
+    for (const tile of tiles) {
+      for (const offset of brushOffsets(width + 2)) {
+        covered.add(
+          `${String(tile.x + offset.x)},${String(tile.y + offset.y)}`,
+        );
+      }
+    }
+    return covered;
+  });
+  return passages.flatMap(({ tiles }, index) =>
+    [tiles[0], tiles[tiles.length - 1]].filter(
+      (end): end is Point =>
+        end !== undefined &&
+        rock[end.y * base().grid.width + end.x] === 1 &&
+        reach.every(
+          (covered, other) =>
+            other === index ||
+            !covered.has(`${String(end.x)},${String(end.y)}`),
+        ),
+    ),
+  );
 }
 
 describe('digVeins on an empty map', () => {
@@ -579,5 +632,77 @@ describe('digVeins with a symmetry', () => {
         expect(grid.get(x, y)).toBe(Tile.Wall);
       }
     }
+  });
+});
+
+describe('digVeins dead ends', () => {
+  const seeds = Array.from({ length: 20 }, (_, index) => index + 1);
+
+  it('ends every vein between halls on floor or on another vein', () => {
+    // given
+    const options = { density: 0.15 };
+
+    // when
+    const failing = seeds.filter(
+      (seed) => rockEnds(digPillarHalls(), options, seed).length > 0,
+    );
+
+    // then
+    expect(failing).toEqual([]);
+  });
+
+  it('ends every wide vein between halls on floor or on another vein', () => {
+    // given
+    const options = { density: 0.15, veinWidth: { min: 3, max: 3 } };
+
+    // when
+    const failing = seeds.filter(
+      (seed) => rockEnds(digPillarHalls(), options, seed).length > 0,
+    );
+
+    // then
+    expect(failing).toEqual([]);
+  });
+
+  it('ends every vein between rooms on floor or on another vein', () => {
+    // given
+    const rooms = placeScatteredRooms({ roomCount: { min: 6, max: 6 } });
+    const options = { density: 0.15 };
+
+    // when
+    const failing = seeds.filter(
+      (seed) => rockEnds(rooms, options, seed).length > 0,
+    );
+
+    // then
+    expect(failing).toEqual([]);
+  });
+
+  it('digs no twin that ends in rock, even when the halls are not symmetric', () => {
+    // given
+    const options = {
+      density: 0.15,
+      veinWidth: { min: 1, max: 1 },
+      symmetry: 'horizontal' as const,
+    };
+
+    // when
+    const failing = seeds.filter(
+      (seed) => rockEnds(digPillarHalls(), options, seed).length > 0,
+    );
+
+    // then
+    expect(failing).toEqual([]);
+  });
+
+  it('may end veins in rock in a web of its own, on an empty map', () => {
+    // given
+    const nothing = floorBlocks();
+
+    // when
+    const ends = rockEnds(nothing, { density: 0.15 }, 1);
+
+    // then
+    expect(ends.length).toBeGreaterThan(0);
   });
 });

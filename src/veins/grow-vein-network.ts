@@ -62,6 +62,13 @@ interface Target extends PiecePort {
   node: number;
 }
 
+/** A vein that was dug, with the ports it joins. */
+interface DugVein {
+  vein: { passage: MinePassage; carved: number[] };
+  from: PiecePort;
+  end: PiecePort;
+}
+
 /** The nodes a vein joins, apart from the vein itself. */
 interface VeinEnds {
   from: number;
@@ -116,6 +123,8 @@ export function growVeinNetwork(
   const junctions: Point[] = [];
   const joined = new Set<number>();
   let outside = findOutsideRock(grid);
+  // what twins may dig: rock that the pieces shut in, such as pillars, stays, but rock that veins shut in does not
+  const twinRock = outside.slice();
   let stale = false;
   // the last resort of the joins: rock that floor shuts in counts too
   let anyRock = false;
@@ -191,13 +200,69 @@ export function growVeinNetwork(
     };
   };
 
-  /** Digs a vein from a node to the nearest of the targets. Returns whether it did. */
+  /** The last vein dug, and its ends. */
+  let last: DugVein | undefined;
+
+  /**
+   * Digs the twins of veins, at the images where each of the `ends` is floor,
+   * or an `Openable` tile for a door, so that every twin joins two things too.
+   * On an empty map, where a web may end in rock, every image counts.
+   */
+  const stampTwins = (
+    veins: readonly DugVein[],
+    checked: readonly PiecePort[],
+  ) => {
+    const fitting = images.filter(
+      ({ point }) =>
+        mandatory === 0 ||
+        checked.every((port) => {
+          const { x, y } = point(port);
+          return port.door
+            ? reserved[y * grid.width + x] === Reserve.Openable
+            : grid.get(x, y) !== Tile.Wall;
+        }),
+    );
+    if (fitting.length === 0) {
+      return;
+    }
+    for (const { vein, from, end } of veins) {
+      const twins = stampVeinTwins(
+        view,
+        fitting,
+        twinRock,
+        {
+          ...vein,
+          // the ends too, since a junction is floor that no vein carved
+          carved: [
+            ...vein.carved,
+            ...[from, end]
+              .filter(({ door }) => !door)
+              .map(({ x, y }) => y * grid.width + x),
+          ],
+        },
+        [from, end].filter(({ door }) => door),
+      );
+      dug += twins.dug;
+      passages.push(...twins.passages);
+      for (const { point } of fitting) {
+        junctions.push(point(from), point(end));
+      }
+    }
+  };
+
+  /** Rolls whether a vein gets its twins. */
+  const rollTwins = (): boolean =>
+    images.length > 0 && random() < settings.symmetryChance;
+
+  /** Digs a vein from a node, or from the `start` ports when given, to the nearest of the targets, with its twins when `twinned` says so (rolled when not given). Returns whether it did. */
   const join = (
     node: number,
     targets: readonly Target[],
     relaxed: boolean,
+    twinned?: boolean,
+    start?: readonly PiecePort[],
   ): boolean => {
-    const own = portsOf(node);
+    const own = start ?? portsOf(node);
     const middle = middles[node];
     // an end that no route reaches is not tried again
     let candidates = anyRock
@@ -269,19 +334,9 @@ export function growVeinNetwork(
       dug += vein.carved.length;
       junctions.push(from, end);
       passages.push(vein.passage);
-      if (images.length > 0 && random() < settings.symmetryChance) {
-        const twins = stampVeinTwins(
-          view,
-          images,
-          findOutsideRock(grid),
-          vein,
-          [from, end].filter(({ door }) => door),
-        );
-        dug += twins.dug;
-        passages.push(...twins.passages);
-        for (const { point } of images) {
-          junctions.push(point(from), point(end));
-        }
+      last = { vein, from, end };
+      if (twinned ?? rollTwins()) {
+        stampTwins([last], [from, end]);
       }
       const created = nodes.length;
       nodes.push(
@@ -453,6 +508,92 @@ export function growVeinNetwork(
     middles.pop();
   };
 
+  /** Saves the map and the network, and returns a function that brings them back. */
+  const save = (): (() => void) => {
+    const tiles = grid.clone();
+    const marks = reserved.slice();
+    const counts = [nodes.length, passages.length, junctions.length, dug];
+    return () => {
+      for (let y = 0; y < grid.height; ++y) {
+        for (let x = 0; x < grid.width; ++x) {
+          grid.set(x, y, tiles.get(x, y));
+        }
+      }
+      reserved.set(marks);
+      const [nodeCount = 0, passageCount = 0, junctionCount = 0] = counts;
+      for (let node = nodeCount; node < nodes.length; ++node) {
+        ends.delete(node);
+        joined.delete(node);
+      }
+      nodes.length = nodeCount;
+      middles.length = nodeCount;
+      passages.length = passageCount;
+      junctions.length = junctionCount;
+      dug = counts[3] ?? 0;
+      stale = true;
+    };
+  };
+
+  /**
+   * Digs a second vein from a junction that one vein reaches, so that it is a
+   * bend on the way between two parts of the network and not a dead end. It
+   * leaves from the junction, or from the tiles of the vein nearest it when a
+   * wide vein leaves no free rock beside the junction. It goes anywhere but
+   * along the vein, and not to the other end of the vein, unless nothing else
+   * is there. Returns whether it was dug.
+   */
+  const tieUp = (junction: number, vein: number): boolean => {
+    const spot = nodes[junction]?.[0];
+    if (!spot) {
+      return false;
+    }
+    const own = portsOf(junction);
+    const ports = own.length > 0 ? own : portsOf(vein);
+    const gap = (port: Point) => Math.hypot(port.x - spot.x, port.y - spot.y);
+    const nearest = Math.min(...ports.map(gap));
+    const start = ports.filter((port) => gap(port) === nearest);
+    const { from, to } = ends.get(vein) ?? { from: junction, to: junction };
+    const others = networkNodes().filter(
+      (node) => node !== junction && node !== vein,
+    );
+    const apart = others.filter((node) => node !== from && node !== to);
+    return (
+      (apart.length > 0 &&
+        join(junction, targetsOf(apart), false, false, start)) ||
+      join(junction, targetsOf(others), false, false, start)
+    );
+  };
+
+  /**
+   * Joins a junction to the network. On a map with pieces it gets two veins
+   * (see `tieUp`), so that no vein between them ends in rock; when both cannot
+   * be dug, nothing is. The twins of both are rolled once and dug once both
+   * veins are, at the images where both far ends are floor. A web of its
+   * own, on an empty map, may end in rock, so there a junction gets one vein.
+   */
+  const joinJunction = (spot: Point, targets: readonly Target[]): void => {
+    if (mandatory === 0) {
+      if (!join(stampJunction(spot), targets, false)) {
+        removeJunction(spot);
+      }
+      return;
+    }
+    const restore = save();
+    const junction = stampJunction(spot);
+    const twinned = rollTwins();
+    const first = join(junction, targets, false, false) ? last : undefined;
+    const second =
+      first && tieUp(junction, nodes.length - 1) ? last : undefined;
+    if (!first || !second) {
+      restore();
+      return;
+    }
+    if (twinned) {
+      // the junction's own images are dug by the twins, so only the far ends are checked
+      stampTwins([first, second], [first.end, second.end]);
+    }
+  };
+
   const wanted = settings.density * diggable;
 
   /** Joins the junctions of one scatter, the one nearest the network first, until the density is reached. */
@@ -489,9 +630,7 @@ export function growVeinNetwork(
         return;
       }
       spots.splice(spots.indexOf(next.spot), 1);
-      if (!join(stampJunction(next.spot), targets, false)) {
-        removeJunction(next.spot);
-      }
+      joinJunction(next.spot, targets);
     }
   };
 
