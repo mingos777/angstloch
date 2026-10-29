@@ -97,7 +97,23 @@
       <label
         >Show crossing plans <input name="showPlans" type="checkbox"
       /></label>
+      <label
+        >Show walking distances <input name="showDistances" type="checkbox"
+      /></label>
+      <label
+        >Distance metric
+        <select name="metric">
+          <option value="euclidean">euclidean</option>
+          <option value="chebyshev">chebyshev</option>
+          <option value="manhattan">manhattan</option>
+        </select>
+      </label>
+      <label
+        >Distance costs (JSON by tile number)
+        <input name="costs" type="text" placeholder='{"7": 10}'
+      /></label>
     </form>
+    <p id="distances"></p>
     <canvas id="map"></canvas>
     <p id="error"></p>
     <pre id="failures"></pre>

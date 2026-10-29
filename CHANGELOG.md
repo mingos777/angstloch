@@ -14,5 +14,6 @@ Initial release. The README documents everything below in full.
 - **Exits** carved into the map border for mazes, caves and mines.
 - **Symmetry** for caves and dungeons, and **areas** that confine a feature to part of the map.
 - **Determinism**: every generator takes an injected `Random`, so a seed gives the same map.
+- **Walking distances**: `measureDistances` measures the walk between places of a finished map, with the `manhattan`, `chebyshev` and `euclidean` metrics and a cost factor per tile.
 - **Data model**: `Grid` and `Tile` (`Wall`, `Floor`, `Door`, `Grass`, `Tree`, `Road`, `ShallowWater`, `DeepWater`, `Bridge`) with plain `{ x, y }` points.
 - Zero runtime dependencies, ESM only, tree-shakable.

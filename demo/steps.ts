@@ -1,7 +1,8 @@
-import { Reserve, Tile, emptyMap, pipeline } from '../src';
+import { Reserve, Tile, emptyMap, measureDistances, pipeline } from '../src';
 import type {
   Area,
   CrossingPlan,
+  DistanceMetric,
   Exit,
   ForestTemplate,
   Grid,
@@ -33,6 +34,7 @@ const canvas = document.querySelector<HTMLCanvasElement>('#map');
 const error = document.querySelector<HTMLElement>('#error');
 const stats = document.querySelector<HTMLElement>('#stats');
 const failures = document.querySelector<HTMLElement>('#failures');
+const distanceLine = document.querySelector<HTMLElement>('#distances');
 const templatePanel = document.querySelector<HTMLElement>('#templates');
 const context = canvas?.getContext('2d');
 
@@ -72,6 +74,9 @@ let snapshots: Snapshot[] = [];
 
 /** What `layRoads` traced in the last attempt: the roads as grown and how they cross the streams. */
 let traced: { grown: Point[][]; plans: CrossingPlan[] } | undefined;
+
+/** The place the walking distances are measured from, by its index in `placesOf`. */
+let picked = 0;
 
 function newCard(
   name: string,
@@ -207,6 +212,154 @@ function mark(
     tileSize - 2,
     tileSize - 2,
   );
+}
+
+/** A place to measure the walk to: what the steps reported, its tiles, and where to write its distance. */
+interface Place {
+  name: string;
+  tiles: Point[];
+  center: Point;
+}
+
+function boxPlace(name: string, { x, y, width, height }: Area): Place {
+  const tiles: Point[] = [];
+  for (let row = y; row < y + height; ++row) {
+    for (let column = x; column < x + width; ++column) {
+      tiles.push({ x: column, y: row });
+    }
+  }
+  return {
+    name,
+    tiles,
+    center: { x: x + Math.floor(width / 2), y: y + Math.floor(height / 2) },
+  };
+}
+
+function pointPlace(name: string, point: Point): Place {
+  return { name, tiles: [point], center: point };
+}
+
+/**
+ * The places the steps reported, to measure the walk between: rooms, halls
+ * and caverns by their boxes (the rock in a box is left out by
+ * `measureDistances`, though a tunnel through it counts), clearings by their
+ * centers, and exits.
+ */
+function placesOf(extras: Partial<Extras>): Place[] {
+  return [
+    ...(extras.rooms ?? []).map((room) =>
+      boxPlace(`room ${String(room.id)}`, room),
+    ),
+    ...(extras.halls ?? []).map((hall, index) =>
+      boxPlace(`hall ${String(index)}`, hall),
+    ),
+    ...(extras.caverns ?? []).map((cavern, index) =>
+      boxPlace(`cavern ${String(index)}`, cavern),
+    ),
+    ...(extras.clearings ?? []).map(({ x, y }, index) =>
+      pointPlace(`clearing ${String(index)}`, { x, y }),
+    ),
+    ...(extras.exits ?? []).map((exit, index) =>
+      pointPlace(`exit ${String(index)}`, exit),
+    ),
+  ];
+}
+
+/** Writes the walk from the picked place to every other place on the map. */
+function paintDistances(
+  context: CanvasRenderingContext2D,
+  shown: Snapshot,
+  tileSize: number,
+  show: FormData,
+): void {
+  if (!distanceLine) {
+    return;
+  }
+  distanceLine.textContent = '';
+  if (!show.has('showDistances')) {
+    return;
+  }
+  const places = placesOf(shown.extras);
+  const from = places[picked] ?? places[0];
+  if (!from) {
+    distanceLine.textContent =
+      'No rooms, halls, caverns, clearings or exits to measure between.';
+    return;
+  }
+  const given = show.get('costs');
+  const costs = typeof given === 'string' ? given.trim() : '';
+  let row: number[];
+  const started = performance.now();
+  try {
+    row =
+      measureDistances(
+        shown.grid,
+        places.map(({ tiles }) => tiles),
+        {
+          metric: show.get('metric') as DistanceMetric,
+          costs: costs
+            ? (JSON.parse(costs) as Partial<Record<Tile, number>>)
+            : {},
+        },
+      )[places.indexOf(from)] ?? [];
+  } catch (e) {
+    distanceLine.textContent = `Distances: ${e instanceof Error ? e.message : String(e)}`;
+    return;
+  }
+  const took = performance.now() - started;
+  const farthest = Math.max(0, ...row);
+  // a white outline round the picked place
+  const xs = from.tiles.map(({ x }) => x);
+  const ys = from.tiles.map(({ y }) => y);
+  context.strokeStyle = Color.BrightWhite;
+  context.lineWidth = Math.max(1, tileSize / 6);
+  context.strokeRect(
+    Math.min(...xs) * tileSize,
+    Math.min(...ys) * tileSize,
+    (Math.max(...xs) - Math.min(...xs) + 1) * tileSize,
+    (Math.max(...ys) - Math.min(...ys) + 1) * tileSize,
+  );
+  // the distance on the center of every other place: red for the farthest,
+  // yellow for at least 70% of it, gray for no way
+  context.font = `bold ${String(Math.max(9, tileSize))}px monospace`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  places.forEach((place, index) => {
+    const distance = row[index] ?? -1;
+    if (place === from) {
+      return;
+    }
+    const text = distance < 0 ? '×' : String(Math.round(distance * 10) / 10);
+    const cx = (place.center.x + 0.5) * tileSize;
+    const cy = (place.center.y + 0.5) * tileSize;
+    const width = context.measureText(text).width + 4;
+    context.fillStyle = Color.Black;
+    context.fillRect(
+      cx - width / 2,
+      cy - tileSize / 2 - 1,
+      width,
+      tileSize + 2,
+    );
+    context.fillStyle =
+      distance < 0
+        ? Color.BrightBlack
+        : distance === farthest
+          ? Color.BrightRed
+          : distance >= 0.7 * farthest
+            ? Color.BrightYellow
+            : Color.BrightWhite;
+    context.fillText(text, cx, cy);
+  });
+  const far = places
+    .filter((_, index) => row[index] === farthest && farthest > 0)
+    .map(({ name }) => name);
+  distanceLine.textContent = [
+    `Walking distances from ${from.name}; click a room, hall, cavern, clearing or exit to measure from it.`,
+    far.length > 0
+      ? `Farthest: ${far.join(', ')} at ${String(Math.round(farthest * 10) / 10)}; yellow is at least 70% of that, × no way.`
+      : 'Nothing else can be reached.',
+    `${String(places.length)} places measured in ${took.toFixed(1)} ms.`,
+  ].join(' ');
 }
 
 function paint(): void {
@@ -387,6 +540,7 @@ function paint(): void {
       }
     }
   }
+  paintDistances(context, shown, tileSize, show);
 }
 
 /** Runs the steps in the list and shows the last attempt. */
@@ -718,6 +872,27 @@ form?.addEventListener('input', render);
 after?.addEventListener('input', paint);
 display?.addEventListener('input', paint);
 overlays?.addEventListener('input', paint);
+// a click on a place measures the walking distances from it
+canvas?.addEventListener('click', (event) => {
+  const shown = snapshots[Number(after?.value)];
+  if (!shown) {
+    return;
+  }
+  const bounds = canvas.getBoundingClientRect();
+  const x = Math.floor(
+    ((event.clientX - bounds.left) / bounds.width) * shown.grid.width,
+  );
+  const y = Math.floor(
+    ((event.clientY - bounds.top) / bounds.height) * shown.grid.height,
+  );
+  const index = placesOf(shown.extras).findIndex(({ tiles }) =>
+    tiles.some((tile) => tile.x === x && tile.y === y),
+  );
+  if (index !== -1) {
+    picked = index;
+    paint();
+  }
+});
 download?.addEventListener('click', () => {
   if (canvas) {
     downloadCanvas(canvas, 'angstloch-steps.png');

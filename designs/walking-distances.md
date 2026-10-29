@@ -1,6 +1,6 @@
 # Walking distances
 
-Design in progress, not started. Delete this file once the feature is done and documented in the README.
+Task 1/2 done; 2/2 waits for `createRoomMap`. Delete this file once the feature is done and documented in the README.
 
 ## Why
 

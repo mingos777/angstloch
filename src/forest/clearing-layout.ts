@@ -1,5 +1,5 @@
 import type { Point } from '../core/point';
-import type { DistanceMetric } from '../roads/distance-metric';
+import type { DistanceMetric } from '../core/distance-metric';
 
 /** What `layClearings` needs besides the clearings themselves. */
 export interface ClearingLayout {

@@ -1,4 +1,4 @@
-import type { DistanceMetric } from './distance-metric';
+import type { DistanceMetric } from '../core/distance-metric';
 
 /**
  * Measures how far every tile is from the nearest road tile, with the given

@@ -4,7 +4,7 @@ import { Reserve } from '../pipeline/reserve';
 import { reserveTile } from '../pipeline/reserve-tile';
 import { stampTile } from '../pipeline/stamp-tile';
 import { step } from '../pipeline/step';
-import { assertDistanceMetric } from '../roads/assert-distance-metric';
+import { assertDistanceMetric } from '../core/assert-distance-metric';
 import { pruneVerge } from '../roads/prune-verge';
 import { assertForestTemplates } from './assert-forest-templates';
 import { assertTemplateFits } from './assert-template-fits';
@@ -38,7 +38,7 @@ export function placeTemplates(
 > {
   const { templates } = options;
   assertForestTemplates(templates);
-  assertDistanceMetric(options.distance ?? 'chebyshev');
+  assertDistanceMetric('distance', options.distance ?? 'chebyshev');
 
   return step<
     Partial<{ clearings: PlacedClearing[] }>,

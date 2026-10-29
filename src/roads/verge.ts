@@ -1,4 +1,4 @@
-import type { DistanceMetric } from './distance-metric';
+import type { DistanceMetric } from '../core/distance-metric';
 
 /**
  * The strip beside a feature that a step keeps clear of ground cover (trees).

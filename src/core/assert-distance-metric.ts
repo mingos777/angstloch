@@ -7,10 +7,10 @@ const METRICS: readonly string[] = [
 ] satisfies DistanceMetric[];
 
 /** Throws a `RangeError` unless the value is a known way of measuring distance. */
-export function assertDistanceMetric(value: string): void {
+export function assertDistanceMetric(name: string, value: string): void {
   if (!METRICS.includes(value)) {
     throw new RangeError(
-      `distance must be one of ${METRICS.join(', ')}, got ${value}`,
+      `${name} must be one of ${METRICS.join(', ')}, got ${value}`,
     );
   }
 }
