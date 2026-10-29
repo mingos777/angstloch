@@ -101,6 +101,7 @@ export type {
 } from './rooms/place-cell-blocks-options';
 export type { RoomShape } from './rooms/room-shape';
 export { createRoomMap } from './rooms/create-room-map';
+export { measureRoomDistances } from './rooms/measure-room-distances';
 export type { RoomConnection } from './dungeon/room-connection';
 export type {
   RoomDungeonOptions,

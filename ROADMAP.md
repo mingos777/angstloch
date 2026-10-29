@@ -4,11 +4,7 @@ What is wanted next, roughly in the user's order, and what was rejected. Finishe
 
 ## Next up
 
-Walking distances, below; the sewers, also needed by the user's own game, come next under More generators, and the parallel adits of the fishbone are wanted under Mines, follow-ups.
-
-### Walking distances
-
-Functions the game calls on a finished map to measure the walk between rooms or other places, for putting the stairs far apart. Being designed in `designs/walking-distances.md`.
+The sewers, also needed by the user's own game, come next under More generators, and the parallel adits of the fishbone are wanted under Mines, follow-ups.
 
 ## Backlog
 

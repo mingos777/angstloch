@@ -4,6 +4,7 @@ import {
   createRoomMap,
   emptyMap,
   measureDistances,
+  measureRoomDistances,
   pipeline,
 } from '../src';
 import type {
@@ -320,16 +321,12 @@ interface Place {
   center: Point;
 }
 
-function boxPlace(name: string, { x, y, width, height }: Area): Place {
-  const tiles: Point[] = [];
-  for (let row = y; row < y + height; ++row) {
-    for (let column = x; column < x + width; ++column) {
-      tiles.push({ x: column, y: row });
-    }
-  }
+/** A room by the floor `createRoomMap` gives it, written on the center of its box. */
+function roomPlace(name: string, room: Area, floor: Point[]): Place {
+  const { x, y, width, height } = room;
   return {
     name,
-    tiles,
+    tiles: floor,
     center: { x: x + Math.floor(width / 2), y: y + Math.floor(height / 2) },
   };
 }
@@ -340,14 +337,19 @@ function pointPlace(name: string, point: Point): Place {
 
 /**
  * The places the steps reported, to measure the walk between: rooms, halls
- * and caverns included, by their boxes (the rock in a box is left out by
- * `measureDistances`, though a tunnel through it counts), clearings by their
- * centers, and exits.
+ * and caverns first, by their floor from `createRoomMap` and in the order of
+ * their ids, then clearings by their centers, and exits.
  */
-function placesOf(extras: Partial<Extras>): Place[] {
+function placesOf(shown: Snapshot): Place[] {
+  const { extras, grid } = shown;
+  const floors: Point[][] = (extras.rooms ?? []).map(() => []);
+  roomMapOf(shown).forEach((id, tile) => {
+    const x = tile % grid.width;
+    floors[id]?.push({ x, y: (tile - x) / grid.width });
+  });
   return [
-    ...(extras.rooms ?? []).map((room) =>
-      boxPlace(`${room.kind} ${String(room.id)}`, room),
+    ...(extras.rooms ?? []).map((room, id) =>
+      roomPlace(`${room.kind} ${String(room.id)}`, room, floors[id] ?? []),
     ),
     ...(extras.clearings ?? []).map(({ x, y }, index) =>
       pointPlace(`clearing ${String(index)}`, { x, y }),
@@ -372,11 +374,17 @@ function paintDistances(
   if (!show.has('showDistances')) {
     return;
   }
-  const places = placesOf(shown.extras);
+  // rooms only: the rooms, halls and caverns, which come first in `placesOf`
+  const roomsOnly = show.get('between') === 'rooms';
+  const places = placesOf(shown).slice(
+    0,
+    roomsOnly ? (shown.extras.rooms?.length ?? 0) : undefined,
+  );
   const from = places[picked] ?? places[0];
   if (!from) {
-    distanceLine.textContent =
-      'No rooms, halls, caverns, clearings or exits to measure between.';
+    distanceLine.textContent = roomsOnly
+      ? 'No rooms, halls or caverns to measure between.'
+      : 'No rooms, halls, caverns, clearings or exits to measure between.';
     return;
   }
   const given = show.get('costs');
@@ -384,17 +392,24 @@ function paintDistances(
   let row: number[];
   const started = performance.now();
   try {
-    row =
-      measureDistances(
-        shown.grid,
-        places.map(({ tiles }) => tiles),
-        {
-          metric: show.get('metric') as DistanceMetric,
-          costs: costs
-            ? (JSON.parse(costs) as Partial<Record<Tile, number>>)
-            : {},
-        },
-      )[places.indexOf(from)] ?? [];
+    const options = {
+      metric: show.get('metric') as DistanceMetric,
+      costs: costs ? (JSON.parse(costs) as Partial<Record<Tile, number>>) : {},
+    };
+    const distances = roomsOnly
+      ? measureRoomDistances(
+          {
+            grid: shown.grid,
+            roomShapes: shown.extras.roomShapes ?? [],
+          },
+          options,
+        )
+      : measureDistances(
+          shown.grid,
+          places.map(({ tiles }) => tiles),
+          options,
+        );
+    row = distances[places.indexOf(from)] ?? [];
   } catch (e) {
     distanceLine.textContent = `Distances: ${e instanceof Error ? e.message : String(e)}`;
     return;
@@ -447,7 +462,9 @@ function paintDistances(
     .filter((_, index) => row[index] === farthest && farthest > 0)
     .map(({ name }) => name);
   distanceLine.textContent = [
-    `Walking distances from ${from.name}; click a room, hall, cavern, clearing or exit to measure from it.`,
+    roomsOnly
+      ? `Walking distances of measureRoomDistances from ${from.name}; click a room, hall or cavern to measure from it.`
+      : `Walking distances of measureDistances from ${from.name}; click a room, hall, cavern, clearing or exit to measure from it.`,
     far.length > 0
       ? `Farthest: ${far.join(', ')} at ${String(Math.round(farthest * 10) / 10)}; yellow is at least 70% of that, × no way.`
       : 'Nothing else can be reached.',
@@ -1045,7 +1062,7 @@ canvas?.addEventListener('click', (event) => {
   if (!shown || !tile) {
     return;
   }
-  const index = placesOf(shown.extras).findIndex(({ tiles }) =>
+  const index = placesOf(shown).findIndex(({ tiles }) =>
     tiles.some(({ x, y }) => tile.x === x && tile.y === y),
   );
   if (index !== -1) {
