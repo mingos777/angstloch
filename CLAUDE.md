@@ -2,13 +2,13 @@
 
 Angstloch is a map generator library for roguelike games on a 2D square grid. It is written in modern TypeScript and will be published on NPM for browser-based roguelikes to consume.
 
-**Read `ROADMAP.md` at the start of every session.** It says where the library stands, what is planned next, the design decisions behind the plans, and what was rejected.
+**Read `ROADMAP.md` at the start of every session.** It says what is wanted next and what was rejected; finished features are documented in `README.md`, never in the roadmap. Designs in progress live in `designs/`, one Markdown file per feature with its decisions, open questions and task split; read the one for the feature at hand.
 
 ## Rules
 
 ### Workflow
 
-- **Design first, build when told.** Talk a feature through with options, a recommendation and a list of open questions. Record the decisions. Do not start implementing until the user says so, even when their answers to the design questions seem to settle everything.
+- **Design first, build when told.** Talk a feature through with options, a recommendation and a list of open questions. Record the decisions and the task split in `designs/<feature>.md`, not in `ROADMAP.md`, which only lists what is wanted. Delete the design file once the feature is done and documented in the README. Do not start implementing until the user says so, even when their answers to the design questions seem to settle everything.
 - **One task at a time.** Split a feature into small tasks. Stop after each one with a short report (what changed, what the tests cover, anything that surprised you) and let the user review it.
 - **The playground follows every task.** Each task that adds or changes behavior also extends `demo/`, so the user can see it and react before the next task builds on it.
 - **Defaults are the user's call.** They tune defaults by looking at the playground, and many defaults in the README came from that, so do not change them unasked.
@@ -67,7 +67,7 @@ A step is named `verb` + what it makes, and the verb tells the **job**, never th
 
 - No runtime dependencies. Core code must not use DOM or Node APIs, so it runs in a browser, Node, or a web worker.
 - Determinism: never call `Math.random` directly in generator code. Generators accept an injected `Random` (`() => number` returning a float in [0, 1), same contract as `Math.random`), resolved via `resolveRandom`, which defaults to `Math.random`. Users can plug in any PRNG (mulberry32, etc.).
-- API contract: each generator is a function `generateX(options: XOptions)` taking a single options object. `width` and `height` are required; `random?: Random` and all algorithm-specific fields are optional with documented defaults. Each algorithm has its own typed options interface extending a shared base (`width`, `height`, `random`); never use `any`. Angstloch has never been released, so there is no external contract yet: options and results may change or go when the design calls for it (the move to composable steps, see `ROADMAP.md`). Once it is published, adding optional fields will be fine, but existing ones must not change or go. Generators are pure: no global state, no mutation of the caller's options. Invalid dimensions (non-positive or non-integer) throw a `RangeError`.
+- API contract: each generator is a function `generateX(options: XOptions)` taking a single options object. `width` and `height` are required; `random?: Random` and all algorithm-specific fields are optional with documented defaults. Each algorithm has its own typed options interface extending a shared base (`width`, `height`, `random`); never use `any`. Angstloch has never been released, so there is no external contract yet: options and results may change or go when the design calls for it (the move to composable steps). Once it is published, adding optional fields will be fine, but existing ones must not change or go. Generators are pure: no global state, no mutation of the caller's options. Invalid dimensions (non-positive or non-integer) throw a `RangeError`.
 - Data model: maps are a `Grid` (flat `Uint8Array`, `get`/`set`/`inBounds`/`clone`/`toString`). `Tile` values are part of the contract: `Wall` 0, `Floor` 1, `Door` 2 (a potential door placement), `Grass` 3, `Tree` 4, `Road` 5, `ShallowWater` 6, `DeepWater` 7, `Bridge` 8. Add new values, never renumber. Positions are plain `{ x, y }` (`Point`), y grows downwards. `Grid#get` outside the grid returns `Wall`; `set` outside throws.
 - Results: generators never mutate their inputs and return a result object (`{ grid, ...extras }`), never a bare grid. Extras describe the map, e.g. a dungeon reports its rooms (count, position, dimensions), a maze reports `start` and `exits`. Composing a map from several parts is done with steps and `pipeline`; combining separate maps is left to the caller.
 - Only a single `Random` float is injected. Derive integers and picks with the shared helpers (`randomInt`, `pickRandom`).
@@ -97,6 +97,7 @@ A step is named `verb` + what it makes, and the verb tells the **job**, never th
   - `test-helpers/`: seedable PRNG and dungeon checks for tests.
 - `demo/`: visual playground, run with `npm run dev`. Not published. The steps page (`steps.html`, with `step-defs.ts` and `step-fields.ts`) is the pipeline-based page: a list of steps to add and configure. Every generator is made there, and the template editor (`template-editor.ts`) sits at the bottom of it; the noise page stays as the only other page. `index.html` only links to the pages.
 - `scripts/`: development scripts, run through Vite's `runnerImport`. Not published. `check-forest.ts` scores forests with roads and streams for artifacts over many seeds, using `createForestSteps` and `pipeline` with `trace`. `check-dungeon.ts` measures the failures, time and look of the room-first and grown dungeons over many seeds, and the failures and time of rooms scattered round a pillar hall and a noise cavern.
+- `designs/`: designs in progress, one Markdown file per feature. Not published.
 - `dist/`: build output (gitignored).
 
 ## Commands
