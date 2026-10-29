@@ -82,7 +82,7 @@ Open questions:
 
 ### Catacombs
 
-Undecided. They feel like a very structured dungeon, something like `placeClusteredRooms` and `digCorridors` made rigid (often on a lattice, with niches along the walls and a few crypts from room templates), and may or may not get a generator of their own. The mine is done, so this can be designed now. The carving core and the room and cavern code of `src/mine/` may carry over.
+A `digCatacombs` step, being designed in `designs/catacombs.md`.
 
 ### Ponds, lakes and swamps
 
@@ -97,4 +97,5 @@ The first iteration of rooms inside mazes is done. Still open, from earlier sess
 - **Multi-level dungeons.** The game generates the individual levels and joins them.
 - **Wilderness or overworld.** Usually a single level, and games often make it by hand, so it is not worth a generator here.
 - **A separate noise package.** The forest needs a default noise, and the code is small and isolated in `src/noise/`.
+- **Sub-pipelines.** Running a pipeline on a smaller map and stamping it onto the parent. Steps in areas, joined by `digVeins` or `digCorridors`, already cover it, without translating every extra into the parent's coordinates.
 - **Cellular automata for forests.** Noise gives broad woods and glades, and a cellular automaton cannot.
