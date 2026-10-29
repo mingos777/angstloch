@@ -1,42 +1,42 @@
 import { carveRoom } from '../rooms/carve-room';
 import { carveTemplate } from '../rooms/templates/carve-template';
 import { createTemplateBlocker } from '../rooms/templates/create-template-blocker';
-import { findRoomOpenings } from '../rooms/find-room-openings';
-import { findTemplateOpenings } from '../rooms/templates/find-template-openings';
 import type { Grid } from '../core/grid';
-import { linkMazeCell } from './link-maze-cell';
-import type { MazeOpening } from '../rooms/maze-opening';
-import type { MazeOptions } from './maze-options';
+import type { MazeRoomOptions } from './maze-room-options';
 import { MAZE_ROOM_SPACING } from './maze-room-spacing';
-import { placeMazeRooms } from './place-maze-rooms';
+import { planMazeRooms } from './plan-maze-rooms';
 import { prepareTemplates } from '../rooms/templates/prepare-templates';
 import type { Point } from '../core/point';
 import type { Random } from '../core/random';
 import { resolveDungeonOptions } from '../rooms/resolve-dungeon-options';
 import type { Room } from '../rooms/room';
 import { TemplateCell } from '../rooms/templates/template-cell';
+import type { RoomTemplate } from '../rooms/templates/room-template';
+import type { TemplatePlacement } from '../rooms/templates/template-placement';
 
-/** The rooms of a maze, placed and carved, and the ways to open them. */
+/** The rooms of a maze, placed and carved. */
 export interface PreparedMazeRooms {
   /** Templated rooms first, then the ordinary ones, with ids in that order. */
   rooms: Room[];
-  /** Ways to open the rooms onto the maze, to be made once the maze is carved. */
-  openings: MazeOpening[];
   /** Whether a tile belongs to a room, which the maze leaves alone. */
   isBlocked: (x: number, y: number) => boolean;
-  /** Carves the maze cells in front of the fixed exits of templated rooms where the maze has not reached them, so that the exits lead somewhere. Throws a `TemplatePlacementError` when that is impossible. */
-  reachExits: () => void;
+  /** The placement of each templated room, by room id. */
+  placements: TemplatePlacement[];
+  /** Whether each `Exit` and `Door` cell of a template gets a door, keyed by `y * width + x`. */
+  doors: ReadonlyMap<number, boolean>;
+  /** Throws a `TemplatePlacementError` for the templated room with an id. */
+  fail: (room: number, problem: string) => never;
 }
 
 /**
  * Places the templates and the ordinary rooms of a maze, in this order, and
- * carves them into the grid. Keeps `start` free, as far as the ordinary rooms
- * go; a `start` inside a templated room throws a `RangeError`.
+ * carves them into the grid. The ordinary rooms keep `start` free; the
+ * templates do not, so the caller checks it with `isBlocked`.
  */
 export function prepareMazeRooms(
   random: Random,
   grid: Grid,
-  options: MazeOptions,
+  options: { templates?: RoomTemplate[]; rooms?: MazeRoomOptions },
   start: Point | undefined,
   doorChance: number,
 ): PreparedMazeRooms {
@@ -51,7 +51,7 @@ export function prepareMazeRooms(
   });
   const templated = prepareTemplates(
     random,
-    { width, height, templates: options.templates },
+    { templates: options.templates },
     resolved,
     'none',
   );
@@ -70,14 +70,8 @@ export function prepareMazeRooms(
       });
     });
   });
-  if (start && isBlocked(start.x, start.y)) {
-    throw new RangeError(
-      `start (${String(start.x)}, ${String(start.y)}) is inside a templated room`,
-    );
-  }
-
   const ordinary = options.rooms
-    ? placeMazeRooms(
+    ? planMazeRooms(
         random,
         width,
         height,
@@ -101,41 +95,11 @@ export function prepareMazeRooms(
     rooms.push(placed);
   }
 
-  const openings: MazeOpening[] = [];
-  templated.placements.forEach((placement, id) => {
-    const room = rooms[id];
-    if (room) {
-      openings.push(
-        ...findTemplateOpenings(
-          placement,
-          room,
-          templated.doors,
-          width,
-          height,
-          isBlocked,
-        ),
-      );
-    }
-  });
-  for (const room of rooms.slice(templated.placements.length)) {
-    openings.push(...findRoomOpenings(room, width, height, isBlocked));
-  }
-
-  const reachExits = (): void => {
-    const fixed = openings.filter((opening) => opening.fixed);
-    for (const { wall } of fixed) {
-      const group = fixed.filter(
-        (other) => other.wall.x === wall.x && other.wall.y === wall.y,
-      );
-      if (
-        !group.some((other) => linkMazeCell(grid, other.outside, isBlocked))
-      ) {
-        templated.fail(
-          group[0]?.room.id ?? 0,
-          `the exit at (${String(wall.x)}, ${String(wall.y)}) cannot be joined to the maze`,
-        );
-      }
-    }
+  return {
+    rooms,
+    isBlocked,
+    placements: templated.placements,
+    doors: templated.doors,
+    fail: templated.fail,
   };
-  return { rooms, openings, isBlocked, reachExits };
 }

@@ -32,14 +32,19 @@ export interface PreparedTemplates {
 /**
  * Validates the templates of the options, places every copy of each of them,
  * and decides their doors. With `centerFirst`, the first template is placed in
- * the middle of the map unless it has positions of its own.
+ * the middle of the map unless it has positions of its own. The templates keep
+ * clear of the `obstacles` as they do of each other.
  */
 export function prepareTemplates(
   random: Random,
-  options: DungeonOptions,
-  resolved: ResolvedDungeonOptions,
+  options: Pick<DungeonOptions, 'templates' | 'templateSymmetry'>,
+  resolved: Pick<
+    ResolvedDungeonOptions,
+    'width' | 'height' | 'placement' | 'roomSpacing' | 'doorChance'
+  >,
   layout: LayoutSymmetry,
   centerFirst = false,
+  obstacles: readonly TemplatePlacement[] = [],
 ): PreparedTemplates {
   const { width, height } = resolved;
   const lattice = resolved.placement === 'lattice';
@@ -81,6 +86,7 @@ export function prepareTemplates(
       lattice,
     },
     mirrors,
+    obstacles,
   );
   const placements = placed.map(({ placement }) => placement);
   const doors = decideTemplateDoors(

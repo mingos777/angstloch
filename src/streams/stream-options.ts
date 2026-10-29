@@ -20,8 +20,4 @@ export interface StreamOptions {
   tributaryAngle?: Range;
   /** The length of a tributary in tiles, as a `Range` of whole numbers of at least 1. A tributary that is not long enough to reach the edge of the map starts in the forest, as at a spring. Without it a tributary runs to the edge. */
   tributaryLength?: Range;
-  /** How many bridges the map has at least, a whole number of at least 0, counting the bridges of the roads. Where the roads make fewer, footbridges are added, straight and one tile wide, each across a stream away from the other bridges, so a map may end up with fewer when there is no room. Apart from this, a footbridge is always added where water would otherwise cut the land into pieces that cannot be walked between, which a stream that runs from edge to edge does unless a road crosses it. Defaults to 0. */
-  bridges?: number;
-  /** The angle in whole degrees, from 1 to 179, at which a generated road meets the stream, as a `Range`. A road that would cross at another angle is bent to cross at one of these. It is picked at random, to the left or the right. The roads of `roads.specs` and the paths to clearings are not bent, and are bridged where they happen to meet the stream. Defaults to `{ min: 75, max: 90 }`. */
-  bridgeAngle?: Range;
 }

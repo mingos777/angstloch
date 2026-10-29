@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { assertRoadOptions } from './assert-road-options';
-import { layRoads } from './lay-roads';
+import { buildRoads } from './build-roads';
 import type { RoadEntry } from './road-entry';
 import type { RoadOptions } from './road-options';
 
 function lay(specs: RoadEntry[], options: RoadOptions = {}) {
-  return layRoads(100, 70, mulberry32(1), {
+  return buildRoads(100, 70, mulberry32(1), {
     windiness: 0,
     ...options,
     specs,
   });
 }
 
-describe('layRoads specs', () => {
+describe('buildRoads specs', () => {
   it('lays only the given roads and ignores the general settings', () => {
     // given
     const specs: RoadEntry[] = [{ origin: { x: 50, y: 35 }, angle: 0 }];

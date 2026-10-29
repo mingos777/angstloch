@@ -10,39 +10,7 @@ function floorShare(grid: Grid): number {
   return (grid.toString().split('.').length - 1) / (grid.width * grid.height);
 }
 
-/** Counts the walls that the floor shuts in, which are the ones that a loop of tunnels encloses. */
-function countEnclosedWalls(grid: Grid): number {
-  const reached = new Set<number>();
-  const stack = [{ x: 0, y: 0 }];
-  while (stack.length > 0) {
-    const tile = stack.pop();
-    if (!tile) {
-      break;
-    }
-    const key = tile.y * grid.width + tile.x;
-    if (!grid.inBounds(tile.x, tile.y) || reached.has(key)) {
-      continue;
-    }
-    if (grid.get(tile.x, tile.y) !== Tile.Wall) {
-      continue;
-    }
-    reached.add(key);
-    for (let dy = -1; dy <= 1; ++dy) {
-      for (let dx = -1; dx <= 1; ++dx) {
-        stack.push({ x: tile.x + dx, y: tile.y + dy });
-      }
-    }
-  }
-  let walls = 0;
-  for (let y = 0; y < grid.height; ++y) {
-    for (let x = 0; x < grid.width; ++x) {
-      walls += grid.get(x, y) === Tile.Wall ? 1 : 0;
-    }
-  }
-  return walls - reached.size;
-}
-
-const base: MineOptions = { width: 80, height: 50 };
+const base = { width: 80, height: 50 };
 
 describe('generateMine', () => {
   it('makes a map of the requested size', () => {
@@ -82,12 +50,26 @@ describe('generateMine', () => {
     expect(first.grid.toString()).not.toBe(second.grid.toString());
   });
 
+  it('works with Math.random when no random is given', () => {
+    // given
+    const options = base;
+
+    // when
+    const { grid } = generateMine(options);
+
+    // then
+    expect(floorShare(grid)).toBeGreaterThan(0);
+  });
+
   it('does not change the options it is given', () => {
     // given
     const options: MineOptions = {
       ...base,
       random: mulberry32(1),
-      shaftWidth: { min: 2, max: 3 },
+      fishbone: { shaftWidth: { min: 2, max: 3 } },
+      caverns: { count: { min: 0, max: 1 } },
+      rooms: {},
+      exits: { count: { min: 1, max: 1 } },
     };
     const copy = structuredClone({ ...options, random: undefined });
 
@@ -98,93 +80,7 @@ describe('generateMine', () => {
     expect({ ...options, random: undefined }).toEqual(copy);
   });
 
-  it('keeps the ring around the map as wall', () => {
-    // given
-    const options = { ...base, random: mulberry32(3) };
-
-    // when
-    const { grid } = generateMine(options);
-
-    // then
-    for (let x = 0; x < grid.width; ++x) {
-      expect(grid.get(x, 0)).toBe(Tile.Wall);
-      expect(grid.get(x, grid.height - 1)).toBe(Tile.Wall);
-    }
-    for (let y = 0; y < grid.height; ++y) {
-      expect(grid.get(0, y)).toBe(Tile.Wall);
-      expect(grid.get(grid.width - 1, y)).toBe(Tile.Wall);
-    }
-  });
-
-  it('makes one connected piece', () => {
-    // given
-    const seeds = [1, 2, 3, 4, 5, 6];
-
-    // when
-    const mines = seeds.map((seed) =>
-      generateMine({ ...base, random: mulberry32(seed), loops: 0.5 }),
-    );
-
-    // then
-    for (const { grid } of mines) {
-      expect(findCaveRegions(grid)).toHaveLength(1);
-    }
-  });
-
-  it('digs tunnels until the density is reached', () => {
-    // given
-    const options = { ...base, density: 0.2, random: mulberry32(4) };
-
-    // when
-    const { grid } = generateMine(options);
-
-    // then
-    expect(floorShare(grid)).toBeGreaterThanOrEqual(0.2);
-    expect(floorShare(grid)).toBeLessThan(0.25);
-  });
-
-  it('digs more with a higher density', () => {
-    // given
-    const make = (density: number) =>
-      generateMine({ ...base, density, random: mulberry32(4) });
-
-    // when
-    const sparse = make(0.1);
-    const dense = make(0.3);
-
-    // then
-    expect(floorShare(dense.grid)).toBeGreaterThan(floorShare(sparse.grid));
-  });
-
-  it('digs the main shaft only with a density of 0', () => {
-    // given
-    const options = { ...base, density: 0, random: mulberry32(1) };
-
-    // when
-    const { passages } = generateMine(options);
-
-    // then
-    expect(passages).toHaveLength(1);
-    expect(passages[0]?.kind).toBe('shaft');
-  });
-
-  it('stops short when the map has no room for the density', () => {
-    // given
-    const options = {
-      width: 20,
-      height: 20,
-      density: 1,
-      random: mulberry32(1),
-    };
-
-    // when
-    const { grid } = generateMine(options);
-
-    // then
-    expect(floorShare(grid)).toBeLessThan(1);
-  });
-
-  it('lists the main shaft first and the adits after it', () => {
+  it('digs a fishbone when no layout is given', () => {
     // given
     const options = { ...base, random: mulberry32(1) };
 
@@ -193,17 +89,14 @@ describe('generateMine', () => {
 
     // then
     expect(passages[0]?.kind).toBe('shaft');
-    expect(passages.length).toBeGreaterThan(1);
-    expect(passages.slice(1).every((p) => p.kind === 'adit')).toBe(true);
+    expect(passages.slice(1).every(({ kind }) => kind === 'adit')).toBe(true);
   });
 
-  it('runs a straight main shaft along a row at an angle of 0', () => {
+  it('passes the fishbone options to digFishbone', () => {
     // given
     const options = {
       ...base,
-      angle: 0,
-      shaftWindiness: 0,
-      density: 0,
+      fishbone: { density: 0 },
       random: mulberry32(1),
     };
 
@@ -211,17 +104,45 @@ describe('generateMine', () => {
     const { passages } = generateMine(options);
 
     // then
-    const rows = new Set(passages[0]?.tiles.map((tile) => tile.y));
-    expect(rows.size).toBe(1);
+    expect(passages.map(({ kind }) => kind)).toEqual(['shaft']);
   });
 
-  it('runs a straight main shaft along a column at an angle of 90', () => {
+  it('digs a web of veins with the veins key', () => {
+    // given
+    const options = { ...base, veins: {}, random: mulberry32(1) };
+
+    // when
+    const { passages, halls } = generateMine(options);
+
+    // then
+    expect(passages.length).toBeGreaterThan(0);
+    expect(passages.every(({ kind }) => kind === 'vein')).toBe(true);
+    expect(halls).toEqual([]);
+  });
+
+  it('digs pillar halls with the pillars key', () => {
     // given
     const options = {
-      ...base,
-      angle: 90,
-      shaftWindiness: 0,
-      density: 0,
+      width: 100,
+      height: 60,
+      pillars: { halls: { min: 3, max: 3 } },
+      random: mulberry32(1),
+    };
+
+    // when
+    const { halls } = generateMine(options);
+
+    // then
+    expect(halls).toHaveLength(3);
+  });
+
+  it('joins the pillar halls with the veins of the hall veins key', () => {
+    // given
+    const options = {
+      width: 100,
+      height: 60,
+      pillars: { halls: { min: 3, max: 3 } },
+      hallVeins: { density: 0 },
       random: mulberry32(1),
     };
 
@@ -229,221 +150,80 @@ describe('generateMine', () => {
     const { passages } = generateMine(options);
 
     // then
-    const columns = new Set(passages[0]?.tiles.map((tile) => tile.x));
-    expect(columns.size).toBe(1);
+    expect(passages).toHaveLength(2);
   });
 
-  it('digs the main shaft as wide as the shaft width says', () => {
+  it('throws a RangeError for hall veins without pillars', () => {
     // given
-    const options = {
-      ...base,
-      angle: 0,
-      shaftWindiness: 0,
-      shaftWidth: { min: 3, max: 3 },
-      density: 0,
-      random: mulberry32(1),
-    };
+    const options = { ...base, hallVeins: {}, random: mulberry32(1) };
 
     // when
-    const { grid, passages } = generateMine(options);
+    const generate = () => generateMine(options);
 
     // then
-    const middle = passages[0]?.tiles[20];
-    let floors = 0;
-    for (let y = 0; y < grid.height; ++y) {
-      floors += grid.get(middle?.x ?? 0, y) === Tile.Floor ? 1 : 0;
-    }
-    expect(passages[0]?.width).toBe(3);
-    expect(floors).toBe(3);
+    expect(generate).toThrow(RangeError);
+    expect(generate).toThrow('hallVeins');
   });
 
-  it('winds the main shaft more with a higher windiness', () => {
+  it('digs rings with the rings key', () => {
     // given
-    const make = (shaftWindiness: number) =>
-      generateMine({
-        ...base,
-        angle: 0,
-        shaftWindiness,
-        density: 0,
-        random: mulberry32(2),
-      }).passages[0]?.tiles;
-
-    // when
-    const straight = make(0);
-    const windy = make(1);
-
-    // then
-    expect(new Set(straight?.map((tile) => tile.y)).size).toBe(1);
-    expect(new Set(windy?.map((tile) => tile.y)).size).toBeGreaterThan(3);
-  });
-
-  it('keeps every adit within the length range, which counts along its line', () => {
-    // given
-    const options = {
-      ...base,
-      aditLength: { min: 10, max: 15 },
-      random: mulberry32(2),
-    };
+    const options = { ...base, rings: {}, random: mulberry32(1) };
 
     // when
     const { passages } = generateMine(options);
 
     // then
-    const adits = passages.filter((passage) => passage.kind === 'adit');
-    expect(adits.length).toBeGreaterThan(0);
-    for (const { tiles } of adits) {
-      expect(tiles.length).toBeGreaterThanOrEqual(10);
-      expect(tiles.length).toBeLessThanOrEqual(23);
+    expect(passages[0]?.kind).toBe('ring');
+  });
+
+  it('lists no halls for the layouts that have none', () => {
+    // given
+    const layouts = ['fishbone', 'veins', 'rings'] as const;
+
+    // when
+    const mines = layouts.map((layout) =>
+      generateMine({ ...base, [layout]: {}, random: mulberry32(1) }),
+    );
+
+    // then
+    for (const { halls } of mines) {
+      expect(halls).toEqual([]);
     }
   });
 
-  it('digs the adits with a width from the adit width range', () => {
+  it('keeps the ring around the map as wall and the mine in one piece, whatever the layout', () => {
     // given
-    const options = {
-      ...base,
-      aditWidth: { min: 1, max: 1 },
-      random: mulberry32(2),
-    };
+    const layouts = ['fishbone', 'veins', 'pillars', 'rings'] as const;
 
     // when
-    const { passages } = generateMine(options);
+    const mines = layouts.map((layout, i) =>
+      generateMine({ ...base, [layout]: {}, random: mulberry32(i + 1) }),
+    );
 
     // then
-    const adits = passages.filter((passage) => passage.kind === 'adit');
-    expect(adits.every((adit) => adit.width === 1)).toBe(true);
-  });
-
-  it('digs floor along every tunnel', () => {
-    // given
-    const options = { ...base, random: mulberry32(6) };
-
-    // when
-    const { grid, passages } = generateMine(options);
-
-    // then
-    for (const { tiles } of passages) {
-      for (const tile of tiles) {
-        const inside =
-          tile.x >= 1 &&
-          tile.y >= 1 &&
-          tile.x < grid.width - 1 &&
-          tile.y < grid.height - 1;
-        expect(!inside || grid.get(tile.x, tile.y) === Tile.Floor).toBe(true);
+    for (const { grid } of mines) {
+      for (let x = 0; x < grid.width; ++x) {
+        expect(grid.get(x, 0)).toBe(Tile.Wall);
+        expect(grid.get(x, grid.height - 1)).toBe(Tile.Wall);
       }
-    }
-  });
-
-  it('ends adits in dead ends, with no loops, by default', () => {
-    // given
-    const seeds = [1, 2, 3, 4, 5];
-
-    // when
-    const mines = seeds.map((seed) =>
-      generateMine({ ...base, random: mulberry32(seed) }),
-    );
-
-    // then
-    for (const { grid } of mines) {
-      expect(countEnclosedWalls(grid)).toBe(0);
-    }
-  });
-
-  it('makes no loops when a winding shaft curves back towards its adits', () => {
-    // given
-    const options = {
-      width: 80,
-      height: 50,
-      angle: 111,
-      shaftWindiness: 0.75,
-      aditWindiness: 0,
-      random: mulberry32(3),
-    };
-
-    // when
-    const { grid } = generateMine(options);
-
-    // then
-    expect(countEnclosedWalls(grid)).toBe(0);
-  });
-
-  it('keeps a shaft that winds off the map in one piece', () => {
-    // given
-    const seeds = Array.from({ length: 20 }, (_, i) => i + 1);
-
-    // when
-    const mines = seeds.map((seed) =>
-      generateMine({
-        width: 120,
-        height: 20,
-        angle: 0,
-        shaftWindiness: 1,
-        random: mulberry32(seed),
-      }),
-    );
-
-    // then
-    for (const { grid } of mines) {
+      for (let y = 0; y < grid.height; ++y) {
+        expect(grid.get(0, y)).toBe(Tile.Wall);
+        expect(grid.get(grid.width - 1, y)).toBe(Tile.Wall);
+      }
       expect(findCaveRegions(grid)).toHaveLength(1);
     }
   });
 
-  it('makes loops when adits break through into other tunnels', () => {
+  it('throws a RangeError for more than one layout', () => {
     // given
-    const seeds = [1, 2, 3, 4, 5];
+    const options = { ...base, fishbone: {}, rings: {} };
 
     // when
-    const mines = seeds.map((seed) =>
-      generateMine({ ...base, loops: 1, random: mulberry32(seed) }),
-    );
+    const generate = () => generateMine(options);
 
     // then
-    const enclosed = mines.map(({ grid }) => countEnclosedWalls(grid));
-    expect(enclosed.every((count) => count > 0)).toBe(true);
-  });
-
-  it('adds the requested number of exits on the border', () => {
-    // given
-    const options = { ...base, minExits: 3, random: mulberry32(1) };
-
-    // when
-    const { grid, exits } = generateMine(options);
-
-    // then
-    expect(exits).toHaveLength(3);
-    for (const { x, y } of exits) {
-      expect(grid.get(x, y)).toBe(Tile.Door);
-      expect(
-        x === 0 || y === 0 || x === grid.width - 1 || y === grid.height - 1,
-      ).toBe(true);
-    }
-  });
-
-  it('keeps the mine connected with exits', () => {
-    // given
-    const options = { ...base, minExits: 3, random: mulberry32(1) };
-
-    // when
-    const { grid } = generateMine(options);
-
-    // then
-    expect(findCaveRegions(grid)).toHaveLength(1);
-  });
-
-  it('adds a number of exits between the minimum and the maximum', () => {
-    // given
-    const options = {
-      ...base,
-      minExits: 1,
-      maxExits: 4,
-      random: mulberry32(8),
-    };
-
-    // when
-    const { exits } = generateMine(options);
-
-    // then
-    expect(exits.length).toBeGreaterThanOrEqual(1);
-    expect(exits.length).toBeLessThanOrEqual(4);
+    expect(generate).toThrow(RangeError);
+    expect(generate).toThrow('fishbone and rings');
   });
 
   it('adds no exits by default', () => {
@@ -457,15 +237,43 @@ describe('generateMine', () => {
     expect(exits).toEqual([]);
   });
 
-  it('works with Math.random when no random is given', () => {
+  it('adds the exits that were asked for on the border, and keeps the mine in one piece', () => {
     // given
-    const options = base;
+    const layouts = ['fishbone', 'veins', 'pillars', 'rings'] as const;
 
     // when
-    const { grid } = generateMine(options);
+    const mines = layouts.map((layout, i) =>
+      generateMine({
+        ...base,
+        [layout]: {},
+        exits: { count: { min: 3, max: 3 } },
+        random: mulberry32(i + 1),
+      }),
+    );
 
     // then
-    expect(floorShare(grid)).toBeGreaterThan(0);
+    for (const { grid, exits } of mines) {
+      expect(exits).toHaveLength(3);
+      for (const { x, y } of exits) {
+        expect(grid.get(x, y)).toBe(Tile.Door);
+        expect(
+          x === 0 || y === 0 || x === grid.width - 1 || y === grid.height - 1,
+        ).toBe(true);
+      }
+      expect(findCaveRegions(grid)).toHaveLength(1);
+    }
+  });
+
+  it('reports one attempt and no failures for a mine that needs no retry', () => {
+    // given
+    const options = { ...base, random: mulberry32(1) };
+
+    // when
+    const { attempts, failures } = generateMine(options);
+
+    // then
+    expect(attempts).toBe(1);
+    expect(failures).toEqual([]);
   });
 
   it('digs a mine on a tiny map without failing', () => {
@@ -483,20 +291,14 @@ describe('generateMine', () => {
     ['width', { width: 0 }],
     ['height', { height: -1 }],
     ['width', { width: 1.5 }],
-    ['layout', { layout: 'spiral' as 'fishbone' }],
-    ['angle', { angle: Number.NaN }],
-    ['density', { density: 1.5 }],
-    ['shaftWindiness', { shaftWindiness: -0.1 }],
-    ['aditWindiness', { aditWindiness: 2 }],
-    ['loops', { loops: 1.1 }],
-    ['shaftWidth', { shaftWidth: { min: 0, max: 2 } }],
-    ['aditWidth', { aditWidth: { min: 3, max: 2 } }],
-    ['aditLength', { aditLength: { min: 1.5, max: 4 } }],
-    ['branchAngle', { branchAngle: { min: 10, max: 180 } }],
-    ['branchAngle', { branchAngle: { min: 0, max: 90 } }],
-    ['minExits', { minExits: -1 }],
-    ['maxExits', { maxExits: 1.5 }],
-  ])('throws a RangeError for an invalid %s', (_name, invalid) => {
+    ['angle', { fishbone: { angle: Number.NaN } }],
+    ['veinSpacing', { veins: { veinSpacing: 2 } }],
+    ['hallRagged', { pillars: { hallRagged: 1.5 } }],
+    ['veinWindiness', { pillars: {}, hallVeins: { veinWindiness: 2 } }],
+    ['ringWobble', { rings: { ringWobble: 1.5 } }],
+    ['veinWindiness', { caverns: {}, tunnels: { veinWindiness: 2 } }],
+    ['count', { exits: { count: { min: -1, max: 1 } } }],
+  ])('throws a RangeError for an invalid %s', (name, invalid) => {
     // given
     const options = { ...base, ...invalid };
 
@@ -505,5 +307,6 @@ describe('generateMine', () => {
 
     // then
     expect(generate).toThrow(RangeError);
+    expect(generate).toThrow(name);
   });
 });

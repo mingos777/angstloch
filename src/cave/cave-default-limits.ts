@@ -1,4 +1,4 @@
-import type { CaveNeighborhood } from './cave-options';
+import type { CaveNeighborhood } from './cave-neighborhood';
 
 /** The birth and survival limits of the automaton for each neighborhood. */
 export const CAVE_DEFAULT_LIMITS: Record<

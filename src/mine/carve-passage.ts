@@ -1,9 +1,9 @@
 import type { Grid } from '../core/grid';
 import type { NoiseFunction } from '../noise/noise-function';
-import { carvePassageTiles } from './carve-passage-tiles';
-import type { Passage } from './passage';
-import type { PassageSpec } from './passage-spec';
-import { tracePassage } from './trace-passage';
+import { carvePassageTiles } from '../veins/carve-passage-tiles';
+import type { Passage } from '../veins/passage';
+import type { PassageSpec } from '../veins/passage-spec';
+import { tracePassage } from '../veins/trace-passage';
 
 /**
  * Carves a winding passage of floor into the grid and returns it. It goes

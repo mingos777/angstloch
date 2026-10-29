@@ -3,12 +3,12 @@ import type { Point } from '../core/point';
 import { traceTiles } from '../roads/trace-tiles';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { createStreamTerrain } from './create-stream-terrain';
-import { layStreams } from './lay-streams';
+import { buildStreams } from './build-streams';
 import { planCrossings } from './plan-crossings';
 
 /** A straight stream, 1 tile wide, that runs top to bottom on a map of 100 by 70 tiles. */
 const terrain = createStreamTerrain(
-  layStreams(100, 70, mulberry32(3), {
+  buildStreams(100, 70, mulberry32(3), {
     angle: 90,
     windiness: 0,
     width: { min: 1, max: 1 },

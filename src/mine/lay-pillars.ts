@@ -1,16 +1,12 @@
 import type { Area } from '../core/area';
 import type { Grid } from '../core/grid';
-import type { Point } from '../core/point';
 import type { Random } from '../core/random';
 import { randomInt } from '../core/random-int';
 import type { Range } from '../core/range';
 import { Tile } from '../core/tile';
-import type { NoiseFunction } from '../noise/noise-function';
 import { createRaggedMask } from './create-ragged-mask';
-import { MARGIN } from './dig-vein';
-import { growHallNetwork } from './grow-hall-network';
-import type { MineHallEntrances } from './mine-hall-entrances';
-import type { MinePassage } from './mine-passage';
+import { MARGIN } from '../veins/dig-vein';
+import type { MinePassage } from '../veins/mine-passage';
 import { placePillars } from './place-pillars';
 
 /** The walls that stay between two halls, so that they do not merge. */
@@ -26,10 +22,6 @@ const PILLAR_SUCCESS = 0.8;
 export interface PillarsSettings {
   density: number;
   halls: Range;
-  /** How many veins to dig between the halls in all. The ones that join every hall come first and are dug whatever this says. */
-  hallVeins: Range;
-  /** Where a vein starts and ends in a hall. */
-  hallEntrances: MineHallEntrances;
   /** The size of a hall's sides. Without it, a size that makes the halls fill about the density. */
   hallSize?: Range;
   hallRagged: number;
@@ -37,8 +29,8 @@ export interface PillarsSettings {
   pillarSpacing: Range;
   pillarRagged: number;
   pillarJitter: number;
-  veinWidth: Range;
-  veinWindiness: number;
+  /** Tiles that are never dug, a byte for each tile of the grid, row by row: anything but 0 protects it. No hall covers one. Defaults to none. */
+  protect?: Uint8Array;
 }
 
 const average = (range: Range) => (range.min + range.max) / 2;
@@ -54,9 +46,30 @@ function isCrowded(area: Area, others: readonly Area[], gap: number): boolean {
   );
 }
 
-/** Looks for a place where a hall of the size fits, apart from the others. */
+/** Whether any tile of the rectangle is marked in `protect`. */
+function isProtected(
+  area: Area,
+  gridWidth: number,
+  protect: Uint8Array | undefined,
+): boolean {
+  if (!protect) {
+    return false;
+  }
+  for (let y = area.y; y < area.y + area.height; ++y) {
+    for (let x = area.x; x < area.x + area.width; ++x) {
+      if ((protect[y * gridWidth + x] ?? 0) !== 0) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Looks for a place where a hall of the size fits, apart from the others and off the protected tiles. */
 function tryPlace(
+  grid: Grid,
   random: Random,
+  protect: Uint8Array | undefined,
   halls: readonly Area[],
   interiorWidth: number,
   interiorHeight: number,
@@ -70,46 +83,45 @@ function tryPlace(
       width,
       height,
     };
-    if (!isCrowded(hall, halls, HALL_GAP)) {
+    if (
+      !isCrowded(hall, halls, HALL_GAP) &&
+      !isProtected(hall, grid.width, protect)
+    ) {
       return hall;
     }
   }
   return undefined;
 }
 
-/** Turns the tiles of a hall, which has ragged edges, into floor. Returns them. */
+/** Turns the tiles of a hall, which has ragged edges, into floor. */
 function carveHall(
   grid: Grid,
   random: Random,
   hall: Area,
   ragged: number,
-): Point[] {
+): void {
   const mask = createRaggedMask(random, hall.width, hall.height, ragged);
-  const tiles: Point[] = [];
   for (let y = 0; y < hall.height; ++y) {
     for (let x = 0; x < hall.width; ++x) {
       if (mask[y * hall.width + x] === 1) {
         grid.set(hall.x + x, hall.y + y, Tile.Floor);
-        tiles.push({ x: hall.x + x, y: hall.y + y });
       }
     }
   }
-  return tiles;
 }
 
-/** Places halls at random where they fit, as many as there is room for, and carves them. Returns the halls, and the tiles of floor of each. */
+/** Places halls at random where they fit, as many as there is room for, and carves them. Returns the halls. */
 function digHalls(
   grid: Grid,
   random: Random,
   settings: PillarsSettings,
   pillarLoss: number,
-): { halls: Area[]; floors: Point[][] } {
+): { halls: Area[] } {
   const interiorWidth = grid.width - 2 * MARGIN;
   const interiorHeight = grid.height - 2 * MARGIN;
   const halls: Area[] = [];
-  const floors: Point[][] = [];
   if (interiorWidth < 1 || interiorHeight < 1) {
-    return { halls, floors };
+    return { halls };
   }
   const count = randomInt(random, settings.halls.min, settings.halls.max);
   const share =
@@ -141,7 +153,9 @@ function digHalls(
         ? height
         : fit(height, interiorHeight);
       const hall = tryPlace(
+        grid,
         random,
+        settings.protect,
         halls,
         interiorWidth,
         interiorHeight,
@@ -149,65 +163,39 @@ function digHalls(
         hallHeight,
       );
       if (hall) {
-        floors.push(carveHall(grid, random, hall, settings.hallRagged));
+        carveHall(grid, random, hall, settings.hallRagged);
         halls.push(hall);
         break;
       }
     }
   }
-  return { halls, floors };
+  return { halls };
 }
 
 /**
- * Digs a room-and-pillar mine into the grid and returns its halls and the
- * veins that join them. A few large halls of floor are placed apart from one
- * another and joined into a network of veins that are routed through the rock
- * around the halls (see `growHallNetwork`). Last, pillars are left standing in
- * the halls.
+ * Digs the halls of a room-and-pillar mine into the grid and returns them. A
+ * few large halls of floor are placed apart from one another, and pillars are
+ * left standing in them. No hall covers a tile of `protect`. The halls are
+ * left apart: `digVeins` or `digCorridors` joins them. The passages come back empty, since
+ * this digs none.
  */
 export function layPillars(
   grid: Grid,
   random: Random,
-  noise: NoiseFunction,
   settings: PillarsSettings,
 ): { passages: MinePassage[]; halls: Area[] } {
   const { pillarSize, pillarSpacing } = settings;
   const cell =
     average(pillarSize) / (average(pillarSize) + average(pillarSpacing));
   const pillarLoss = cell * cell * PILLAR_SUCCESS;
-  const { halls, floors } = digHalls(grid, random, settings, pillarLoss);
-
-  const { passages, joined } = growHallNetwork(
-    grid,
-    random,
-    noise,
-    halls,
-    floors,
-    settings,
-  );
-  // a hall that no vein could reach, which should not happen, is filled in
-  for (const [index, tiles] of floors.entries()) {
-    if (!joined.has(index)) {
-      for (const { x, y } of tiles) {
-        grid.set(x, y, Tile.Wall);
-      }
-    }
-  }
-  const keptHalls = halls.filter((_, index) => joined.has(index));
-
-  const keep = new Set<number>();
-  for (const { tiles } of passages) {
-    for (const { x, y } of tiles) {
-      keep.add(y * grid.width + x);
-    }
-  }
-  for (const hall of keptHalls) {
-    placePillars(grid, random, hall, keep, {
+  const { halls } = digHalls(grid, random, settings, pillarLoss);
+  for (const hall of halls) {
+    placePillars(grid, random, hall, {
       size: pillarSize,
       spacing: pillarSpacing,
       ragged: settings.pillarRagged,
       jitter: settings.pillarJitter,
     });
   }
-  return { passages, halls: keptHalls };
+  return { passages: [], halls };
 }

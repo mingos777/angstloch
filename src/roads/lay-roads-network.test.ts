@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../test-helpers/mulberry32';
-import { layRoads } from './lay-roads';
+import { buildRoads } from './build-roads';
 import type { RoadOptions } from './road-options';
 
 function lay(options: RoadOptions, seed = 1, width = 100, height = 70) {
-  return layRoads(width, height, mulberry32(seed), options);
+  return buildRoads(width, height, mulberry32(seed), options);
 }
 
 const STRAIGHT = { angle: 0, windiness: 0 };
@@ -49,7 +49,7 @@ function groups(covered: Uint8Array, width: number, height: number) {
   return count;
 }
 
-describe('layRoads crossings', () => {
+describe('buildRoads crossings', () => {
   it('adds a road that crosses the main road', () => {
     // given
     const options = { ...STRAIGHT, crossings: ONE };
@@ -136,7 +136,7 @@ describe('layRoads crossings', () => {
   });
 });
 
-describe('layRoads branches', () => {
+describe('buildRoads branches', () => {
   it('adds branches that are branches', () => {
     // given
     const options = { ...STRAIGHT, branches: THREE };
@@ -297,7 +297,7 @@ describe('layRoads branches', () => {
   });
 });
 
-describe('layRoads network', () => {
+describe('buildRoads network', () => {
   it.each([1, 2, 3, 4, 5, 6])(
     'joins every road into one network (seed %i)',
     (seed) => {
@@ -399,7 +399,7 @@ describe('layRoads network', () => {
     const options = { crossings: THREE, branches: THREE };
 
     // when
-    const { roads } = layRoads(10, 10, mulberry32(1), options);
+    const { roads } = buildRoads(10, 10, mulberry32(1), options);
 
     // then
     expect(roads).toHaveLength(1);

@@ -7,6 +7,7 @@ import type { RoomTemplate } from '../rooms/templates/room-template';
 import { TemplateCell } from '../rooms/templates/template-cell';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
 import type { TemplateVariant } from '../rooms/templates/template-variant';
+import { assertTemplateFits } from './assert-template-fits';
 import type { ForestFootprint } from './forest-footprint';
 
 /** How many random spots are tried for a template that goes anywhere. */
@@ -53,18 +54,7 @@ export function placeForestTemplates(
   };
 
   templates.forEach((template, index) => {
-    if (
-      createTemplateVariants(template).every(
-        (variant) => variant.width > width || variant.height > height,
-      )
-    ) {
-      throw new TemplatePlacementError(
-        index,
-        template.name,
-        `is bigger than the ${String(width)}x${String(height)} map`,
-        true,
-      );
-    }
+    assertTemplateFits(template, index, width, height);
     const count = template.count
       ? randomInt(random, template.count.min, template.count.max)
       : 1;

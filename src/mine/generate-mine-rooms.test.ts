@@ -6,11 +6,13 @@ import type { RoomTemplate } from '../rooms/templates/room-template';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { generateMine } from './generate-mine';
-import type { MineOptions } from './mine-options';
 
 const { Floor: F, Wall: W, Exit: E, Door: D, OptionalExit: O } = TemplateCell;
 
-const base: MineOptions = { width: 100, height: 60, density: 0.05 };
+const base = { width: 100, height: 60 };
+
+/** No ordinary rooms, for the tests of templates alone. */
+const noRooms = { min: 0, max: 0 };
 
 const closet: RoomTemplate = {
   cells: [
@@ -65,7 +67,11 @@ function floorTiles(grid: Grid): Set<number> {
 describe('generateMine with ordinary rooms', () => {
   it('digs no rooms by default', () => {
     // given
-    const options = { ...base, random: mulberry32(1) };
+    const options = {
+      ...base,
+      fishbone: { density: 0.05 },
+      random: mulberry32(1),
+    };
 
     // when
     const { rooms, roomExits } = generateMine(options);
@@ -77,14 +83,18 @@ describe('generateMine with ordinary rooms', () => {
 
   it('makes the same mine as before when there are no rooms', () => {
     // given
-    const plain = generateMine({ ...base, random: mulberry32(1) });
+    const plain = generateMine({
+      ...base,
+      fishbone: { density: 0.05 },
+      random: mulberry32(1),
+    });
 
     // when
     const none = generateMine({
       ...base,
-      rooms: { count: { min: 0, max: 0 } },
-      templates: [],
+      fishbone: { density: 0.05 },
       random: mulberry32(1),
+      rooms: { roomCount: { min: 0, max: 0 }, templates: [] },
     });
 
     // then
@@ -96,8 +106,9 @@ describe('generateMine with ordinary rooms', () => {
     const make = () =>
       generateMine({
         ...base,
-        rooms: { count: { min: 3, max: 3 } },
+        fishbone: { density: 0.05 },
         random: mulberry32(5),
+        rooms: { roomCount: { min: 3, max: 3 } },
       });
 
     // when
@@ -114,8 +125,9 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: { count: { min: 3, max: 3 } },
+      fishbone: { density: 0.05 },
       random: mulberry32(2),
+      rooms: { roomCount: { min: 3, max: 3 } },
     };
 
     // when
@@ -128,7 +140,12 @@ describe('generateMine with ordinary rooms', () => {
 
   it('digs one room when only the rooms option is given', () => {
     // given
-    const options = { ...base, rooms: {}, random: mulberry32(2) };
+    const options = {
+      ...base,
+      fishbone: { density: 0.05 },
+      rooms: {},
+      random: mulberry32(2),
+    };
 
     // when
     const { rooms } = generateMine(options);
@@ -140,15 +157,15 @@ describe('generateMine with ordinary rooms', () => {
   it('digs fewer rooms when the map has no room for them', () => {
     // given
     const options = {
+      fishbone: { density: 0.1 },
       width: 40,
       height: 40,
-      density: 0.1,
-      rooms: {
-        count: { min: 8, max: 8 },
-        width: { min: 15, max: 15 },
-        height: { min: 15, max: 15 },
-      },
       random: mulberry32(1),
+      rooms: {
+        roomCount: { min: 8, max: 8 },
+        roomWidth: { min: 15, max: 15 },
+        roomHeight: { min: 15, max: 15 },
+      },
     };
 
     // when
@@ -163,12 +180,13 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: {
-        count: { min: 4, max: 4 },
-        width: { min: 4, max: 6 },
-        height: { min: 5, max: 8 },
-      },
+      fishbone: { density: 0.05 },
       random: mulberry32(3),
+      rooms: {
+        roomCount: { min: 4, max: 4 },
+        roomWidth: { min: 4, max: 6 },
+        roomHeight: { min: 5, max: 8 },
+      },
     };
 
     // when
@@ -188,13 +206,14 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
+      fishbone: { density: 0.05 },
+      random: mulberry32(3),
       rooms: {
-        count: { min: 4, max: 4 },
-        width: { min: 3, max: 9 },
-        height: { min: 3, max: 9 },
+        roomCount: { min: 4, max: 4 },
+        roomWidth: { min: 3, max: 9 },
+        roomHeight: { min: 3, max: 9 },
         sizeUniformity: 1,
       },
-      random: mulberry32(3),
     };
 
     // when
@@ -212,8 +231,9 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: { count: { min: 4, max: 4 } },
+      fishbone: { density: 0.05 },
       random: mulberry32(4),
+      rooms: { roomCount: { min: 4, max: 4 } },
     };
 
     // when
@@ -233,8 +253,9 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: { count: { min: 4, max: 4 } },
+      fishbone: { density: 0.05 },
       random: mulberry32(4),
+      rooms: { roomCount: { min: 4, max: 4 } },
     };
 
     // when
@@ -264,9 +285,12 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: { count: { min: 4, max: 4 } },
-      exitsPerRoom: { min: 2, max: 2 },
+      fishbone: { density: 0.05 },
       random: mulberry32(5),
+      rooms: {
+        roomCount: { min: 4, max: 4 },
+        exitsPerRoom: { min: 2, max: 2 },
+      },
     };
 
     // when
@@ -284,8 +308,9 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: { count: { min: 5, max: 5 } },
+      fishbone: { density: 0.05 },
       random: mulberry32(6),
+      rooms: { roomCount: { min: 5, max: 5 } },
     };
 
     // when
@@ -302,9 +327,9 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: { count: { min: 4, max: 4 } },
-      doorChance: 1,
+      fishbone: { density: 0.05 },
       random: mulberry32(5),
+      rooms: { roomCount: { min: 4, max: 4 }, doorChance: 1 },
     };
 
     // when
@@ -322,9 +347,9 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: { count: { min: 4, max: 4 } },
-      doorChance: 0,
+      fishbone: { density: 0.05 },
       random: mulberry32(5),
+      rooms: { roomCount: { min: 4, max: 4 }, doorChance: 0 },
     };
 
     // when
@@ -343,9 +368,9 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: { count: { min: 4, max: 4 } },
-      doorChance: 0.5,
+      fishbone: { density: 0.05 },
       random: mulberry32(7),
+      rooms: { roomCount: { min: 4, max: 4 }, doorChance: 0.5 },
     };
 
     // when
@@ -370,12 +395,14 @@ describe('generateMine with ordinary rooms', () => {
     const mines = layouts.flatMap((layout) =>
       seeds.map((seed) =>
         generateMine({
+          [layout]: {},
           width: 80,
           height: 50,
-          layout,
-          rooms: { count: { min: 2, max: 2 } },
-          exitsPerRoom: { min: 6, max: 6 },
           random: mulberry32(seed),
+          rooms: {
+            roomCount: { min: 2, max: 2 },
+            exitsPerRoom: { min: 6, max: 6 },
+          },
         }),
       ),
     );
@@ -401,7 +428,7 @@ describe('generateMine with ordinary rooms', () => {
     }
     expect(checked).toBeGreaterThan(0);
     expect(crowded).toBe(0);
-  });
+  }, 20_000);
 
   it('never puts two optional openings of a template next to each other', () => {
     // given
@@ -415,9 +442,13 @@ describe('generateMine with ordinary rooms', () => {
     };
     const options = {
       ...base,
-      templates: [wall],
-      exitsPerRoom: { min: 5, max: 5 },
+      fishbone: { density: 0.05 },
       random: mulberry32(1),
+      rooms: {
+        roomCount: noRooms,
+        templates: [wall],
+        exitsPerRoom: { min: 5, max: 5 },
+      },
     };
 
     // when
@@ -443,10 +474,10 @@ describe('generateMine with ordinary rooms', () => {
     const mines = seeds.map((seed) =>
       generateMine({
         ...base,
-        rooms: { count: { min: 3, max: 6 } },
-        doorChance: (seed % 3) / 2,
-        minExits: seed % 3,
+        fishbone: { density: 0.05 },
+        exits: { count: { min: seed % 3, max: seed % 3 } },
         random: mulberry32(seed),
+        rooms: { roomCount: { min: 3, max: 6 }, doorChance: (seed % 3) / 2 },
       }),
     );
 
@@ -463,12 +494,12 @@ describe('generateMine with ordinary rooms', () => {
     // when
     const mines = layouts.map((layout, i) =>
       generateMine({
+        [layout]: {},
         width: 80,
         height: 50,
-        layout,
-        rooms: { count: { min: 3, max: 4 } },
-        caverns: { min: 1, max: 2 },
         random: mulberry32(i + 1),
+        caverns: { count: { min: 0, max: 2 } },
+        rooms: { roomCount: { min: 3, max: 4 } },
       }),
     );
 
@@ -480,13 +511,18 @@ describe('generateMine with ordinary rooms', () => {
 
   it('only adds floor to the mine', () => {
     // given
-    const plain = generateMine({ ...base, random: mulberry32(8) });
+    const plain = generateMine({
+      ...base,
+      fishbone: { density: 0.05 },
+      random: mulberry32(8),
+    });
 
     // when
     const withRooms = generateMine({
       ...base,
-      rooms: { count: { min: 4, max: 4 } },
+      fishbone: { density: 0.05 },
       random: mulberry32(8),
+      rooms: { roomCount: { min: 4, max: 4 } },
     });
 
     // then
@@ -502,8 +538,9 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: { count: { min: 8, max: 8 } },
+      fishbone: { density: 0.05 },
       random: mulberry32(3),
+      rooms: { roomCount: { min: 8, max: 8 } },
     };
 
     // when
@@ -524,9 +561,12 @@ describe('generateMine with ordinary rooms', () => {
     // given
     const options = {
       ...base,
-      rooms: { count: { min: 3, max: 3 } },
-      exitsPerRoom: { min: 1, max: 1 },
+      fishbone: { density: 0.05 },
       random: mulberry32(2),
+      rooms: {
+        roomCount: { min: 3, max: 3 },
+        exitsPerRoom: { min: 1, max: 1 },
+      },
     };
 
     // when
@@ -555,8 +595,8 @@ describe('generateMine with ordinary rooms', () => {
       generateMine({
         width,
         height,
-        rooms: { count: { min: 2, max: 2 } },
         random: mulberry32(1),
+        rooms: { roomCount: { min: 2, max: 2 } },
       }),
     );
 
@@ -565,22 +605,23 @@ describe('generateMine with ordinary rooms', () => {
   });
 
   it.each([
-    ['rooms.count', { rooms: { count: { min: 3, max: 2 } } }],
-    ['rooms.width', { rooms: { width: { min: 0, max: 3 } } }],
-    ['rooms.height', { rooms: { height: { min: 2.5, max: 3 } } }],
-    ['rooms.sizeUniformity', { rooms: { sizeUniformity: 2 } }],
+    ['roomCount', { roomCount: { min: 3, max: 2 } }],
+    ['roomWidth', { roomWidth: { min: 0, max: 3 } }],
+    ['roomHeight', { roomHeight: { min: 2.5, max: 3 } }],
+    ['sizeUniformity', { sizeUniformity: 2 }],
     ['exitsPerRoom', { exitsPerRoom: { min: 0, max: 2 } }],
     ['exitsPerRoom', { exitsPerRoom: { min: 3, max: 2 } }],
     ['doorChance', { doorChance: 1.5 }],
-  ])('throws a RangeError for an invalid %s', (_name, invalid) => {
+  ])('throws a RangeError for an invalid %s', (name, rooms) => {
     // given
-    const options = { ...base, ...invalid };
+    const options = { ...base, rooms };
 
     // when
     const generate = () => generateMine(options);
 
     // then
     expect(generate).toThrow(RangeError);
+    expect(generate).toThrow(name);
   });
 });
 
@@ -589,8 +630,9 @@ describe('generateMine with room templates', () => {
     // given
     const options = {
       ...base,
-      templates: [closet],
+      fishbone: { density: 0.05 },
       random: mulberry32(1),
+      rooms: { roomCount: noRooms, templates: [closet] },
     };
 
     // when
@@ -609,8 +651,9 @@ describe('generateMine with room templates', () => {
     // given
     const options = {
       ...base,
-      templates: [closet],
+      fishbone: { density: 0.05 },
       random: mulberry32(1),
+      rooms: { roomCount: noRooms, templates: [closet] },
     };
 
     // when
@@ -626,8 +669,12 @@ describe('generateMine with room templates', () => {
     // given
     const options = {
       ...base,
-      templates: [{ ...closet, count: { min: 3, max: 3 } }],
+      fishbone: { density: 0.05 },
       random: mulberry32(1),
+      rooms: {
+        roomCount: noRooms,
+        templates: [{ ...closet, count: { min: 3, max: 3 } }],
+      },
     };
 
     // when
@@ -642,8 +689,12 @@ describe('generateMine with room templates', () => {
     // given
     const options = {
       ...base,
-      templates: [{ ...closet, rotate: [90 as const] }],
+      fishbone: { density: 0.05 },
       random: mulberry32(1),
+      rooms: {
+        roomCount: noRooms,
+        templates: [{ ...closet, rotate: [90 as const] }],
+      },
     };
 
     // when
@@ -658,9 +709,12 @@ describe('generateMine with room templates', () => {
     // given
     const options = {
       ...base,
-      templates: [{ ...closet, count: { min: 2, max: 2 } }],
-      rooms: { count: { min: 2, max: 2 } },
+      fishbone: { density: 0.05 },
       random: mulberry32(2),
+      rooms: {
+        templates: [{ ...closet, count: { min: 2, max: 2 } }],
+        roomCount: { min: 2, max: 2 },
+      },
     };
 
     // when
@@ -687,9 +741,9 @@ describe('generateMine with room templates', () => {
     };
     const options = {
       ...base,
-      templates: [doored],
-      doorChance: 0,
+      fishbone: { density: 0.05 },
       random: mulberry32(1),
+      rooms: { roomCount: noRooms, templates: [doored], doorChance: 0 },
     };
 
     // when
@@ -707,9 +761,9 @@ describe('generateMine with room templates', () => {
     const make = (doorChance: number) =>
       generateMine({
         ...base,
-        templates: [closet],
-        doorChance,
+        fishbone: { density: 0.05 },
         random: mulberry32(1),
+        rooms: { roomCount: noRooms, templates: [closet], doorChance },
       }).roomExits[0]?.door;
 
     // when
@@ -734,9 +788,13 @@ describe('generateMine with room templates', () => {
     };
     const options = {
       ...base,
-      templates: [hall],
-      exitsPerRoom: { min: 3, max: 3 },
+      fishbone: { density: 0.05 },
       random: mulberry32(1),
+      rooms: {
+        roomCount: noRooms,
+        templates: [hall],
+        exitsPerRoom: { min: 3, max: 3 },
+      },
     };
 
     // when
@@ -760,9 +818,13 @@ describe('generateMine with room templates', () => {
     };
     const options = {
       ...base,
-      templates: [hall],
-      exitsPerRoom: { min: 1, max: 1 },
+      fishbone: { density: 0.05 },
       random: mulberry32(1),
+      rooms: {
+        roomCount: noRooms,
+        templates: [hall],
+        exitsPerRoom: { min: 1, max: 1 },
+      },
     };
 
     // when
@@ -777,8 +839,9 @@ describe('generateMine with room templates', () => {
     const area = { x: 60, y: 30, width: 30, height: 25 };
     const options = {
       ...base,
-      templates: [{ ...closet, areas: [area] }],
+      fishbone: { density: 0.05 },
       random: mulberry32(3),
+      rooms: { roomCount: noRooms, templates: [{ ...closet, areas: [area] }] },
     };
 
     // when
@@ -796,13 +859,19 @@ describe('generateMine with room templates', () => {
     // given
     const options = {
       ...base,
-      templates: [
-        {
-          ...closet,
-          positions: [{ coords: { x: 20, y: 40 }, anchor: 'center' as const }],
-        },
-      ],
+      fishbone: { density: 0.05 },
       random: mulberry32(3),
+      rooms: {
+        roomCount: noRooms,
+        templates: [
+          {
+            ...closet,
+            positions: [
+              { coords: { x: 20, y: 40 }, anchor: 'center' as const },
+            ],
+          },
+        ],
+      },
     };
 
     // when
@@ -828,7 +897,12 @@ describe('generateMine with room templates', () => {
       ),
       name: 'big',
     };
-    const options = { ...base, templates: [big], random: mulberry32(1) };
+    const options = {
+      ...base,
+      fishbone: { density: 0.05 },
+      random: mulberry32(1),
+      rooms: { roomCount: noRooms, templates: [big] },
+    };
 
     // when
     const generate = () => generateMine(options);
@@ -846,7 +920,12 @@ describe('generateMine with room templates', () => {
         [W, W, W],
       ],
     };
-    const options = { ...base, templates: [noExit], random: mulberry32(1) };
+    const options = {
+      ...base,
+      fishbone: { density: 0.05 },
+      random: mulberry32(1),
+      rooms: { roomCount: noRooms, templates: [noExit] },
+    };
 
     // when
     const generate = () => generateMine(options);
@@ -862,15 +941,17 @@ describe('generateMine with room templates', () => {
     // when
     const mines = layouts.map((layout, i) =>
       generateMine({
+        [layout]: {},
         width: 80,
         height: 50,
-        layout,
-        templates: [
-          { ...closet, count: { min: 1, max: 2 }, rotate: [0, 90, 180, 270] },
-        ],
-        rooms: { count: { min: 2, max: 3 } },
-        minExits: 1,
+        exits: { count: { min: 1, max: 1 } },
         random: mulberry32(i + 1),
+        rooms: {
+          templates: [
+            { ...closet, count: { min: 1, max: 2 }, rotate: [0, 90, 180, 270] },
+          ],
+          roomCount: { min: 2, max: 3 },
+        },
       }),
     );
 

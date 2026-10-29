@@ -9,12 +9,12 @@
  * - `--show`: print the map of every seed that has an artifact, with the
  *   road as it was grown drawn as `o` where it differs from the laid road.
  *
- * The forest is the playground's, at 80 by 50 with its defaults, Road and
- * Stream checked.
+ * The forest is made of the steps of `createForestSteps`, at 80 by 50 with
+ * the defaults of the playground, Road and Stream checked.
  */
-import { Tile } from '../src';
-import type { ForestOptions, ForestResult, Grid, Point } from '../src';
-import { buildForest } from '../src/forest/build-forest';
+import { Tile, emptyMap, pipeline } from '../src';
+import type { ForestStepOptions, Grid, Point, Road } from '../src';
+import { createForestSteps } from '../src/forest/create-forest-steps';
 import { brushOffsets } from '../src/roads/brush-offsets';
 import { sharpestTurn } from '../src/roads/sharpest-turn';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
@@ -51,23 +51,18 @@ function seedList(): number[] {
   return Array.from({ length: to - from + 1 }, (_, index) => from + index);
 }
 
-function options(seed: number): ForestOptions {
+function options(): ForestStepOptions {
   const tributaries = Number(flag('tributaries') ?? 2);
   return {
-    width: 80,
-    height: 50,
-    random: mulberry32(seed),
     streams: {
       angle: 'random',
       width: { min: 3, max: 3 },
       windiness: 0.5,
       shoreWidth: 1,
       spring: false,
-      bridges: 0,
       tributaries: { min: tributaries, max: tributaries },
       tributaryWidth: { min: 1, max: 1 },
       tributaryAngle: { min: 30, max: 60 },
-      bridgeAngle: { min: 75, max: 90 },
     },
     roads: {
       angle: 'random',
@@ -78,6 +73,7 @@ function options(seed: number): ForestOptions {
       branches: { min: 0, max: 0 },
       branchWidth: { min: 1, max: 1 },
       branchAngle: { min: 20, max: 70 },
+      bridgeAngle: { min: 75, max: 90 },
     },
   };
 }
@@ -265,14 +261,27 @@ interface Score {
 
 function score(seed: number): {
   score: Score;
-  result: ForestResult;
+  result: { grid: Grid };
   grown: Point[][];
 } {
-  const grown: Point[][] = [];
-  const result = buildForest(options(seed), {
-    grown: (points) => grown.push(points),
-  });
-  const { grid, roads, streams } = result;
+  // the roads as they were grown, from the last attempt
+  let grown: Point[][] = [];
+  const run = pipeline(
+    emptyMap({ width: 80, height: 50, tile: Tile.Grass }),
+    createForestSteps(options()),
+    {
+      random: mulberry32(seed),
+      trace: (_name, data) => {
+        grown = (data as { grown: Point[][] }).grown;
+      },
+    },
+  );
+  const { grid } = run;
+  const { roads, streams } = run as unknown as {
+    roads: Road[];
+    streams: Road[];
+  };
+  const result = { grid };
   const widest = Math.max(...streams.map(({ width }) => width));
   const covered = new Set(
     roads.flatMap(({ points, width }) => [...cover(grid, points, width)]),
@@ -314,7 +323,7 @@ function score(seed: number): {
 }
 
 /** The map with spaces for grass and trees, and `o` where the grown road ran and the laid one does not. */
-function draw(result: ForestResult, grown: Point[][]): string {
+function draw(result: { grid: Grid }, grown: Point[][]): string {
   const rows = result.grid
     .toString()
     .split('\n')

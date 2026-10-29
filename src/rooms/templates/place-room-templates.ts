@@ -14,7 +14,8 @@ export interface PlacedTemplate {
 
 /**
  * Places every copy of every template, in the order of the list. Each copy
- * brings its mirror images along, one per transform, when there are any.
+ * brings its mirror images along, one per transform, when there are any, and
+ * keeps clear of the `obstacles`, which are not returned.
  * Throws a `TemplatePlacementError` for a template that does not fit.
  */
 export function placeRoomTemplates(
@@ -22,6 +23,7 @@ export function placeRoomTemplates(
   templates: readonly RoomTemplate[],
   area: PlacementArea,
   transforms: readonly Transform[],
+  obstacles: readonly TemplatePlacement[] = [],
 ): PlacedTemplate[] {
   const placed: PlacedTemplate[] = [];
   templates.forEach((template, index) => {
@@ -30,7 +32,7 @@ export function placeRoomTemplates(
       template,
       index,
       area,
-      placed.map(({ placement }) => placement),
+      [...obstacles, ...placed.map(({ placement }) => placement)],
       (placement) =>
         transforms.map((transform) => createTemplateTwin(placement, transform)),
     );

@@ -3,7 +3,7 @@ import { findCaveTwin } from './find-cave-twin';
 import { Grid } from '../core/grid';
 import type { LayoutSymmetry } from '../core/layout-symmetry';
 import type { NoiseFunction } from '../noise/noise-function';
-import type { NoiseCaveShape } from './noise-cave-options';
+import type { NoiseCaveShape } from './noise-cave-shape';
 import type { Random } from '../core/random';
 import { Tile } from '../core/tile';
 

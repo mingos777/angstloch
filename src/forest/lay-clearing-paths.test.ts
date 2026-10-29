@@ -1,153 +1,402 @@
 import { describe, expect, it } from 'vitest';
-import { addRoad } from '../roads/add-road';
-import { createRoadMap } from '../roads/create-road-map';
+import { Tile } from '../core/tile';
+import { emptyMap } from '../pipeline/empty-map';
+import { pipeline } from '../pipeline/pipeline';
+import { stampTile } from '../pipeline/stamp-tile';
+import { step } from '../pipeline/step';
+import type { Road } from '../roads/road';
+import type { RoomTemplate } from '../rooms/templates/room-template';
+import { TemplateCell } from '../rooms/templates/template-cell';
+import { layRoads } from '../streams/lay-roads';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { layClearingPaths } from './lay-clearing-paths';
+import type { LayClearingPathsOptions } from './lay-clearing-paths-options';
+import type { ClearingSpec } from './clearing-spec';
+import { placeClearings } from './place-clearings';
+import { placeTemplates } from './place-templates';
+import { plantTrees } from './plant-trees';
 
-const PATH = { width: 1, windiness: 0, clearing: 0 };
+const { Unused: U, Floor: F, Wall: W } = TemplateCell;
 
-function emptyMap(size = 61) {
-  return createRoadMap(size, size, mulberry32(1), 0);
+const base = emptyMap({ width: 80, height: 60, tile: Tile.Grass });
+const solid = plantTrees({ density: { min: 1, max: 1 } });
+const STRAIGHT = layRoads({ angle: 0, windiness: 0 });
+const PATH = { width: 1, windiness: 0 };
+const GLADE: ClearingSpec = {
+  x: 40,
+  y: 10,
+  radiusX: { min: 3, max: 3 },
+  path: PATH,
+};
+
+/** A 5 by 5 ruin: a ring of wall round a room, with unused corners. */
+const RUIN: RoomTemplate = {
+  name: 'ruin',
+  cells: [
+    [U, W, W, W, U],
+    [W, F, F, F, W],
+    [W, F, F, F, W],
+    [W, F, F, F, W],
+    [U, W, W, W, U],
+  ],
+  clearing: true,
+};
+
+/** Dense trees, optionally a road along the middle, clearings, and the paths to them. */
+function build(
+  clearings: ClearingSpec[],
+  {
+    roads = true,
+    options,
+    seed = 1,
+  }: { roads?: boolean; options?: LayClearingPathsOptions; seed?: number } = {},
+) {
+  const random = { random: mulberry32(seed) };
+  const place = placeClearings({ clearings });
+  const paths = layClearingPaths(options);
+  return roads
+    ? pipeline(base, [solid, STRAIGHT, place, paths], random)
+    : pipeline(base, [solid, place, paths], random);
 }
 
 describe('layClearingPaths', () => {
-  it('starts a path at the nearest road tile', () => {
+  it('leads a path from a road to the center of a clearing', () => {
     // given
-    const map = emptyMap();
-    addRoad(map, {
-      kind: 'road',
-      width: 1,
-      origin: { x: 10.5, y: 30.5 },
-      angle: Math.PI / 2,
-      directions: [-1, 1],
+    const clearings = [GLADE];
+
+    // when
+    const { roads, grid } = build(clearings);
+
+    // then
+    const path = roads[1];
+    expect(path?.kind).toBe('branch');
+    expect(path?.points[path.points.length - 1]).toEqual({ x: 40, y: 10 });
+    const start = path?.points[0];
+    expect(roads[0]?.points).toContainEqual(start);
+    expect(grid.get(start?.x ?? -1, start?.y ?? -1)).toBe(Tile.Road);
+  });
+
+  it('paints the path over the trees', () => {
+    // given
+    const clearings = [GLADE];
+
+    // when
+    const { grid, prunable, roads } = build(clearings);
+
+    // then
+    const [tile] = roads[1]?.points ?? [];
+    expect(grid.get(tile?.x ?? -1, tile?.y ?? -1)).toBe(Tile.Road);
+    expect(prunable[(tile?.y ?? 0) * 80 + (tile?.x ?? 0)]).toBe(0);
+    expect(grid.get(40, 10)).toBe(Tile.Road);
+  });
+
+  it('joins the path to the road at a junction', () => {
+    // given
+    const clearings = [GLADE];
+
+    // when
+    const { junctions } = build(clearings);
+
+    // then
+    expect(junctions).toHaveLength(1);
+  });
+
+  it('makes no path unless asked', () => {
+    // given
+    const clearings = [{ x: 40, y: 10, radiusX: { min: 3, max: 3 } }];
+
+    // when
+    const { roads } = build(clearings);
+
+    // then
+    expect(roads).toHaveLength(1);
+  });
+
+  it('leaves the roads as they were when no path is asked for', () => {
+    // given
+    const clearings = [{ x: 40, y: 10, radiusX: { min: 3, max: 3 } }];
+    const plain = pipeline(
+      base,
+      [solid, STRAIGHT, placeClearings({ clearings })],
+      {
+        random: mulberry32(6),
+      },
+    );
+
+    // when
+    const result = build(clearings, { seed: 6 });
+
+    // then
+    expect(result.roads).toEqual(plain.roads);
+    expect(result.junctions).toEqual(plain.junctions);
+    expect(result.exits).toEqual(plain.exits);
+    expect(result.grid.toString()).toBe(plain.grid.toString());
+  });
+
+  it('leads a path from the border when there are no roads', () => {
+    // given
+    const clearings = [
+      { x: 70, y: 30, radiusX: { min: 3, max: 3 }, path: PATH },
+    ];
+
+    // when
+    const { roads, exits, grid } = build(clearings, { roads: false });
+
+    // then
+    expect(roads).toHaveLength(1);
+    expect(roads[0]?.points[0]).toEqual({ x: 79, y: 30 });
+    expect(exits).toEqual([{ x: 79, y: 30 }]);
+    expect(grid.get(75, 30)).toBe(Tile.Road);
+  });
+
+  it('draws the path with the width that was asked for', () => {
+    // given
+    const path = { width: 3, windiness: 0 };
+    const clearings = [{ x: 70, y: 30, radiusX: { min: 3, max: 3 }, path }];
+
+    // when
+    const { grid } = build(clearings, { roads: false });
+
+    // then
+    expect(grid.get(75, 29)).toBe(Tile.Road);
+    expect(grid.get(75, 31)).toBe(Tile.Road);
+  });
+
+  it('uses the road and bridge tiles it is given', () => {
+    // given
+    const clearings = [
+      { x: 70, y: 30, radiusX: { min: 3, max: 3 }, path: PATH },
+    ];
+    const options = { roadTile: Tile.Floor };
+
+    // when
+    const { grid } = build(clearings, { roads: false, options });
+
+    // then
+    expect(grid.get(75, 30)).toBe(Tile.Floor);
+  });
+
+  it('leads a path to a clearing placed at random', () => {
+    // given
+    const clearings = [{ radiusX: { min: 4, max: 4 }, path: PATH }];
+
+    // when
+    const { roads, clearings: made } = build(clearings);
+
+    // then
+    expect(roads).toHaveLength(2);
+    expect(roads[1]?.points[roads[1].points.length - 1]).toEqual({
+      x: made[0]?.x,
+      y: made[0]?.y,
     });
-
-    // when
-    layClearingPaths(map, [{ ...PATH, to: { x: 40, y: 20 } }]);
-
-    // then
-    const path = map.roads[1];
-    expect(path?.points[0]).toEqual({ x: 10, y: 20 });
-    expect(path?.points[path.points.length - 1]).toEqual({ x: 40, y: 20 });
   });
 
-  it('stops a path at the tile before the first one it may not enter', () => {
+  it('leads a path to every clearing that asks for one', () => {
     // given
-    const map = emptyMap();
-    addRoad(map, {
-      kind: 'road',
-      width: 1,
-      origin: { x: 10.5, y: 30.5 },
-      angle: Math.PI / 2,
-      directions: [-1, 1],
+    const clearings = [
+      { x: 15, y: 10, radiusX: { min: 3, max: 3 }, path: PATH },
+      { radiusX: { min: 3, max: 3 }, path: PATH },
+      { x: 60, y: 50, radiusX: { min: 3, max: 3 } },
+      { x: 65, y: 12, radiusX: { min: 3, max: 3 }, path: { width: 2 } },
+    ];
+
+    // when
+    const { roads, clearings: made } = build(clearings);
+
+    // then
+    const ends = roads.slice(1).map((road) => road.points.at(-1));
+    expect(made).toHaveLength(4);
+    expect(ends).toHaveLength(3);
+    expect(ends).toContainEqual({ x: 15, y: 10 });
+    expect(ends).toContainEqual({ x: 65, y: 12 });
+    expect(ends).toContainEqual({ x: made[1]?.x, y: made[1]?.y });
+  });
+
+  it('clears the trees of its verge', () => {
+    // given
+    const clearings = [
+      { x: 70, y: 30, radiusX: { min: 3, max: 3 }, path: PATH },
+    ];
+    const options = { clearance: 1 };
+
+    // when
+    const { grid } = build(clearings, { roads: false, options });
+
+    // then
+    expect(grid.get(75, 29)).toBe(Tile.Grass);
+    expect(grid.get(75, 27)).toBe(Tile.Tree);
+  });
+
+  it('stops the path to a clearing at the edge of its template', () => {
+    // given
+    const clearings = [
+      { x: 40, y: 40, radiusX: { min: 4, max: 4 }, path: PATH },
+    ];
+    const road = layRoads({
+      windiness: 0,
+      width: { min: 3, max: 3 },
+      specs: [{ origin: { x: 40, y: 10 }, angle: 0 }],
     });
-    const stopAt = (x: number) => x >= 34;
+    const steps = [
+      solid,
+      road,
+      placeClearings({ clearings }),
+      placeTemplates({ templates: [RUIN] }),
+      layClearingPaths(),
+    ] as const;
 
     // when
-    layClearingPaths(map, [{ ...PATH, to: { x: 40, y: 20 }, stopAt }]);
+    const { grid } = pipeline(base, steps, { random: mulberry32(1) });
 
     // then
-    const path = map.roads[1];
-    expect(path?.points[path.points.length - 1]).toEqual({ x: 33, y: 20 });
+    expect(grid.get(40, 37)).toBe(Tile.Road);
+    expect(grid.get(40, 38)).toBe(Tile.Wall);
   });
 
-  it('lays a path to the center when it is never stopped', () => {
+  it('throws a TemplatePlacementError for a path that runs through a template', () => {
     // given
-    const map = emptyMap();
-    addRoad(map, {
-      kind: 'road',
-      width: 1,
-      origin: { x: 10.5, y: 30.5 },
-      angle: Math.PI / 2,
-      directions: [-1, 1],
+    const fence: RoomTemplate = {
+      cells: Array.from({ length: 6 }, () =>
+        Array.from({ length: 80 }, () => W),
+      ),
+      clearing: false,
+      count: { min: 6, max: 6 },
+    };
+    const clearings = [
+      { x: 40, y: 30, radiusX: { min: 3, max: 3 }, path: PATH },
+    ];
+    const steps = [
+      solid,
+      placeClearings({ clearings }),
+      placeTemplates({ templates: [fence] }),
+      layClearingPaths(),
+    ] as const;
+    const failed: unknown[] = [];
+
+    // when
+    const run = () =>
+      pipeline(base, steps, {
+        random: mulberry32(1),
+        onStep: (name) => {
+          if (name === 'plantTrees') {
+            failed.push(name);
+          }
+        },
+      });
+
+    // then
+    expect(run).toThrow('runs through it');
+    expect(failed).toHaveLength(3);
+  });
+
+  it('makes a bridge where a path spans water', () => {
+    // given
+    const river = step<object, { streams: Road[] }>(
+      'river',
+      { adds: ['streams'] },
+      (state) => {
+        const points = Array.from({ length: 60 }, (_, y) => ({ x: 41, y }));
+        for (let y = 0; y < 60; ++y) {
+          for (let x = 40; x <= 42; ++x) {
+            stampTile(state, x, y, Tile.ShallowWater);
+          }
+        }
+        return { streams: [{ kind: 'road', width: 3, points }] };
+      },
+    );
+    const road = layRoads({
+      windiness: 0,
+      specs: [{ origin: { x: 5, y: 30 }, angle: 90 }],
     });
+    const clearings = [
+      { x: 70, y: 30, radiusX: { min: 3, max: 3 }, path: PATH },
+    ];
+    const steps = [
+      solid,
+      river,
+      road,
+      placeClearings({ clearings }),
+      layClearingPaths(),
+    ] as const;
 
     // when
-    layClearingPaths(map, [
-      { ...PATH, to: { x: 40, y: 20 }, stopAt: () => false },
-    ]);
+    const { grid, bridges } = pipeline(base, steps, { random: mulberry32(1) });
 
     // then
-    const path = map.roads[1];
-    expect(path?.points[path.points.length - 1]).toEqual({ x: 40, y: 20 });
+    expect(grid.get(41, 30)).toBe(Tile.Bridge);
+    expect(bridges).toHaveLength(1);
   });
 
-  it('makes the path a branch of the width that was asked for', () => {
+  it('lets a path that does not span water give way to it', () => {
     // given
-    const map = emptyMap();
-    addRoad(map, {
-      kind: 'road',
-      width: 1,
-      origin: { x: 10.5, y: 30.5 },
-      angle: Math.PI / 2,
-      directions: [-1, 1],
-    });
+    const pond = step<object, { streams: Road[] }>(
+      'pond',
+      { adds: ['streams'] },
+      (state) => {
+        const points = Array.from({ length: 11 }, (_, at) => ({
+          x: 41,
+          y: 25 + at,
+        }));
+        for (let y = 25; y <= 35; ++y) {
+          for (let x = 40; x <= 42; ++x) {
+            stampTile(state, x, y, Tile.ShallowWater);
+          }
+        }
+        return { streams: [{ kind: 'road', width: 3, points }] };
+      },
+    );
+    // the path from the bottom border ends in the pond, so it joins nothing
+    const clearings = [
+      { x: 41, y: 30, radiusX: { min: 3, max: 3 }, path: PATH },
+    ];
+    const steps = [
+      solid,
+      pond,
+      placeClearings({ clearings }),
+      layClearingPaths(),
+    ] as const;
 
     // when
-    layClearingPaths(map, [
-      { to: { x: 40, y: 20 }, width: 2, windiness: 0, clearing: 0 },
-    ]);
+    const { grid, bridges } = pipeline(base, steps, { random: mulberry32(1) });
 
     // then
-    expect(map.roads[1]).toMatchObject({ kind: 'branch', width: 2 });
+    expect(grid.get(41, 45)).toBe(Tile.Road);
+    expect(grid.get(41, 28)).toBe(Tile.ShallowWater);
+    expect(bridges).toEqual([]);
   });
 
-  it('starts a path at the nearest border when there are no roads', () => {
+  it('throws a TypeError without clearings in the state', () => {
     // given
-    const map = emptyMap();
+    const step = layClearingPaths();
+    const state = base();
 
     // when
-    layClearingPaths(map, [{ ...PATH, to: { x: 50, y: 30 } }]);
+    const run = () => step(state as never);
 
     // then
-    const path = map.roads[0];
-    expect(path?.points[0]).toEqual({ x: 60, y: 30 });
-    expect(path?.points[path.points.length - 1]).toEqual({ x: 50, y: 30 });
+    expect(run).toThrow(TypeError);
   });
 
-  it('lays a path to every clearing', () => {
+  it('throws a RangeError for an unknown tile or a bad verge', () => {
     // given
-    const map = emptyMap();
-
-    // when
-    layClearingPaths(map, [
-      { ...PATH, to: { x: 50, y: 30 } },
-      { ...PATH, to: { x: 30, y: 8 } },
-    ]);
+    const badTile = () => layClearingPaths({ roadTile: 99 as Tile });
+    const badVerge = () => layClearingPaths({ falloff: -1 });
 
     // then
-    expect(map.roads).toHaveLength(2);
+    expect(badTile).toThrow(RangeError);
+    expect(badVerge).toThrow(RangeError);
   });
 
-  it('lets a later path start at an earlier one', () => {
+  it('is deterministic for the same seed', () => {
     // given
-    const map = emptyMap();
+    const clearings = [GLADE, { radiusX: { min: 3, max: 3 }, path: PATH }];
 
     // when
-    layClearingPaths(map, [
-      { ...PATH, to: { x: 30, y: 30 } },
-      { ...PATH, to: { x: 30, y: 36 } },
-    ]);
+    const a = build(clearings, { seed: 5 });
+    const b = build(clearings, { seed: 5 });
 
     // then
-    expect(map.roads[1]?.points[0]).toEqual({ x: 30, y: 36 - 6 });
-  });
-
-  it('lays no path to a clearing with a road through its center', () => {
-    // given
-    const map = emptyMap();
-    addRoad(map, {
-      kind: 'road',
-      width: 1,
-      origin: { x: 10.5, y: 30.5 },
-      angle: Math.PI / 2,
-      directions: [-1, 1],
-    });
-
-    // when
-    layClearingPaths(map, [{ ...PATH, to: { x: 10, y: 30 } }]);
-
-    // then
-    expect(map.roads).toHaveLength(1);
+    expect(a.grid.toString()).toBe(b.grid.toString());
+    expect(a.roads).toEqual(b.roads);
   });
 });

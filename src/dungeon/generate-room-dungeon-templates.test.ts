@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateRoomDungeon } from './generate-room-dungeon';
-import type { RoomDungeonOptions } from '../rooms/room-dungeon-options';
+import type { RoomDungeonOptions } from './room-dungeon-options';
+import type { PlaceScatteredRoomsOptions } from './place-scattered-rooms-options';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 import { TemplateCell } from '../rooms/templates/template-cell';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
@@ -46,11 +47,17 @@ const hall: RoomTemplate = {
   ],
 };
 
-function dungeon(options: Partial<RoomDungeonOptions> = {}, seed = 1) {
+/** The preset with these options for `scatter`, and any other options of the preset on top. */
+function dungeon(
+  scatter: PlaceScatteredRoomsOptions = {},
+  seed = 1,
+  options: Partial<RoomDungeonOptions> = {},
+) {
   return generateRoomDungeon({
     width: 61,
     height: 31,
     random: mulberry32(seed),
+    scatter,
     ...options,
   });
 }
@@ -259,7 +266,9 @@ describe('generateRoomDungeon with templates', () => {
     const exitsPerRoom = { min: 1, max: 1 };
 
     // when
-    const result = dungeon({ templates: [hall], exitsPerRoom });
+    const result = dungeon({ templates: [hall] }, 1, {
+      corridors: { exitsPerRoom },
+    });
 
     // then
     expect(result.rooms[0]?.exitCount).toBe(1);
@@ -360,7 +369,10 @@ describe('generateRoomDungeon with templates', () => {
     const templates = [{ ...closet, count: { min: 2, max: 2 } }, hall];
 
     // when
-    const result = dungeon({ templates, partition: 'bsp' });
+    const result = dungeon({}, 1, {
+      scatter: undefined,
+      partition: { templates },
+    });
 
     // then
     const seen = reachable(result, floorOf(result, 0));
@@ -375,7 +387,7 @@ describe('generateRoomDungeon with templates', () => {
     const templates = [closet];
 
     // when
-    const generate = () => dungeon({ templates, width: 3, height: 3 });
+    const generate = () => dungeon({ templates }, 1, { width: 3, height: 3 });
 
     // then
     expect(generate).toThrow(TemplatePlacementError);
@@ -467,7 +479,7 @@ describe('generateRoomDungeon with template symmetry', () => {
     // given
     const options = {
       templates: [left],
-      layoutSymmetry: 'horizontal' as const,
+      symmetry: 'horizontal' as const,
       templateSymmetry: true,
     };
 
@@ -487,7 +499,7 @@ describe('generateRoomDungeon with template symmetry', () => {
           positions: [{ coords: { x: 14, y: 10 }, anchor: 'center' as const }],
         },
       ],
-      layoutSymmetry: 'horizontal' as const,
+      symmetry: 'horizontal' as const,
       templateSymmetry: true,
     };
 
@@ -513,7 +525,7 @@ describe('generateRoomDungeon with template symmetry', () => {
     // given
     const options = {
       templates: [left],
-      layoutSymmetry: 'horizontal' as const,
+      symmetry: 'horizontal' as const,
       templateSymmetry: true,
     };
 
@@ -528,7 +540,7 @@ describe('generateRoomDungeon with template symmetry', () => {
     // given
     const options = {
       templates: [left],
-      layoutSymmetry: 'horizontal' as const,
+      symmetry: 'horizontal' as const,
     };
 
     // when
@@ -542,7 +554,7 @@ describe('generateRoomDungeon with template symmetry', () => {
     // given
     const options = {
       templates: [{ ...closet, count: { min: 2, max: 2 } }, hall],
-      layoutSymmetry: 'both' as const,
+      symmetry: 'both' as const,
       templateSymmetry: true,
     };
 
@@ -733,7 +745,7 @@ describe('generateRoomDungeon with a double row of templates that share a corrid
     const templates = [closet];
 
     // when
-    const result = dungeon({ templates, height: 41 }, seed);
+    const result = dungeon({ templates }, seed, { height: 41 });
 
     // then
     expect(result.rooms.filter(({ template }) => template === 0)).toHaveLength(
@@ -751,14 +763,16 @@ describe('generateRoomDungeon with a double row of templates that share a corrid
     const templates = [closet];
 
     // when
-    const { grid, rooms } = dungeon({ templates, height: 41 });
+    const { grid, rooms, exits } = dungeon({ templates }, 1, { height: 41 });
 
     // then
     const doors = rooms
       .filter(({ template }) => template === 0)
-      .flatMap(({ exits }) => exits);
+      .flatMap((room) => room.exits.map((exit) => exits[exit]?.position));
     expect(doors).toHaveLength(6);
-    for (let x = 1; x <= 11; x++) {
+    expect(doors.every((door) => door?.y === 28 || door?.y === 30)).toBe(true);
+    const xs = doors.map((door) => door?.x ?? 0);
+    for (let x = Math.min(...xs); x <= Math.max(...xs); x++) {
       expect(grid.get(x, 29)).not.toBe(Tile.Wall);
     }
   });

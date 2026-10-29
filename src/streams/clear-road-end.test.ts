@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { clearRoadEnd } from './clear-road-end';
 import { createStreamTerrain } from './create-stream-terrain';
-import { layStreams } from './lay-streams';
+import { buildStreams } from './build-streams';
 
 /** A straight stream, 1 tile wide, that runs top to bottom on a map of 40 by 30 tiles. */
 const terrain = createStreamTerrain(
-  layStreams(40, 30, mulberry32(3), {
+  buildStreams(40, 30, mulberry32(3), {
     angle: 90,
     windiness: 0,
     width: { min: 1, max: 1 },

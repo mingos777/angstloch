@@ -1,112 +1,84 @@
 import { describe, expect, it } from 'vitest';
+import { Tile } from '../core/tile';
+import { emptyMap } from '../pipeline/empty-map';
+import { pipeline } from '../pipeline/pipeline';
+import { step } from '../pipeline/step';
+import { plantTrees } from '../forest/plant-trees';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { layStreams } from './lay-streams';
-import type { StreamOptions } from './stream-options';
 
-function lay(options: StreamOptions, seed = 1) {
-  return layStreams(100, 70, mulberry32(seed), options);
+const base = emptyMap({ width: 60, height: 40, tile: Tile.Grass });
+
+function count(
+  grid: { width: number; height: number; get(x: number, y: number): Tile },
+  tile: Tile,
+) {
+  let total = 0;
+  for (let y = 0; y < grid.height; ++y) {
+    for (let x = 0; x < grid.width; ++x) {
+      total += grid.get(x, y) === tile ? 1 : 0;
+    }
+  }
+  return total;
 }
 
 describe('layStreams', () => {
-  it('lays a stream from one border to the opposite one', () => {
+  it('paints shallow water along the stream', () => {
     // given
-    const options = { angle: 0, windiness: 0 };
+    const step = layStreams({
+      angle: 0,
+      windiness: 0,
+      width: { min: 2, max: 2 },
+    });
 
     // when
-    const { map } = lay(options);
+    const { grid } = pipeline(base, [step], { random: mulberry32(1) });
 
     // then
-    const points = map.roads[0]?.points ?? [];
-    expect(points[0]?.x).toBe(0);
-    expect(points[points.length - 1]?.x).toBe(99);
+    expect(count(grid, Tile.ShallowWater)).toBe(120);
+    expect(count(grid, Tile.DeepWater)).toBe(0);
   });
 
-  it('makes the water flow the way of the angle', () => {
+  it('puts deep water in the core of a wide stream', () => {
     // given
-    const options = { angle: 90, windiness: 0 };
+    const step = layStreams({
+      angle: 0,
+      windiness: 0,
+      width: { min: 5, max: 5 },
+    });
 
     // when
-    const { map } = lay(options);
+    const { grid } = pipeline(base, [step], { random: mulberry32(1) });
 
     // then
-    const points = map.roads[0]?.points ?? [];
-    expect(points[0]?.y).toBe(0);
-    expect(points[points.length - 1]?.y).toBe(69);
+    expect(count(grid, Tile.DeepWater)).toBe(180);
+    expect(count(grid, Tile.ShallowWater)).toBe(120);
   });
 
-  it('picks the width from the range', () => {
+  it('uses the tiles it is given', () => {
     // given
-    const options = { width: { min: 4, max: 4 } };
+    const step = layStreams({
+      angle: 0,
+      windiness: 0,
+      width: { min: 5, max: 5 },
+      shallowTile: Tile.Floor,
+      deepTile: Tile.Wall,
+    });
 
     // when
-    const { map } = lay(options);
+    const { grid } = pipeline(base, [step], { random: mulberry32(1) });
 
     // then
-    expect(map.roads[0]?.width).toBe(4);
+    expect(count(grid, Tile.Floor)).toBe(120);
+    expect(count(grid, Tile.Wall)).toBe(180);
   });
 
-  it('marks the tiles of the stream as water', () => {
+  it('reports the streams, tributaries running with the water', () => {
     // given
-    const options = { angle: 0, windiness: 0, width: { min: 1, max: 1 } };
+    const step = layStreams({ tributaries: { min: 2, max: 2 } });
 
     // when
-    const { water } = lay(options);
-
-    // then
-    expect(water.reduce((sum, tile) => sum + tile, 0)).toBe(100);
-  });
-
-  it('puts deep water in the middle of a wide stream', () => {
-    // given
-    const options = { angle: 0, windiness: 0, width: { min: 3, max: 3 } };
-
-    // when
-    const { deep } = lay(options);
-
-    // then
-    expect(deep.reduce((sum, tile) => sum + tile, 0)).toBe(100);
-  });
-
-  it('gives a narrow stream no deep water', () => {
-    // given
-    const options = { width: { min: 2, max: 2 } };
-
-    // when
-    const { deep } = lay(options);
-
-    // then
-    expect(deep.reduce((sum, tile) => sum + tile, 0)).toBe(0);
-  });
-
-  it('gives the same stream for the same seed', () => {
-    // given
-    const options = { windiness: 0.8 };
-
-    // when
-    const first = lay(options, 7);
-    const second = lay(options, 7);
-
-    // then
-    expect(first.map.roads).toEqual(second.map.roads);
-  });
-
-  it('lays no tributary by default', () => {
-    // given
-    const options = {};
-
-    // when
-    const { streams } = lay(options);
-
-    // then
-    expect(streams).toHaveLength(1);
-  });
-
-  it('lays the tributaries asked for', () => {
-    // given
-    const options = { tributaries: { min: 2, max: 2 } };
-
-    // when
-    const { streams } = lay(options);
+    const { streams } = pipeline(base, [step], { random: mulberry32(3) });
 
     // then
     expect(streams.map(({ kind }) => kind)).toEqual([
@@ -116,116 +88,148 @@ describe('layStreams', () => {
     ]);
   });
 
-  it('picks the width of a tributary from its own range', () => {
+  it('paints over what is there and clears its prunable bit', () => {
     // given
-    const options = {
-      width: { min: 3, max: 3 },
-      tributaries: { min: 1, max: 1 },
-      tributaryWidth: { min: 2, max: 2 },
-    };
-
-    // when
-    const { streams } = lay(options);
-
-    // then
-    expect(streams.map(({ width }) => width)).toEqual([3, 2]);
-  });
-
-  it('ends a tributary in the stream it joins', () => {
-    // given
-    const options = {
+    const plant = plantTrees({ density: { min: 1, max: 1 } });
+    const water = layStreams({
       angle: 0,
       windiness: 0,
-      tributaries: { min: 1, max: 1 },
-    };
+      width: { min: 2, max: 2 },
+    });
 
     // when
-    const { streams } = lay(options);
+    const result = pipeline(base, [plant, water], { random: mulberry32(1) });
 
     // then
-    const [main, tributary] = streams;
-    const mouth = tributary?.points.at(-1);
-    expect(main?.points).toContainEqual(mouth);
-  });
-
-  it('makes a tributary join at the angle, flowing the same way as the stream', () => {
-    // given
-    const options = {
-      angle: 0,
-      windiness: 0,
-      tributaries: { min: 1, max: 1 },
-      tributaryAngle: { min: 45, max: 45 },
-    };
-
-    // when
-    const { streams } = lay(options);
-
-    // then: from its source to the mouth the tributary goes right, and at 45 degrees
-    const points = streams[1]?.points ?? [];
-    const source = points[0] ?? { x: 0, y: 0 };
-    const mouth = points.at(-1) ?? { x: 0, y: 0 };
-    const degrees =
-      (Math.atan2(mouth.y - source.y, mouth.x - source.x) * 180) / Math.PI;
-    expect(Math.abs(degrees)).toBeGreaterThan(40);
-    expect(Math.abs(degrees)).toBeLessThan(50);
-  });
-
-  it('starts a tributary in the forest when it has a length', () => {
-    // given
-    const options = {
-      tributaries: { min: 1, max: 1 },
-      tributaryLength: { min: 10, max: 10 },
-    };
-
-    // when
-    const { streams } = lay(options);
-
-    // then
-    const source = streams[1]?.points[0] ?? { x: 0, y: 0 };
-    expect(source.x > 0 && source.y > 0 && source.x < 99 && source.y < 69).toBe(
-      true,
+    expect(count(result.grid, Tile.Tree)).toBe(60 * 40 - 120);
+    expect(result.prunable.reduce((sum, byte) => sum + byte, 0)).toBe(
+      60 * 40 - 120,
     );
   });
 
-  it('makes the water of a tributary part of the stream', () => {
+  it('leaves the trees at the water by default', () => {
     // given
-    const options = {
-      tributaries: { min: 1, max: 1 },
+    const plant = plantTrees({ density: { min: 1, max: 1 } });
+    const water = layStreams({
+      angle: 0,
+      windiness: 0,
       width: { min: 1, max: 1 },
-    };
+    });
 
     // when
-    const { water, streams } = lay(options);
+    const { grid, streams } = pipeline(base, [plant, water], {
+      random: mulberry32(1),
+    });
 
     // then
-    const source = streams[1]?.points[0] ?? { x: 0, y: 0 };
-    expect(water[source.y * 100 + source.x]).toBe(1);
+    const y = streams[0]?.points[20]?.y ?? 0;
+    expect(grid.get(20, y + 1)).toBe(Tile.Tree);
+    expect(grid.get(20, y - 1)).toBe(Tile.Tree);
   });
 
-  it('starts a stream at a spring in the forest', () => {
+  it('clears the trees within the clearance beside the water', () => {
     // given
-    const options = { angle: 0, windiness: 0, spring: true };
+    const plant = plantTrees({ density: { min: 1, max: 1 } });
+    const water = layStreams({
+      angle: 0,
+      windiness: 0,
+      width: { min: 1, max: 1 },
+      clearance: 3,
+    });
 
     // when
-    const { streams } = lay(options);
-
-    // then: the first point is inside the map and the last is on the border
-    const points = streams[0]?.points ?? [];
-    const spring = points[0] ?? { x: 0, y: 0 };
-    expect(spring.x).toBeGreaterThan(0);
-    expect(spring.x).toBeLessThan(99);
-    expect(points.at(-1)?.x).toBe(99);
-  });
-
-  it('lays no water upstream of a spring', () => {
-    // given
-    const options = { angle: 0, windiness: 0, spring: true };
-
-    // when
-    const { streams, water } = lay(options);
+    const { grid, streams } = pipeline(base, [plant, water], {
+      random: mulberry32(1),
+    });
 
     // then
-    const spring = streams[0]?.points[0] ?? { x: 0, y: 0 };
-    expect(water[spring.y * 100 + spring.x - 3]).toBe(0);
+    const y = streams[0]?.points[20]?.y ?? 0;
+    for (let dy = -3; dy <= 3; ++dy) {
+      expect(grid.get(20, y + dy)).not.toBe(Tile.Tree);
+    }
+    expect(grid.get(20, y + 4)).toBe(Tile.Tree);
+    expect(grid.get(20, y - 4)).toBe(Tile.Tree);
+  });
+
+  it('thins the trees across the falloff', () => {
+    // given
+    const plant = plantTrees({ density: { min: 1, max: 1 } });
+    const water = layStreams({
+      angle: 0,
+      windiness: 0,
+      width: { min: 1, max: 1 },
+      falloff: 3,
+    });
+
+    // when
+    const { grid, streams } = pipeline(base, [plant, water], {
+      random: mulberry32(1),
+    });
+
+    // then
+    const y = streams[0]?.points[0]?.y ?? 0;
+    const near = Array.from(
+      { length: 60 },
+      (_, x) => grid.get(x, y + 1) === Tile.Tree,
+    );
+    const far = Array.from(
+      { length: 60 },
+      (_, x) => grid.get(x, y + 4) === Tile.Tree,
+    );
+    expect(near.filter(Boolean).length).toBeLessThan(
+      far.filter(Boolean).length,
+    );
+  });
+
+  it('throws when roads are already in the state, without retrying', () => {
+    // given
+    let calls = 0;
+    const roads = step<object, { roads: number[] }>(
+      'roads',
+      { adds: ['roads'] },
+      () => ({ roads: [] }),
+    );
+    const water = layStreams();
+    const counting = step('counting', {}, () => {
+      ++calls;
+      return {};
+    });
+
+    // when
+    const call = () => pipeline(base, [counting, roads, water]);
+
+    // then
+    expect(call).toThrow(/must come before/);
+    expect(calls).toBe(1);
+  });
+
+  it('gives the same stream for the same seed', () => {
+    // given
+    const water = layStreams({ tributaries: { min: 1, max: 1 } });
+
+    // when
+    const first = pipeline(base, [water], { random: mulberry32(8) });
+    const second = pipeline(base, [water], { random: mulberry32(8) });
+
+    // then
+    expect(first.grid.toString()).toBe(second.grid.toString());
+  });
+
+  it.each([
+    ['windiness', { windiness: 2 }],
+    ['streams.width', { width: { min: 0, max: 1 } }],
+    ['shallowTile', { shallowTile: 99 as Tile }],
+    ['deepTile', { deepTile: 99 as Tile }],
+    ['layStreams.clearance', { clearance: -1 }],
+    ['layStreams.falloff', { falloff: 0.5 }],
+  ])('throws a RangeError at once for a bad %s', (_name, options) => {
+    // given
+    const bad = options;
+
+    // when
+    const call = () => layStreams(bad);
+
+    // then
+    expect(call).toThrow(RangeError);
   });
 });

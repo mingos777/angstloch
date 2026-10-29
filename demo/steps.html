@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Angstloch playground: steps</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <h1>Angstloch playground</h1>
+    <nav>
+      <a href="./index.html">Index</a><a href="./steps.html">Steps</a
+      ><a href="./noise.html">Noise</a>
+    </nav>
+    <form id="controls">
+      <label
+        >Width <input name="width" type="number" value="80" min="3"
+      /></label>
+      <label
+        >Height <input name="height" type="number" value="50" min="3"
+      /></label>
+      <label>Seed <input name="seed" type="number" value="1" /></label>
+      <label
+        >Tile size <input name="tileSize" type="number" value="12" min="1"
+      /></label>
+      <label
+        >Base tile
+        <select name="baseTile">
+          <option value="3">grass</option>
+          <option value="0">wall</option>
+          <option value="1">floor</option>
+        </select>
+      </label>
+      <label
+        >Attempts <input name="attempts" type="number" value="3" min="1"
+      /></label>
+    </form>
+    <div class="view">
+      <label for="add-kind">Add a step</label>
+      <select id="add-kind"></select>
+      <button id="add-step" type="button">Add</button>
+      <button id="load-forest" type="button">Load a forest</button>
+      <button id="load-mine" type="button">Load a mine</button>
+      <button id="load-mine-caverns" type="button">
+        Load a mine with caverns
+      </button>
+      <button id="load-cave" type="button">Load a cave</button>
+      <button id="load-noise-cave" type="button">Load a noise cave</button>
+      <button id="load-maze" type="button">Load a maze</button>
+      <button id="load-maze-rooms" type="button">Load a maze with rooms</button>
+      <button id="load-dungeon" type="button">Load a dungeon</button>
+      <button id="load-grown-dungeon" type="button">
+        Load a grown dungeon
+      </button>
+      <button id="load-dungeon-features" type="button">
+        Load a dungeon with a hall and a cavern
+      </button>
+      <button id="load-cave-rooms" type="button">Load a cave with rooms</button>
+      <button id="clear-steps" type="button">Remove all</button>
+    </div>
+    <div id="steps"></div>
+    <p id="stats"></p>
+    <div class="view">
+      <label for="after">Show after step</label>
+      <select id="after"></select>
+      <label for="display">Display</label>
+      <select id="display">
+        <option value="simple">simple</option>
+        <option value="roguelike">roguelike</option>
+      </select>
+      <button id="download" type="button">Download PNG</button>
+    </div>
+    <form id="overlays">
+      <label
+        >Mark clearing centers <input name="showClearings" type="checkbox"
+      /></label>
+      <label
+        >Outline templates <input name="showTemplates" type="checkbox" checked
+      /></label>
+      <label>Mark tunnels <input name="showTunnels" type="checkbox" /></label>
+      <label>Outline halls <input name="showHalls" type="checkbox" /></label>
+      <label
+        >Outline caverns <input name="showCaverns" type="checkbox"
+      /></label>
+      <label
+        >Mark region centers <input name="showCenters" type="checkbox"
+      /></label>
+      <label>Outline rooms <input name="showRooms" type="checkbox" /></label>
+      <label>Show room gaps <input name="showGaps" type="checkbox" /></label>
+      <label>Mark maze start <input name="showStart" type="checkbox" /></label>
+      <label
+        >Mark junctions <input name="showJunctions" type="checkbox"
+      /></label>
+      <label>Show reserved <input name="showReserved" type="checkbox" /></label>
+      <label>Mark road exits <input name="showExits" type="checkbox" /></label>
+      <label>Show grown roads <input name="showGrown" type="checkbox" /></label>
+      <label
+        >Show crossing plans <input name="showPlans" type="checkbox"
+      /></label>
+    </form>
+    <canvas id="map"></canvas>
+    <p id="error"></p>
+    <pre id="failures"></pre>
+    <h2>Template editor</h2>
+    <p>
+      Export the templates as JSON and paste them into the Templates field of a
+      room step.
+    </p>
+    <section id="templates"></section>
+    <script type="module" src="./steps.ts"></script>
+  </body>
+</html>
