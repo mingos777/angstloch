@@ -10,7 +10,7 @@ import { reserveRoomShape } from '../rooms/reserve-room-shape';
 import { TemplateCell } from '../rooms/templates/template-cell';
 import { findStandIns } from './find-stand-ins';
 
-const { Unused: U, Floor: F, OptionalExit: O } = TemplateCell;
+const { Unused: U, Floor: F, OptionalExit: O, Wall: W } = TemplateCell;
 
 /** A map of wall with floor where the rows say `.`. */
 function mapOf(rows: string[]): MapState {
@@ -30,6 +30,57 @@ function mapOf(rows: string[]): MapState {
 }
 
 describe('findStandIns', () => {
+  it('takes an openable wall outside every room as a potential exit', () => {
+    // given
+    const state = mapOf(['#####', '#...#', '#####']);
+    for (let y = 0; y < 3; ++y) {
+      for (let x = 0; x < 5; ++x) {
+        reserveTile(state, x, y, y === 1 ? Reserve.None : Reserve.Solid);
+      }
+    }
+    reserveTile(state, 0, 1, Reserve.Solid);
+    reserveTile(state, 4, 1, Reserve.Openable);
+
+    // when
+    const { shapes } = findStandIns(state, []);
+
+    // then
+    expect(
+      shapes[0]?.exits.map(({ x, y }) => [
+        (shapes[0]?.x ?? 0) + x,
+        (shapes[0]?.y ?? 0) + y,
+      ]),
+    ).toEqual([[4, 1]]);
+  });
+
+  it('leaves out an openable wall that a room holds', () => {
+    // given
+    const state = mapOf(['#####', '#...#', '#####']);
+    for (let y = 0; y < 3; ++y) {
+      for (let x = 0; x < 5; ++x) {
+        reserveTile(state, x, y, y === 1 ? Reserve.None : Reserve.Solid);
+      }
+    }
+    reserveTile(state, 0, 1, Reserve.Solid);
+    reserveTile(state, 4, 1, Reserve.Openable);
+    const room = {
+      x: 4,
+      y: 0,
+      width: 1,
+      height: 3,
+      cells: [[W], [O], [W]],
+      exits: [],
+      rotation: 0 as const,
+      mirrored: false,
+    };
+
+    // when
+    const { shapes } = findStandIns(state, [room]);
+
+    // then
+    expect(shapes[0]?.exits).toEqual([]);
+  });
+
   it('makes a shape of each piece of floor, its walls round it as potential exits', () => {
     // given
     const state = mapOf(['#####', '#####', '##.##', '##..#', '#####']);
@@ -102,6 +153,7 @@ describe('findStandIns', () => {
     carveRoom(state.grid, {
       ...room,
       id: 0,
+      kind: 'room',
       exits: [],
       exitCount: 0,
       doorCount: 0,

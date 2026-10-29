@@ -4,6 +4,7 @@ import type { Room } from '../room';
 
 const room: Room = {
   id: 4,
+  kind: 'room',
   x: 2,
   y: 3,
   width: 5,
@@ -125,5 +126,16 @@ describe('createTransforms', () => {
 
     // then
     expect(images).toEqual(transforms.map(() => ({ x: 3, y: 5 })));
+  });
+
+  it('keeps the kind of a mirrored room', () => {
+    // given
+    const [transform] = createTransforms('horizontal', 21, 11, false);
+
+    // when
+    const image = transform?.room(room);
+
+    // then
+    expect(image?.kind).toBe('room');
   });
 });

@@ -88,6 +88,18 @@ const mean = (values: number[]) =>
   values.reduce((a, b) => a + b, 0) / values.length;
 
 describe('placeClusteredRooms', () => {
+  it('marks every room as a room, templated rooms included', () => {
+    // given
+    const options = { templates: [hall] };
+
+    // when
+    const { rooms } = grow(options);
+
+    // then
+    expect(rooms.some(({ template }) => template !== undefined)).toBe(true);
+    expect(rooms.map(({ kind }) => kind)).toEqual(rooms.map(() => 'room'));
+  });
+
   describe('growth', () => {
     it('starts from a room in the middle of the map', () => {
       // given

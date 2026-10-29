@@ -138,6 +138,7 @@ function placeInLeaf(
     );
   return {
     id,
+    kind: 'room',
     x: leaf.x + offset(leaf.width - width),
     y: leaf.y + offset(leaf.height - height),
     width,
@@ -231,6 +232,7 @@ function partitionSymmetric(random: Random, plan: RoomPlan): Room[] {
 
   const shape = (leaf: Leaf): Room => ({
     id: 0,
+    kind: 'room',
     ...leaf,
     exits: [],
     exitCount: 0,

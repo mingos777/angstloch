@@ -1,9 +1,12 @@
 import type { Rotation } from '../core/rotation';
+import type { RoomKind } from './room-kind';
 
 /** A room of a dungeon. Coordinates and dimensions describe its floor, without the surrounding wall; for a templated room they describe the template's bounding box, walls included. */
 export interface Room {
   /** Position of the room in `DungeonResult#rooms`. */
   id: number;
+  /** What the room is, so the game never has to guess. */
+  kind: RoomKind;
   /** Column of the room's leftmost floor tile. */
   x: number;
   /** Row of the room's topmost floor tile. */
@@ -18,6 +21,8 @@ export interface Room {
   exitCount: number;
   /** Number of exits that have a door. */
   doorCount: number;
+  /** Index into the `roomGroups` extra of the group the room belongs to, such as the cell block of a cell. Absent for a room of no group. */
+  group?: number;
   /** Index into the `templates` option of the template this room was made from. Absent for ordinary rooms. */
   template?: number;
   /** The clockwise rotation the template was placed in, for templated rooms. */

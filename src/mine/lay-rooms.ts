@@ -464,6 +464,7 @@ export function layRooms(
     const ordinary = room.template === undefined;
     const record: Room = {
       id,
+      kind: 'room',
       x: placement.x + (ordinary ? 1 : 0),
       y: placement.y + (ordinary ? 1 : 0),
       width: placement.width - (ordinary ? 2 : 0),

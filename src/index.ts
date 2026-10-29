@@ -90,6 +90,14 @@ export type { Position } from './core/position';
 export type { Random } from './core/random';
 export type { Range } from './core/range';
 export type { Room } from './rooms/room';
+export type { RoomKind } from './rooms/room-kind';
+export type { RoomGroup } from './rooms/room-group';
+export type { CellBlockGroup } from './rooms/cell-block-group';
+export { placeCellBlocks } from './rooms/place-cell-blocks';
+export type {
+  GuardRoomOptions,
+  PlaceCellBlocksOptions,
+} from './rooms/place-cell-blocks-options';
 export type { RoomShape } from './rooms/room-shape';
 export type { RoomConnection } from './dungeon/room-connection';
 export type {

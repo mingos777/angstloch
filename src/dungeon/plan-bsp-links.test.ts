@@ -4,7 +4,17 @@ import { mulberry32 } from '../test-helpers/mulberry32';
 import { planBspLinks } from './plan-bsp-links';
 
 function room(id: number, x: number, y: number, width = 3, height = 3): Room {
-  return { id, x, y, width, height, exits: [], exitCount: 0, doorCount: 0 };
+  return {
+    id,
+    kind: 'room',
+    x,
+    y,
+    width,
+    height,
+    exits: [],
+    exitCount: 0,
+    doorCount: 0,
+  };
 }
 
 const ids = (rooms: Room[]) =>

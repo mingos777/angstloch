@@ -39,6 +39,18 @@ function unevenness(options: PlaceScatteredRoomsOptions) {
 }
 
 describe('placeScatteredRooms', () => {
+  it('marks every room as a room, mirror images included', () => {
+    // given
+    const options = { symmetry: 'horizontal' as const };
+
+    // when
+    const { rooms } = place(options);
+
+    // then
+    expect(rooms.length).toBeGreaterThan(1);
+    expect(rooms.map(({ kind }) => kind)).toEqual(rooms.map(() => 'room'));
+  });
+
   it('puts rooms right next to each other by default', () => {
     // given
     const options = { fill: 0.12 };

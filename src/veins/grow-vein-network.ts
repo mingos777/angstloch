@@ -18,6 +18,7 @@ import { findReachableTargets } from './find-reachable-targets';
 import { findPiecePorts } from './find-piece-ports';
 import type { PiecePort } from './find-piece-ports';
 import { findPieces } from './find-pieces';
+import { joinTouchingPieces } from '../pipeline/join-touching-pieces';
 import type { MineHallEntrances } from './mine-hall-entrances';
 import type { MinePassage } from './mine-passage';
 import { pickEntrance } from './pick-entrance';
@@ -113,6 +114,7 @@ export function growVeinNetwork(
     grid.height,
     false,
   );
+  joinTouchingPieces(view);
   // the floor of each node: the pieces first, then the veins and junctions dug
   const nodes: Point[][] = findPieces(grid);
   const mandatory = nodes.length;
@@ -656,6 +658,9 @@ export function growVeinNetwork(
   } else if (mandatory > 1) {
     startNetwork();
     joinRest();
+    // the veins may have dug up to the entrance of a piece they did not reach
+    joinTouchingPieces(view);
+    stale = true;
     joinBoxedIn();
   }
   if (settings.density > 0) {
@@ -669,5 +674,6 @@ export function growVeinNetwork(
     }
     joinLoops();
   }
+  joinTouchingPieces(view);
   return passages;
 }

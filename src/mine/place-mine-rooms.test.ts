@@ -68,6 +68,20 @@ function countPieces(grid: Grid): number {
 }
 
 describe('placeMineRooms', () => {
+  it('marks every room as a room, templated rooms included', () => {
+    // given
+    const options = { roomCount: { min: 3, max: 3 }, templates: [closet] };
+
+    // when
+    const { rooms } = pipeline(base, [mine, placeMineRooms(options)], {
+      random: mulberry32(5),
+    });
+
+    // then
+    expect(rooms.some(({ template }) => template !== undefined)).toBe(true);
+    expect(rooms.map(({ kind }) => kind)).toEqual(rooms.map(() => 'room'));
+  });
+
   it('places the same rooms from the same seed', () => {
     // given
     const make = () =>
@@ -312,6 +326,7 @@ describe('placeMineRooms', () => {
         rooms: [
           {
             id: 0,
+            kind: 'room',
             x: 0,
             y: 0,
             width: 1,

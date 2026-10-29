@@ -25,6 +25,18 @@ function place(
 }
 
 describe('placePartitionedRooms', () => {
+  it('marks every room as a room', () => {
+    // given
+    const options = {};
+
+    // when
+    const { rooms } = place(options);
+
+    // then
+    expect(rooms.length).toBeGreaterThan(1);
+    expect(rooms.map(({ kind }) => kind)).toEqual(rooms.map(() => 'room'));
+  });
+
   it('puts one room in every area it cuts, spaced as asked', () => {
     // given
     const options = { roomCount: { min: 12, max: 12 }, roomSpacing: 3 };

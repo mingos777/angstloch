@@ -118,6 +118,7 @@ export function prepareTemplates(
     rooms: () =>
       placed.map(({ placement, template }, id) => ({
         id,
+        kind: 'room' as const,
         x: placement.x,
         y: placement.y,
         width: placement.width,

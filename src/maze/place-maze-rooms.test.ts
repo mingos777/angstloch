@@ -69,6 +69,18 @@ function apart(a: Room, b: Room, gap: number) {
 }
 
 describe('placeMazeRooms', () => {
+  it('marks every room as a room, templated rooms included', () => {
+    // given
+    const options = { roomCount: { min: 2, max: 2 }, templates: [closet] };
+
+    // when
+    const { rooms } = place(options);
+
+    // then
+    expect(rooms.some(({ template }) => template !== undefined)).toBe(true);
+    expect(rooms.map(({ kind }) => kind)).toEqual(rooms.map(() => 'room'));
+  });
+
   it('places the same rooms from the same seed', () => {
     // given
     const options = { roomCount: { min: 3, max: 3 }, templates: [closet] };

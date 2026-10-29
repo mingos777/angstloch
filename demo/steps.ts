@@ -10,6 +10,7 @@ import type {
   PlacedClearing,
   Point,
   Room,
+  RoomGroup,
 } from '../src';
 import { describeCaveRegion } from '../src/cave/describe-cave-region';
 import { findCaveRegions } from '../src/cave/find-cave-regions';
@@ -55,6 +56,7 @@ interface Extras {
   caverns: Area[];
   rooms: Room[];
   roomExits: Exit[];
+  roomGroups: RoomGroup[];
   start: Point;
 }
 
@@ -195,6 +197,13 @@ const CAVE_WITH_ROOMS: CardSpec[] = [
   ],
   ['placeScatteredRooms', { roomCountMin: '4', roomCountMax: '6' }],
   TUNNELS,
+];
+
+/** A cell block or two, then rooms round them, joined by corridors that enter each block at its entrance. */
+const PRISON: CardSpec[] = [
+  ['placeCellBlocks', { blocksMin: '1', blocksMax: '2', guardRoom: true }],
+  'placeScatteredRooms',
+  'digCorridors',
 ];
 
 /** Outlines a tile. */
@@ -489,6 +498,45 @@ function paint(): void {
       );
     }
   }
+  if (show.has('showBlocks')) {
+    // an outline round the footprint of every cell block, its tunnel and its
+    // guard room, walls included, and a mark on its entrance
+    context.strokeStyle = Color.BrightMagenta;
+    context.lineWidth = Math.max(1, tileSize / 6);
+    const guards = (extras.rooms ?? [])
+      .filter(({ kind }) => kind === 'guardRoom')
+      .map(({ x, y, width, height }) => ({
+        x: x - 1,
+        y: y - 1,
+        width: width + 2,
+        height: height + 2,
+      }));
+    const tunnels = (extras.roomGroups ?? []).flatMap(({ tunnel }) =>
+      // between its walls, across a tunnel that is one tile wide
+      tunnel
+        ? [
+            tunnel.height === 1
+              ? { ...tunnel, y: tunnel.y - 1, height: 3 }
+              : { ...tunnel, x: tunnel.x - 1, width: 3 },
+          ]
+        : [],
+    );
+    for (const box of [
+      ...(extras.roomGroups ?? []).map(({ footprint }) => footprint),
+      ...guards,
+      ...tunnels,
+    ]) {
+      context.strokeRect(
+        box.x * tileSize,
+        box.y * tileSize,
+        box.width * tileSize,
+        box.height * tileSize,
+      );
+    }
+    for (const { entrance } of extras.roomGroups ?? []) {
+      mark(context, entrance, Color.BrightYellow, tileSize);
+    }
+  }
   if (show.has('showStart') && extras.start) {
     // a green square on the cell the maze was carved from
     context.fillStyle = Color.BrightGreen;
@@ -604,6 +652,7 @@ function render(): void {
               caverns: extras.caverns,
               rooms: extras.rooms,
               roomExits: extras.roomExits,
+              roomGroups: extras.roomGroups,
               start: extras.start,
             },
           });
@@ -622,14 +671,25 @@ function render(): void {
       'caverns',
       'rooms',
       'roomExits',
+      'roomGroups',
     ]
       .filter((name) => done[name])
       .map((name) => `${String(done[name]?.length)} ${name}`);
     // the regions of floor, which the cave presets report
     const regions = findCaveRegions(run.grid).length;
+    // the rooms by kind, which tells apart what the room steps made
+    const kinds = new Map<string, number>();
+    for (const { kind } of (done.rooms ?? []) as Room[]) {
+      kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
+    }
     summary = [
       `${String(run.attempts)} attempt(s), ${String(run.failures.length)} failure(s)`,
       ...counts,
+      ...(kinds.size > 0
+        ? [
+            `rooms by kind: ${[...kinds].map(([kind, count]) => `${String(count)} ${kind}`).join(', ')}`,
+          ]
+        : []),
       ...(regions > 0 ? [`${String(regions)} regions of floor`] : []),
     ].join(', ');
     failed = run.failures;
@@ -815,6 +875,9 @@ document
 document.querySelector('#load-cave-rooms')?.addEventListener('click', () => {
   setDungeonSize();
   setWallCards(CAVE_WITH_ROOMS);
+});
+document.querySelector('#load-prison')?.addEventListener('click', () => {
+  setWallCards(PRISON);
 });
 // the room cards take the templates as JSON, which the editor exports
 if (templatePanel) {

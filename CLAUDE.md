@@ -34,13 +34,13 @@ Angstloch is a map generator library for roguelike games on a 2D square grid. It
 
 A step is named `verb` + what it makes, and the verb tells the **job**, never the method. The method goes into the noun (`digCellularCave`, `digNoiseCave`, `placeScatteredRooms`), so the name says what algorithm runs and what comes out. One step per variant (see Steps), so a new variant is a new noun, not a mode. Pick the verb from this list for every new step, and add a row here only when none fits:
 
-| Verb    | Job                                                  | Steps                                                                                                                                         |
-| ------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dig`   | turns rock into floor (caves, tunnels, mazes, halls) | `digCellularCave`, `digNoiseCave`, `digFishbone`, `digVeins`, `digPillarHalls`, `digRings`, `digMaze`, `digCorridors`                         |
-| `place` | puts a discrete, bounded thing at a position         | `placeScatteredRooms`, `placePartitionedRooms`, `placeClusteredRooms`, `placeMazeRooms`, `placeMineRooms`, `placeClearings`, `placeTemplates` |
-| `lay`   | lays a linear feature across the terrain             | `layStreams`, `layRoads`, `layClearingPaths`, `layFootbridges`                                                                                |
-| `open`  | makes an entrance or an exit (always, and only this) | `openExits`, `openMazeRooms`                                                                                                                  |
-| `plant` | covers the ground (the one exception)                | `plantTrees`                                                                                                                                  |
+| Verb    | Job                                                  | Steps                                                                                                                                                            |
+| ------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dig`   | turns rock into floor (caves, tunnels, mazes, halls) | `digCellularCave`, `digNoiseCave`, `digFishbone`, `digVeins`, `digPillarHalls`, `digRings`, `digMaze`, `digCorridors`                                            |
+| `place` | puts a discrete, bounded thing at a position         | `placeScatteredRooms`, `placePartitionedRooms`, `placeClusteredRooms`, `placeCellBlocks`, `placeMazeRooms`, `placeMineRooms`, `placeClearings`, `placeTemplates` |
+| `lay`   | lays a linear feature across the terrain             | `layStreams`, `layRoads`, `layClearingPaths`, `layFootbridges`                                                                                                   |
+| `open`  | makes an entrance or an exit (always, and only this) | `openExits`, `openMazeRooms`                                                                                                                                     |
+| `plant` | covers the ground (the one exception)                | `plantTrees`                                                                                                                                                     |
 
 - The files, options and tests follow the step: `dig-noise-cave.ts`, `DigNoiseCaveOptions`, `assertDigNoiseCaveOptions`.
 - Never use `add`, `carve`, `grow`, `scatter`, `partition` or `generate` as the verb of a step. `generateX` is for presets only.
@@ -98,7 +98,7 @@ Until the first release, `package.json` stays at `0.0.0` and only the changelog 
 
 - `src/`: library source; `src/index.ts` is the public entry point. Tests sit next to their sources. Directories, with imports only pointing down the list (`dungeon` may also use `maze`, `forest/` uses `noise/`, `roads/` and `streams/`, `cave/` uses `veins/`, and `mine/` uses `noise/`, `roads/`, `veins/` and the cave steps of `cave/`; `pipeline/` sits right under `core/`, so any directory below it may use it):
   - `core/`: grid, tiles, points, ranges, randomness helpers, option assertions.
-  - `pipeline/`: `MapState`, `step`, `emptyMap`, `stampTile` and `pipeline`, the machinery of composable steps, plus the helpers any step may use: the `reserved` mask (`reserveTile`, `openReserved`, `isFree`, `findNearestOpenable`) and areas (`placeAreas`, `placeBeside`, `buildInArea`). It only uses `core/`, so it spots a permanent `TemplatePlacementError` by its `permanent` field and does not import it.
+  - `pipeline/`: `MapState`, `step`, `emptyMap`, `stampTile` and `pipeline`, the machinery of composable steps, plus the helpers any step may use: the `reserved` mask (`reserveTile`, `openReserved`, `isFree`, `findNearestOpenable`, `joinTouchingPieces`) and areas (`placeAreas`, `placeBeside`, `buildInArea`). It only uses `core/`, so it spots a permanent `TemplatePlacementError` by its `permanent` field and does not import it.
   - `rooms/`: code shared by mazes, mines and dungeons: room plans and their placers (scatter, partition, grow), room shapes and their reserving, corridor symmetry and the shared dungeon options. `rooms/templates/` holds the room templates.
   - `exits/`: `openExits`, the step that carves exits into the border, and the carving code under it (`carveCaveExit`). It sits right under `rooms/`, since it mirrors exits with the transforms of `rooms/templates/`, and uses `core/`, `pipeline/` and `rooms/`. Maze, cave and mine use it.
   - `noise/`: noise functions (simplex, fractal) for outdoor generators. It only uses `core/`.

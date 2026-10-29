@@ -1,6 +1,8 @@
 import type { Point } from '../core/point';
 import type { Random } from '../core/random';
+import { Tile } from '../core/tile';
 import { isFree } from '../pipeline/is-free';
+import { joinTouchingPieces } from '../pipeline/join-touching-pieces';
 import type { MapState } from '../pipeline/map-state';
 import { openReserved } from '../pipeline/open-reserved';
 import { Reserve } from '../pipeline/reserve';
@@ -36,7 +38,13 @@ export interface JoinedRooms extends PlacedRooms {
 
 /** The rooms that one routing joined, by their place in the list it was given, or why it failed. */
 type Routing =
-  | { scratch: MapState; kept: Room[]; rooms: Room[]; exits: Exit[] }
+  | {
+      scratch: MapState;
+      kept: Room[];
+      rooms: Room[];
+      exits: Exit[];
+      entered: Point[];
+    }
   | { error: Error };
 
 /**
@@ -51,7 +59,11 @@ type Routing =
  * Every piece of floor outside the rooms (see `findStandIns`) is joined too,
  * as a stand-in room that is never dropped: one that is cut off fails like a
  * templated room, with a plain `Error`. A corridor that reaches a stand-in
- * opens its wall into floor, which is no exit of the result.
+ * opens its wall into floor, which is no exit of the result. Where that wall
+ * was reserved `Openable`, the entrance of a cell block, it is opened through
+ * `openReserved` and gets a door by `doorChance`. Such an entrance with the
+ * floor of another piece right beyond it is opened first, the same way, with
+ * no corridor (see `joinTouchingPieces`).
  */
 export function joinRooms(
   given: MapState & Partial<PlacedRooms> & Partial<JoinedRooms>,
@@ -66,6 +78,22 @@ export function joinRooms(
     roomShapes: given.roomShapes ?? [],
   };
   const { width, height } = state.grid;
+  // an entrance that the floor beyond reaches already needs no corridor
+  const covered = new Uint8Array(width * height);
+  for (const shape of state.roomShapes) {
+    shape.cells.forEach((row, dy) => {
+      row.forEach((cell, dx) => {
+        if (cell !== TemplateCell.Unused) {
+          covered[(shape.y + dy) * width + shape.x + dx] = 1;
+        }
+      });
+    });
+  }
+  for (const { x, y } of joinTouchingPieces(state, covered)) {
+    if (random() < settings.doorChance) {
+      state.grid.set(x, y, Tile.Door);
+    }
+  }
   const lattice = settings.placement === 'lattice';
   const transforms =
     settings.symmetry === 'none'
@@ -111,6 +139,14 @@ export function joinRooms(
           ),
       );
       const shapes = [...kept.map(shapeOf), ...standIns.shapes];
+      // the potential exits of stand-ins that something reserved as its way in
+      const entrances = new Set(
+        standIns.shapes.flatMap((shape) =>
+          shape.exits
+            .map(({ x, y }) => (shape.y + y) * width + shape.x + x)
+            .filter((at) => scratch.reserved[at] === Reserve.Openable),
+        ),
+      );
       const blocked = new Uint8Array(width * height);
       const sealed = new Uint8Array(width * height);
       for (let y = 0; y < height; ++y) {
@@ -124,6 +160,7 @@ export function joinRooms(
         }
       }
       const rooms: Room[] = [...kept, ...standIns.floors].map((room, id) => ({
+        kind: 'room' as const,
         ...room,
         id,
         exits: [],
@@ -145,6 +182,7 @@ export function joinRooms(
           blocked,
           sealed,
           firstStandIn: kept.length,
+          entrances,
         },
       );
       const [lost] = unconnected;
@@ -195,6 +233,9 @@ export function joinRooms(
             exits: room.exits.map((i) => index.get(i) as number),
           })),
           exits: roomExits,
+          entered: exits
+            .map(({ position }) => position)
+            .filter(({ x, y }) => entrances.has(y * width + x)),
         };
       }
       const dropped = withTwins(stranded, rooms, transforms);
@@ -284,6 +325,9 @@ function finish(
   reserved.set(routed.scratch.reserved);
   for (const { position } of routed.exits) {
     openReserved(state, position.x, position.y);
+  }
+  for (const { x, y } of routed.entered) {
+    openReserved(state, x, y);
   }
 
   const kept = new Set(routed.kept.map(({ id }) => id));

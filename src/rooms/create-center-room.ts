@@ -56,6 +56,7 @@ export function createCenterRoom(
   }
   const room: Room = {
     id: 0,
+    kind: 'room',
     x: center(width, plan.width, mirrorsX),
     y: center(height, plan.height, mirrorsY),
     width,

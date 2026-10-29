@@ -21,6 +21,7 @@ import {
   placeTemplates,
   plantTrees,
   placeScatteredRooms,
+  placeCellBlocks,
 } from '../src';
 import type {
   AnyStep,
@@ -644,6 +645,60 @@ export const STEP_DEFS: StepDef[] = [
       openMazeRooms({
         exitsPerRoom: v.range('exitsPerRoom'),
         doorChance: v.number('doorChance'),
+      }),
+  },
+  {
+    name: 'placeCellBlocks',
+    summary:
+      'cell blocks of a prison: cells along a corridor, entered at one end (needs a wall map)',
+    fields: [
+      ...pair('blocks', 'Blocks', 1, 1, { min: '0' }),
+      ...pair('cellWidth', 'Cell width', 3, 3, POSITIVE),
+      ...pair('cellDepth', 'Cell depth', 3, 3, POSITIVE),
+      ...pair('cellsPerSide', 'Cells per side', 4, 6, POSITIVE),
+      ...pair('sides', 'Sides', 2, 2, { min: '1', max: '2' }),
+      ...pair('corridorWidth', 'Corridor width', 1, 1, POSITIVE),
+      select('orientation', 'Orientation', 'any', [
+        ['any', 'any'],
+        ['horizontal', 'horizontal'],
+        ['vertical', 'vertical'],
+      ]),
+      select('cellDoors', 'Cell doors', 'centered', [
+        ['centered', 'centered'],
+        ['jittered', 'jittered'],
+      ]),
+      check('guardRoom', 'Guard room', false),
+      number('guardChance', 'Guard room chance', 1, FRACTION),
+      ...pair('guardWidth', 'Guard room width', 5, 5, POSITIVE),
+      ...pair('guardDepth', 'Guard room depth', 3, 3, POSITIVE),
+      select('guardPlacement', 'Guard room placement', 'beside', [
+        ['beside', 'beside'],
+      ]),
+      ...pair('guardTunnel', 'Tunnel past its door', 2, 4, { min: '0' }),
+      ...areaFields(),
+    ],
+    make: (v) =>
+      placeCellBlocks({
+        blocks: v.range('blocks'),
+        cellSize: { width: v.range('cellWidth'), depth: v.range('cellDepth') },
+        cellsPerSide: v.range('cellsPerSide'),
+        sides: v.range('sides'),
+        corridorWidth: v.range('corridorWidth'),
+        orientation: v.text('orientation') as 'horizontal' | 'vertical' | 'any',
+        cellDoors: v.text('cellDoors') as 'centered' | 'jittered',
+        ...(v.flag('guardRoom') && {
+          guardRoom: {
+            chance: v.number('guardChance'),
+            size: {
+              width: v.range('guardWidth'),
+              depth: v.range('guardDepth'),
+            },
+            placement: v.text('guardPlacement') as 'beside',
+            tunnel: v.range('guardTunnel'),
+          },
+        }),
+        area: v.area(),
+        count: v.range('count'),
       }),
   },
   {

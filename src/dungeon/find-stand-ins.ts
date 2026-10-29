@@ -29,7 +29,9 @@ export interface StandIns {
  * an earlier step. Any tile that is not the base counts as floor. Rock that
  * the pieces enclose and that nothing else reaches is a hole: it is no exit,
  * and nothing is built in it. A wall is a potential exit of a piece when it
- * holds the base, is not reserved and is not a hole.
+ * holds the base and is not a hole, and is either not reserved, or reserved
+ * `Openable` outside every room's shape, which is how the entrance of a cell
+ * block is entered.
  */
 export function findStandIns(
   state: Pick<MapState, 'grid' | 'base' | 'reserved'>,
@@ -85,7 +87,8 @@ export function findStandIns(
       grid.inBounds(x, y) &&
       piece[at] === 0 &&
       holes[at] === 0 &&
-      reserved[at] === Reserve.None &&
+      (reserved[at] === Reserve.None ||
+        (reserved[at] === Reserve.Openable && covered[at] === 0)) &&
       grid.get(x, y) === base
     );
   };

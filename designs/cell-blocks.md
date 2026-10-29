@@ -1,6 +1,6 @@
 # Cell blocks
 
-Design in progress, not started. Delete this file once the feature is done and documented in the README.
+Tasks 1/8 to 3/8 done. Delete this file once the feature is done and documented in the README.
 
 ## Scope
 
@@ -31,7 +31,7 @@ Design in progress, not started. Delete this file once the feature is done and d
 ## Rooms and the result
 
 - **Cells and guard rooms are real rooms** in `rooms`. The cells' doors are open already, so `digCorridors` leaves them alone. The block corridor is floor outside the room shapes, a stand-in. The rejected alternative was the whole block as one templated room.
-- **Every `Room` gets a `kind`**: `'room'` for the rooms of every placement step (templates included), `'cell'` and `'guardRoom'`, and, in task 5/6, `'pillarHall'` and `'cavern'`. The game never has to guess what is what. This reverses the old rule that `Room` has no `kind`.
+- **Every `Room` gets a `kind`**: `'room'` for the rooms of every placement step (templates included), `'cell'` and `'guardRoom'`, and, in task 6/8, `'pillarHall'` and `'cavern'`. The game never has to guess what is what. This reverses the old rule that `Room` has no `kind`.
 - **Block index**: `Room.cellBlock` is an index into a `cellBlocks` extra (footprint, corridor, entrance). It only points from the room to the block, since `digCorridors` renumbers rooms and blocks are never dropped. The use case: two blocks themed differently (prisoners, monsters).
 
 ## The entrance
@@ -55,13 +55,30 @@ o......+.......................#
 
 - **The guard room** is optional (absent means none), with options for its chance, size and placement (`'through'` or `'beside'`).
 
+- **Open question, the approach.** Nothing keeps a later step off the two tiles beyond the entrance. A later hall that reaches them is handled (`joinTouchingPieces` opens the entrance in `digCorridors` and `digVeins`), but a later room whose wall lands there cuts the block off and the map is retried: with 1 to 2 blocks, `digPillarHalls`, `placeScatteredRooms` and `digCorridors` on 80 by 50, about one map in four is retried and 2 in 200 fail; without the hall, one in ten and none. A fix would need a new kind of reservation (no step builds there, a joining step may dig), which is a change to `Reserve`.
+
+## The lattice
+
+- **The need**: in a lattice dungeon (`placement: 'lattice'` on the rooms and on `digCorridors`), a corridor leaves an exit only toward a tile with odd coordinates. A block entrance lands there only by chance, so with 1 to 2 blocks, lattice `placeScatteredRooms` and lattice `digCorridors` on 81 by 51, 132 of 200 maps fail today.
+- **Option**: `placement: 'free' | 'lattice'` (`Placement`), as on the room placement steps, default `'free'`. It takes nothing from the other steps (no config inheritance), so a lattice dungeon gives it to every step.
+- **What the lattice fixes**: walls on even coordinates, floors on odd ones.
+  - The footprint starts on even coordinates and has odd sides; the area goes through `placeAreas` with `lattice: true`.
+  - Cell width and depth, corridor width and the guard room's size are narrowed to odd numbers, as the rooms' sizes are (`{ 4, 4 }` rounds up to 5). The arithmetic then works out: the cells share walls on even columns, the fronts are even rows, the corridor starts on an odd row and the far fronts are even again.
+  - The entrance sits on an odd row of the corridor, so the tile beyond it is odd on both axes.
+  - The tunnel's length is made odd, so its entrance is on an even column and the tile beyond on an odd one.
+  - Flipping a one-sided block keeps the parity, since the footprint has odd sides.
+- **The guard room beside**: with the double wall of the free layout, its near wall lands on an odd column. On the lattice it shares the block's end wall, its floor starting on the first odd column out.
+- **The doors inside stay centered**: the cell doors and the guard room door open onto the block corridor and the tunnel, which no outside corridor touches, so only the shell is on the lattice. A 3-wide cell keeps its door in the middle, on an even tile, off the lattice.
+- **The free layout keeps its double wall** (no preference from the user, so the sketch stands).
+- **Checked by** lattice `placeScatteredRooms` and `digCorridors` with blocks, guard rooms or not, over 200 seeds, as the other runs were.
+
 ## Changes to the joining steps
 
 - **`digCorridors`, change 1**: an `Openable` wall touching a stand-in is one of its potential exits, opened through `openReserved`.
 - **`digCorridors`, change 2**: rooms and floor already joined by open doors count as one thing to join. This is for the through case: the guard room has its inner door, and the block corridor has no exit of its own.
 - **`digVeins`** is expected to need no change: the block is one piece, entered through its `Openable` tile. To be verified.
 
-## Halls and caverns as rooms (task 5/6)
+## Halls and caverns as rooms (task 6/8)
 
 - **"Room" versus "feature" was never about the output.** It is about how the steps treat a thing:
   - A room has a shape in `roomShapes`, reserves its footprint, is entered only through its `Openable` tiles, has `Exit` entries, and an ordinary room can be dropped.
@@ -89,10 +106,11 @@ o......+.......................#
 
 Each task extends the playground and the README.
 
-- 1/7 `Room.kind` on every room step (`'room'`).
-- 2/7 `placeCellBlocks` with cells, corridor and entrance, no guard room; `Room.group` and `roomGroups` with the `'cellBlock'` group; `digCorridors` change 1; checked with `digVeins`; a playground step.
-- 3/7 The guard room beside the block, with its tunnel.
-- 4/7 The guard room through which the block is entered; `digCorridors` change 2.
-- 5/7 Halls and caverns as rooms: kinds, shapes that block nothing, their groups; the mine's `halls` and the caves' `regions` go.
-- 6/7 `Exit` entries where `digCorridors` and `digVeins` enter a hall or a cavern, and `createRoomMap`; in the playground, the room under the mouse.
-- 7/7 README check, and this file deleted.
+- 1/8 `Room.kind` on every room step (`'room'`).
+- 2/8 `placeCellBlocks` with cells, corridor and entrance, no guard room; `Room.group` and `roomGroups` with the `'cellBlock'` group; `digCorridors` change 1; checked with `digVeins`; a playground step.
+- 3/8 The guard room beside the block, with its tunnel.
+- 4/8 The lattice: `placement` on `placeCellBlocks`, the guard room beside included.
+- 5/8 The guard room through which the block is entered, on the lattice too; `digCorridors` change 2.
+- 6/8 Halls and caverns as rooms: kinds, shapes that block nothing, their groups; the mine's `halls` and the caves' `regions` go.
+- 7/8 `Exit` entries where `digCorridors` and `digVeins` enter a hall or a cavern, and `createRoomMap`; in the playground, the room under the mouse.
+- 8/8 README check, and this file deleted.

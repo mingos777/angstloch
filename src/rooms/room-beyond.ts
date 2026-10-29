@@ -33,5 +33,15 @@ export function roomBeyond(
   } else {
     y = wall.y - height;
   }
-  return { id: 0, x, y, width, height, exits: [], exitCount: 0, doorCount: 0 };
+  return {
+    id: 0,
+    kind: 'room',
+    x,
+    y,
+    width,
+    height,
+    exits: [],
+    exitCount: 0,
+    doorCount: 0,
+  };
 }

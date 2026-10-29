@@ -97,8 +97,9 @@ export const scatterRoomPlan: RoomPlacer = (random, plan) => {
         step,
         plan.sizeUniformity,
       );
-      const candidate = {
+      const candidate: Room = {
         id: rooms.length,
+        kind: 'room',
         x: pickOrigin(random, step, width - EDGE_CLEARANCE - roomWidth),
         y: pickOrigin(random, step, height - EDGE_CLEARANCE - roomHeight),
         width: roomWidth,

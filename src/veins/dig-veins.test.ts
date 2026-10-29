@@ -9,9 +9,11 @@ import type { MapStep } from '../pipeline/map-step';
 import { Reserve } from '../pipeline/reserve';
 import { brushOffsets } from '../roads/brush-offsets';
 import { step } from '../pipeline/step';
+import { floorBeyondEntrances } from '../test-helpers/floor-beyond-entrances';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { digFishbone } from '../mine/dig-fishbone';
 import { digPillarHalls } from '../mine/dig-pillar-halls';
+import { placeCellBlocks } from '../rooms/place-cell-blocks';
 import { digVeins } from './dig-veins';
 import type { DigVeinsOptions } from './dig-veins-options';
 import { findOutsideRock } from './find-outside-rock';
@@ -403,6 +405,59 @@ describe('digVeins on a piece that is boxed in', () => {
 });
 
 describe('digVeins with rooms', () => {
+  it('opens a cell block entrance that floor reaches right beyond it', () => {
+    // given
+    const steps = [placeCellBlocks(), floorBeyondEntrances()] as const;
+
+    // when
+    const { grid, roomGroups } = pipeline(
+      base,
+      [...steps, digVeins({ density: 0 })],
+      { random: mulberry32(1) },
+    );
+
+    // then
+    const { x, y } = roomGroups[0]?.entrance ?? { x: -1, y: -1 };
+    expect(grid.get(x, y)).toBe(Tile.Floor);
+    expect(findPieces(grid)).toHaveLength(1);
+  });
+
+  it('enters a cell block through its entrance alone', () => {
+    // given
+    const blocks = placeCellBlocks({ blocks: { min: 2, max: 2 } });
+
+    // when
+    const { grid, reserved, roomGroups } = pipeline(
+      base,
+      [blocks, digVeins({ density: 0 })],
+      { random: mulberry32(1) },
+    );
+
+    // then
+    expect(findPieces(grid)).toHaveLength(1);
+    for (const { entrance, footprint } of roomGroups) {
+      expect(grid.get(entrance.x, entrance.y)).toBe(Tile.Floor);
+      expect(reserved[entrance.y * grid.width + entrance.x]).toBe(
+        Reserve.Solid,
+      );
+      // nothing else of the outer wall was dug
+      const { x, y, width, height } = footprint;
+      const ring = [];
+      for (let column = x; column < x + width; ++column) {
+        ring.push({ x: column, y }, { x: column, y: y + height - 1 });
+      }
+      for (let row = y; row < y + height; ++row) {
+        ring.push({ x, y: row }, { x: x + width - 1, y: row });
+      }
+      const dug = ring.filter(
+        (tile) =>
+          (tile.x !== entrance.x || tile.y !== entrance.y) &&
+          grid.get(tile.x, tile.y) !== Tile.Wall,
+      );
+      expect(dug).toEqual([]);
+    }
+  });
+
   const rooms = placeScatteredRooms({ roomCount: { min: 6, max: 6 } });
 
   it.each([1, 2, 3, 4, 5, 6, 7, 8])(

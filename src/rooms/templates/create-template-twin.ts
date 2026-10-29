@@ -15,6 +15,7 @@ export function createTemplateTwin(
   const { x, y, width, height } = placement;
   const box = transform.room({
     id: 0,
+    kind: 'room',
     x,
     y,
     width,

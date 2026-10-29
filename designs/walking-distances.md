@@ -22,7 +22,7 @@ The game wants to put the stairs up and down in two rooms far apart, so that the
 
 ## Where it lives
 
-`measureDistances` in `src/core/` (it only needs the grid), and `measureRoomDistances` next to `createRoomMap` in `src/rooms/`. `measureDistances` can be built at any time; `measureRoomDistances` waits for `createRoomMap`, task 6/7 of the cell blocks.
+`measureDistances` in `src/core/` (it only needs the grid), and `measureRoomDistances` next to `createRoomMap` in `src/rooms/`. `measureDistances` can be built at any time; `measureRoomDistances` waits for `createRoomMap`, task 7/8 of the cell blocks.
 
 ## Tasks
 

@@ -33,11 +33,13 @@ import {
   roomAt,
   touchingExits,
 } from '../test-helpers/dungeon-checks';
+import { floorBeyondEntrances } from '../test-helpers/floor-beyond-entrances';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { digCorridors } from './dig-corridors';
 import type { DigCorridorsOptions } from './dig-corridors-options';
 import { joinRooms } from './join-rooms';
 import { placePartitionedRooms } from './place-partitioned-rooms';
+import { placeCellBlocks } from '../rooms/place-cell-blocks';
 import { resolveCorridorSettings } from './resolve-corridor-settings';
 import { placeScatteredRooms } from './place-scattered-rooms';
 import type { PlaceScatteredRoomsOptions } from './place-scattered-rooms-options';
@@ -74,6 +76,7 @@ function handRooms(floors: Area[], extras: { roomExits?: Exit[] } = {}) {
       const rooms = floors.map((floor, id): Room => ({
         ...floor,
         id,
+        kind: 'room',
         exits: [],
         exitCount: 0,
         doorCount: 0,
@@ -109,6 +112,7 @@ function closetRoom(id: number, x: number, y: number) {
   };
   const room: Room = {
     id,
+    kind: 'room',
     x,
     y,
     width: 3,
@@ -135,6 +139,7 @@ function withCloset(sealed: () => boolean) {
       ].map((floor, id): Room => ({
         ...floor,
         id,
+        kind: 'room',
         exits: [],
         exitCount: 0,
         doorCount: 0,
@@ -190,6 +195,134 @@ function wallMap(width = 61, height = 41) {
 }
 
 describe('digCorridors', () => {
+  describe('with a cell block', () => {
+    /** A cell block, rooms round it and the corridors, on a wall map of 60 by 40. */
+    function prison(options: DigCorridorsOptions = {}, seed = 1) {
+      return pipeline(
+        emptyMap({ width: 60, height: 40, tile: Tile.Wall }),
+        [placeCellBlocks(), placeScatteredRooms(), digCorridors(options)],
+        { random: mulberry32(seed) },
+      );
+    }
+
+    it('joins the block and the rooms into one dungeon', () => {
+      // given
+      const results = SEEDS.map((seed) => prison({}, seed));
+
+      // when
+      const cut = results.filter(
+        (result) =>
+          !isConnected({ ...result, exits: result.roomExits, fill: 0 }),
+      );
+
+      // then
+      expect(cut).toEqual([]);
+    });
+
+    it('opens the entrance with a door by the door chance', () => {
+      // given
+      const [always, never] = [prison(), prison({ doorChance: 0 })];
+
+      // when
+      const [door, gap] = [always, never].map(({ grid, roomGroups }) => {
+        const { x, y } = roomGroups[0]?.entrance ?? { x: -1, y: -1 };
+        return grid.get(x, y);
+      });
+
+      // then
+      expect(door).toBe(Tile.Door);
+      expect(gap).toBe(Tile.Floor);
+    });
+
+    it('opens the entrance through openReserved', () => {
+      // given
+      const { grid, reserved, roomGroups } = prison();
+
+      // when
+      const { x, y } = roomGroups[0]?.entrance ?? { x: -1, y: -1 };
+
+      // then
+      expect(reserved[y * grid.width + x]).toBe(Reserve.Solid);
+    });
+
+    it('opens an entrance that floor reaches right beyond it, with no corridor', () => {
+      // given
+      const base = emptyMap({ width: 60, height: 40, tile: Tile.Wall });
+      const steps = [placeCellBlocks(), floorBeyondEntrances()] as const;
+      const before = pipeline(base, steps, { random: mulberry32(1) }).grid;
+
+      // when
+      const { grid, roomGroups } = pipeline(base, [...steps, digCorridors()], {
+        random: mulberry32(1),
+      });
+
+      // then
+      const changed = [];
+      for (let y = 0; y < grid.height; ++y) {
+        for (let x = 0; x < grid.width; ++x) {
+          if (grid.get(x, y) !== before.get(x, y)) {
+            changed.push({ x, y, tile: grid.get(x, y) });
+          }
+        }
+      }
+      expect(changed).toEqual([
+        { ...roomGroups[0]?.entrance, tile: Tile.Door },
+      ]);
+    });
+
+    it('joins a block with a guard room and the rooms into one dungeon', () => {
+      // given
+      const make = (seed: number) =>
+        pipeline(
+          emptyMap({ width: 60, height: 40, tile: Tile.Wall }),
+          [
+            placeCellBlocks({ guardRoom: {} }),
+            placeScatteredRooms(),
+            digCorridors(),
+          ],
+          { random: mulberry32(seed) },
+        );
+
+      // when
+      const cut = SEEDS.map(make).filter(
+        (result) =>
+          !isConnected({ ...result, exits: result.roomExits, fill: 0 }),
+      );
+
+      // then
+      expect(cut).toEqual([]);
+    });
+
+    it('leaves the cells with the one door they have', () => {
+      // given
+      const { rooms, roomExits } = prison();
+
+      // when
+      const cells = rooms.filter(({ kind }) => kind === 'cell');
+
+      // then
+      expect(cells.length).toBeGreaterThan(0);
+      for (const cell of cells) {
+        expect(cell.exitCount).toBe(1);
+        expect(roomExits[cell.exits[0] ?? -1]?.rooms).toEqual([cell.id]);
+      }
+    });
+  });
+
+  it('keeps the kind of every room it joins', () => {
+    // given
+    const base = emptyMap({ width: 61, height: 41, tile: Tile.Wall });
+
+    // when
+    const { rooms } = pipeline(base, [placeScatteredRooms(), digCorridors()], {
+      random: mulberry32(1),
+    });
+
+    // then
+    expect(rooms.length).toBeGreaterThan(1);
+    expect(rooms.map(({ kind }) => kind)).toEqual(rooms.map(() => 'room'));
+  });
+
   describe('joining', () => {
     it.each(['free', 'lattice'] as const)(
       'makes every room reachable from the first with %s placement',

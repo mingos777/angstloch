@@ -39,6 +39,7 @@ export function createTransforms(
           : direction,
     room: (room) => ({
       id: 0,
+      kind: room.kind,
       x: flipX ? w - room.x - room.width : room.x,
       y: flipY ? h - room.y - room.height : room.y,
       width: room.width,

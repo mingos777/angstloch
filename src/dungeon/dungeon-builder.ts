@@ -54,6 +54,8 @@ export interface DungeonBuilderOptions {
    * distance to them is measured to their nearest wall. Defaults to none.
    */
   firstStandIn?: number;
+  /** The potential exits of stand-ins that were reserved as entrances, keyed by `y * width + x`: they get a door by `doorChance`, like the exits of rooms. */
+  entrances?: ReadonlySet<number>;
 }
 
 /** An exit of a templated room that could not be opened or joined to the rest of the dungeon. */
@@ -204,7 +206,8 @@ export function createDungeonBuilder(
     forcedDoor?: boolean,
   ): void => {
     const door =
-      !ids.some((id) => id >= firstStandIn) &&
+      (!ids.some((id) => id >= firstStandIn) ||
+        (options.entrances?.has(position.y * width + position.x) ?? false)) &&
       (forcedDoor ?? options.doorChance > random());
     grid.set(position.x, position.y, door ? Tile.Door : Tile.Floor);
     for (let y = position.y - 1; y <= position.y + 1; ++y) {
