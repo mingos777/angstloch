@@ -31,6 +31,7 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "check:forest": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-forest.ts'))\" --",
+    "check:version": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-version.ts'))\" --",
     "check:dungeon": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-dungeon.ts'))\" --"
   },
   "devDependencies": {
