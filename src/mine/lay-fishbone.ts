@@ -8,9 +8,9 @@ import type { Range } from '../core/range';
 import { Tile } from '../core/tile';
 import type { NoiseFunction } from '../noise/noise-function';
 import { brushOffsets } from '../roads/brush-offsets';
-import { carvePassageTiles } from './carve-passage-tiles';
-import type { MinePassage } from './mine-passage';
-import { tracePassage } from './trace-passage';
+import { carvePassageTiles } from '../veins/carve-passage-tiles';
+import type { MinePassage } from '../veins/mine-passage';
+import { tracePassage } from '../veins/trace-passage';
 
 /** The rings of the map that stay wall, so that the mine is closed in by rock. */
 const MARGIN = 1;

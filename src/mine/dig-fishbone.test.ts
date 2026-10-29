@@ -10,7 +10,7 @@ import { mulberry32 } from '../test-helpers/mulberry32';
 import type { Random } from '../core/random';
 import { digFishbone } from './dig-fishbone';
 import type { DigFishboneOptions } from './dig-fishbone-options';
-import type { MinePassage } from './mine-passage';
+import type { MinePassage } from '../veins/mine-passage';
 
 const base = emptyMap({ width: 80, height: 50, tile: Tile.Wall });
 

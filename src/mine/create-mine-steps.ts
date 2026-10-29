@@ -1,12 +1,11 @@
 import { digNoiseCave } from '../cave/dig-noise-cave';
-import { digCaveTunnels } from '../cave/dig-cave-tunnels';
+import { CAVE_TUNNEL_DEFAULTS } from '../cave/cave-tunnel-defaults';
 import { openExits } from '../exits/open-exits';
 import type { AnyStep } from '../pipeline/pipeline-chain';
 import { digFishbone } from './dig-fishbone';
-import { digHallVeins } from './dig-hall-veins';
 import { digPillarHalls } from './dig-pillar-halls';
 import { digRings } from './dig-rings';
-import { digVeins } from './dig-veins';
+import { digVeins } from '../veins/dig-veins';
 import type { MineStepOptions } from './mine-options';
 import { placeMineRooms } from './place-mine-rooms';
 
@@ -45,7 +44,7 @@ function createLayoutSteps(options: MineStepOptions): AnyStep[] {
     return [digVeins(options.veins)];
   }
   if (options.pillars) {
-    return [digPillarHalls(options.pillars), digHallVeins(options.hallVeins)];
+    return [digPillarHalls(options.pillars), digVeins(options.hallVeins)];
   }
   if (options.rings) {
     return [digRings(options.rings)];
@@ -56,8 +55,8 @@ function createLayoutSteps(options: MineStepOptions): AnyStep[] {
 /**
  * The steps of a mine, in order: the layout step (`digFishbone` unless
  * `veins`, `pillars` or `rings` is given; `pillars` is `digPillarHalls` and
- * `digHallVeins`), then `digNoiseCave` and
- * `digCaveTunnels` when `caverns` is given, then `placeMineRooms` when `rooms`
+ * `digVeins`), then `digNoiseCave` and
+ * `digVeins` for the tunnels when `caverns` is given, then `placeMineRooms` when `rooms`
  * is, and `openExits` when `exits` is. The default area of a cavern is cut
  * down to the `width` and `height` of the map, when they are given. Every
  * option is checked here, and a bad one, or more than one layout, throws a
@@ -84,7 +83,7 @@ export function createMineSteps(
       }),
     );
     if (tunnels !== false) {
-      steps.push(digCaveTunnels(tunnels));
+      steps.push(digVeins({ ...CAVE_TUNNEL_DEFAULTS, ...tunnels }));
     }
   }
   if (rooms) {

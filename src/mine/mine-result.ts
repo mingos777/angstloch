@@ -4,7 +4,7 @@ import type { Point } from '../core/point';
 import type { PipelineFailure } from '../pipeline/pipeline-failure';
 import type { Exit } from '../rooms/exit';
 import type { Room } from '../rooms/room';
-import type { MinePassage } from './mine-passage';
+import type { MinePassage } from '../veins/mine-passage';
 
 export interface MineResult {
   /** The generated map. */

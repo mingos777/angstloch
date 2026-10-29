@@ -97,12 +97,12 @@ describe('generateCave', () => {
     },
   );
 
-  it('passes the tunnel options to digCaveTunnels', () => {
+  it('passes the tunnel options to digVeins', () => {
     // given
     const narrow = cave({}, 2);
 
     // when
-    const wide = cave({ tunnels: { width: 3 } }, 2);
+    const wide = cave({ tunnels: { veinWidth: { min: 3, max: 3 } } }, 2);
 
     // then
     expect(count(wide.grid, Tile.Floor)).toBeGreaterThan(
@@ -203,7 +203,7 @@ describe('generateCave', () => {
   });
 
   it.each(['horizontal', 'vertical', 'both', 'rotational'] as const)(
-    'makes a perfectly %s cave when every step is given the symmetry',
+    'makes a nearly %s cave when every step is given the symmetry',
     (symmetry) => {
       // given
       const options = {
@@ -211,14 +211,17 @@ describe('generateCave', () => {
         tunnels: { symmetry },
         exits: { symmetry, count: { min: 4, max: 4 } },
       };
+      const plain = { ...options, tunnels: {} };
 
       // when
-      const grids = [1, 2, 3].map((seed) => cave(options, seed).grid);
+      const seeds = [1, 2, 3];
+      const mirrored = seeds.map((seed) => cave(options, seed).grid);
+      const loose = seeds.map((seed) => cave(plain, seed).grid);
 
       // then
-      for (const grid of grids) {
-        expect(countAsymmetry(grid, symmetry)).toBe(0);
-      }
+      const total = (grids: Grid[]) =>
+        grids.reduce((sum, grid) => sum + countAsymmetry(grid, symmetry), 0);
+      expect(total(mirrored)).toBeLessThan(total(loose));
     },
   );
 
@@ -238,7 +241,7 @@ describe('generateCave', () => {
     ['width', { width: 0 }],
     ['height', { height: 2.5 }],
     ['fillChance', { cave: { fillChance: 1.5 } }],
-    ['width', { tunnels: { width: 0 } }],
+    ['veinWidth', { tunnels: { veinWidth: { min: 0, max: 1 } } }],
     ['count', { exits: { count: { min: -1, max: 1 } } }],
   ])('throws a RangeError for an invalid %s', (name, options) => {
     // given

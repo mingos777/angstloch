@@ -77,15 +77,14 @@ function blockTiles(
   return blocked;
 }
 
-/** The free tile next to an entrance, along an edge, that lies nearest to `towards`, where a vein leaves it. */
-function findMouth(
+/** The free tiles next to an entrance, along an edge, nearest to `towards` first, where a vein may leave it. */
+function findMouths(
   grid: Grid,
   blocked: Uint8Array,
   entrance: Point,
   towards: Point,
-): Point | undefined {
-  let best: Point | undefined;
-  let bestDistance = Infinity;
+): Point[] {
+  const mouths: Point[] = [];
   for (const [dx, dy] of [
     [1, 0],
     [-1, 0],
@@ -94,18 +93,19 @@ function findMouth(
   ] as const) {
     const x = entrance.x + dx;
     const y = entrance.y + dy;
-    const distance = Math.hypot(towards.x - x, towards.y - y);
     if (
       grid.inBounds(x, y) &&
       grid.get(x, y) === Tile.Wall &&
-      blocked[y * grid.width + x] !== 1 &&
-      distance < bestDistance
+      blocked[y * grid.width + x] !== 1
     ) {
-      best = { x, y };
-      bestDistance = distance;
+      mouths.push({ x, y });
     }
   }
-  return best;
+  return mouths.sort(
+    (a, b) =>
+      Math.hypot(towards.x - a.x, towards.y - a.y) -
+      Math.hypot(towards.x - b.x, towards.y - b.y),
+  );
 }
 
 /**
@@ -133,25 +133,26 @@ export function digRoutedVein(
   // a passage reaches half its width from its middle line, and one wall is left beyond that
   const clearance = relaxed ? 0 : Math.floor(style.width / 2) + 1;
   const blocked = blockTiles(grid, clearance, [from, to], style.protect);
-  const start = findMouth(grid, blocked, from, to);
-  const end = findMouth(grid, blocked, to, from);
-  if (!start || !end) {
-    return undefined;
-  }
   const limit = relaxed
     ? Infinity
     : Math.floor(
         DETOUR_FACTOR * (Math.abs(to.x - from.x) + Math.abs(to.y - from.y)) +
           DETOUR_SLACK,
       );
-  const route = findRockRoute(
-    grid.width,
-    grid.height,
-    blocked,
-    start,
-    end,
-    limit,
-  );
+  // the nearest mouths first; one that is walled off from the other end is skipped
+  let route: Point[] | undefined;
+  for (const start of findMouths(grid, blocked, from, to)) {
+    for (const end of findMouths(grid, blocked, to, from)) {
+      route ??= findRockRoute(
+        grid.width,
+        grid.height,
+        blocked,
+        start,
+        end,
+        limit,
+      );
+    }
+  }
   if (!route) {
     return undefined;
   }

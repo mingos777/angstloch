@@ -13,7 +13,7 @@ import type { RoomTemplate } from '../rooms/templates/room-template';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { digFishbone } from './dig-fishbone';
-import type { MinePassage } from './mine-passage';
+import type { MinePassage } from '../veins/mine-passage';
 import { placeMineRooms } from './place-mine-rooms';
 
 const { Floor: F, Wall: W, Exit: E } = TemplateCell;

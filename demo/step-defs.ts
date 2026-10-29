@@ -7,11 +7,9 @@ import {
   digCorridors,
   digMaze,
   digNoiseCave,
-  digCaveTunnels,
   digFishbone,
   digPillarHalls,
   digRings,
-  digHallVeins,
   digVeins,
   digCellularCave,
   placeClusteredRooms,
@@ -28,7 +26,6 @@ import type {
   AnyStep,
   CaveNeighborhood,
   CavePlacement,
-  CaveTunnelStyle,
   ClearingSpec,
   CorridorSymmetry,
   LayoutSymmetry,
@@ -387,13 +384,19 @@ export const STEP_DEFS: StepDef[] = [
   },
   {
     name: 'digVeins',
-    summary: 'a web of winding tunnels between junctions (needs a wall map)',
+    summary:
+      'veins through the rock that join every piece of floor, rooms and halls included, into one network, and a web of their own up to the density',
     fields: [
-      number('density', 'Density', 0.15, FRACTION),
+      number('density', 'Density (0: only join)', 0.15, FRACTION),
       ...pair('veinWidth', 'Vein width', 1, 2, POSITIVE),
       number('veinWindiness', 'Vein windiness', 0.5, FRACTION),
       number('veinSpacing', 'Vein spacing', 16, { min: '3' }),
-      ...areaFields(),
+      select('hallEntrances', 'Entrances', 'facing', [
+        ['facing', 'facing'],
+        ['edge', 'edge'],
+      ]),
+      select('symmetry', 'Symmetry', 'none', SYMMETRIES),
+      number('symmetryChance', 'Symmetry chance', 1, FRACTION),
     ],
     make: (v) =>
       digVeins({
@@ -401,14 +404,15 @@ export const STEP_DEFS: StepDef[] = [
         veinWidth: v.range('veinWidth'),
         veinWindiness: v.number('veinWindiness'),
         veinSpacing: v.number('veinSpacing'),
-        area: v.area(),
-        count: v.range('count'),
+        hallEntrances: v.text('hallEntrances') as MineHallEntrances,
+        symmetry: v.text('symmetry') as LayoutSymmetry,
+        symmetryChance: v.number('symmetryChance'),
       }),
   },
   {
     name: 'digPillarHalls',
     summary:
-      'large halls with pillars left standing (needs a wall map); join them with digHallVeins',
+      'large halls with pillars left standing (needs a wall map); join them with digVeins',
     fields: [
       number('density', 'Density', 0.35, FRACTION),
       ...pair('halls', 'Halls', 2, 4, POSITIVE),
@@ -433,27 +437,6 @@ export const STEP_DEFS: StepDef[] = [
         pillarJitter: v.number('pillarJitter'),
         area: v.area(),
         count: v.range('count'),
-      }),
-  },
-  {
-    name: 'digHallVeins',
-    summary:
-      'veins that join the pillar halls into one network (needs digPillarHalls before it)',
-    fields: [
-      ...pair('hallVeins', 'Hall veins', 2, 4, POSITIVE),
-      select('hallEntrances', 'Hall entrances', 'facing', [
-        ['facing', 'facing'],
-        ['edge', 'edge'],
-      ]),
-      ...pair('veinWidth', 'Vein width', 1, 2, POSITIVE),
-      number('veinWindiness', 'Vein windiness', 0.5, FRACTION),
-    ],
-    make: (v) =>
-      digHallVeins({
-        hallVeins: v.range('hallVeins'),
-        hallEntrances: v.text('hallEntrances') as MineHallEntrances,
-        veinWidth: v.range('veinWidth'),
-        veinWindiness: v.number('veinWindiness'),
       }),
   },
   {
@@ -578,33 +561,6 @@ export const STEP_DEFS: StepDef[] = [
         lacunarity: v.number('lacunarity'),
         iterations: v.number('iterations'),
         ...caveOptions(v),
-      }),
-  },
-  {
-    name: 'digCaveTunnels',
-    summary:
-      'tunnels that join every piece of floor into one, round reserved tiles (needs a wall map)',
-    fields: [
-      select('style', 'Style', 'winding', [
-        ['winding', 'winding'],
-        ['direct', 'direct'],
-      ]),
-      number('width', 'Width', 1, POSITIVE),
-      number('windiness', 'Windiness', 0.5, FRACTION),
-      number('loops', 'Loops', 0, FRACTION),
-      check('borderWalls', 'Border walls', true),
-      select('symmetry', 'Symmetry', 'none', SYMMETRIES),
-      number('symmetryChance', 'Symmetry chance', 1, FRACTION),
-    ],
-    make: (v) =>
-      digCaveTunnels({
-        style: v.text('style') as CaveTunnelStyle,
-        width: v.number('width'),
-        windiness: v.number('windiness'),
-        loops: v.number('loops'),
-        borderWalls: v.flag('borderWalls'),
-        symmetry: v.text('symmetry') as LayoutSymmetry,
-        symmetryChance: v.number('symmetryChance'),
       }),
   },
   {

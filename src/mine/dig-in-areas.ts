@@ -7,8 +7,8 @@ import type { AreaSize } from '../pipeline/area-size';
 import { buildInArea } from '../pipeline/build-in-area';
 import type { MapState } from '../pipeline/map-state';
 import { placeAreas } from '../pipeline/place-areas';
-import { LANE_SPACING } from './dig-vein';
-import type { MinePassage } from './mine-passage';
+import { LANE_SPACING } from '../veins/dig-vein';
+import type { MinePassage } from '../veins/mine-passage';
 
 /**
  * Digs a mine layout once in every area that `placeAreas` picks, and returns

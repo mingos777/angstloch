@@ -5,9 +5,9 @@ import { randomInt } from '../core/random-int';
 import type { Range } from '../core/range';
 import type { NoiseFunction } from '../noise/noise-function';
 import { joinTiles } from '../roads/join-tiles';
-import { carvePassageTiles } from './carve-passage-tiles';
-import { digVein, keepInside, LANE_SPACING, MARGIN } from './dig-vein';
-import type { MinePassage } from './mine-passage';
+import { carvePassageTiles } from '../veins/carve-passage-tiles';
+import { digVein, keepInside, LANE_SPACING, MARGIN } from '../veins/dig-vein';
+import type { MinePassage } from '../veins/mine-passage';
 import type { MineRingShape } from './mine-ring-shape';
 
 /** The smallest radius of a ring, in tiles. A ring any smaller is left out. */

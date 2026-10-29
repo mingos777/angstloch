@@ -7,7 +7,7 @@ import type { Exit } from '../rooms/exit';
 import type { Room } from '../rooms/room';
 import { createMineSteps } from './create-mine-steps';
 import type { MineOptions } from './mine-options';
-import type { MinePassage } from './mine-passage';
+import type { MinePassage } from '../veins/mine-passage';
 import type { MineResult } from './mine-result';
 
 /**

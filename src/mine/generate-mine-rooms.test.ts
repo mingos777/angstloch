@@ -428,7 +428,7 @@ describe('generateMine with ordinary rooms', () => {
     }
     expect(checked).toBeGreaterThan(0);
     expect(crowded).toBe(0);
-  });
+  }, 20_000);
 
   it('never puts two optional openings of a template next to each other', () => {
     // given

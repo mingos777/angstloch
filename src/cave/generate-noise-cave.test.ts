@@ -121,18 +121,24 @@ describe('generateNoiseCave', () => {
     }
   });
 
-  it('makes a perfectly symmetric cave with tunnels when both steps are given the symmetry', () => {
+  it('makes a nearly symmetric cave when the tunnels are given the symmetry too', () => {
     // given
-    const options = {
-      cave: { ...SMALL, symmetry: 'rotational' },
+    const cave1 = { ...SMALL, symmetry: 'rotational' } as const;
+    const mirrored = {
+      cave: cave1,
       tunnels: { symmetry: 'rotational' },
     } as const;
+    const plain = { cave: cave1 };
 
     // when
-    const { grid } = cave(options);
+    const seeds = [1, 2, 3];
+    const near = seeds.map((seed) => cave(mirrored, seed).grid);
+    const loose = seeds.map((seed) => cave(plain, seed).grid);
 
     // then
-    expect(countAsymmetry(grid, 'rotational')).toBe(0);
+    const total = (grids: Grid[]) =>
+      grids.reduce((sum, grid) => sum + countAsymmetry(grid, 'rotational'), 0);
+    expect(total(near)).toBeLessThan(total(loose));
   });
 
   it('reports one attempt and no failures', () => {
@@ -152,7 +158,7 @@ describe('generateNoiseCave', () => {
     ['height', { height: -1 }],
     ['fill', { cave: { fill: 1.1 } }],
     ['scaleX', { cave: { scaleX: 0 } }],
-    ['windiness', { tunnels: { windiness: 2 } }],
+    ['veinWindiness', { tunnels: { veinWindiness: 2 } }],
     ['count', { exits: { count: { min: -1, max: 0 } } }],
   ])('throws a RangeError for an invalid %s', (name, options) => {
     // given

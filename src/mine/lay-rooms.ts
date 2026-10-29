@@ -22,13 +22,13 @@ import { TemplateCell } from '../rooms/templates/template-cell';
 import type { TemplateExit } from '../rooms/templates/template-exit';
 import type { TemplatePlacement } from '../rooms/templates/template-placement';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
-import { carvePassageTiles } from './carve-passage-tiles';
-import { keepInside, LANE_SPACING, MARGIN } from './dig-vein';
-import type { MinePassage } from './mine-passage';
+import { carvePassageTiles } from '../veins/carve-passage-tiles';
+import { keepInside, LANE_SPACING, MARGIN } from '../veins/dig-vein';
+import type { MinePassage } from '../veins/mine-passage';
 import type { MineRoomOptions } from './mine-room-options';
 import { measureReach } from './measure-reach';
 import type { Reach } from './measure-reach';
-import { tracePassage } from './trace-passage';
+import { tracePassage } from '../veins/trace-passage';
 
 /** Wall tiles that stay between a room's footprint and the mine, or another room. */
 const SPACING = 2;

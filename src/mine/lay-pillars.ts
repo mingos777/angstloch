@@ -5,8 +5,8 @@ import { randomInt } from '../core/random-int';
 import type { Range } from '../core/range';
 import { Tile } from '../core/tile';
 import { createRaggedMask } from './create-ragged-mask';
-import { MARGIN } from './dig-vein';
-import type { MinePassage } from './mine-passage';
+import { MARGIN } from '../veins/dig-vein';
+import type { MinePassage } from '../veins/mine-passage';
 import { placePillars } from './place-pillars';
 
 /** The walls that stay between two halls, so that they do not merge. */
@@ -176,7 +176,7 @@ function digHalls(
  * Digs the halls of a room-and-pillar mine into the grid and returns them. A
  * few large halls of floor are placed apart from one another, and pillars are
  * left standing in them. No hall covers a tile of `protect`. The halls are
- * left apart: `digHallVeins` joins them. The passages come back empty, since
+ * left apart: `digVeins` or `digCorridors` joins them. The passages come back empty, since
  * this digs none.
  */
 export function layPillars(

@@ -8,9 +8,9 @@ import type { Room } from '../rooms/room';
 import type { RoomShape } from '../rooms/room-shape';
 import { assertMineRoomOptions } from './assert-mine-room-options';
 import { assertWallBase } from '../pipeline/assert-wall-base';
-import { LANE_SPACING } from './dig-vein';
+import { LANE_SPACING } from '../veins/dig-vein';
 import { layRooms } from './lay-rooms';
-import type { MinePassage } from './mine-passage';
+import type { MinePassage } from '../veins/mine-passage';
 import type { PlaceMineRoomsOptions } from './place-mine-rooms-options';
 
 /** The extras that `placeMineRooms` uses and adds. */

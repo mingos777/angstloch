@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { digNoiseCave } from '../cave/dig-noise-cave';
-import { digCaveTunnels } from '../cave/dig-cave-tunnels';
+import { digVeins } from '../veins/dig-veins';
 import { findCaveRegions } from '../cave/find-cave-regions';
 import { digCellularCave } from '../cave/dig-cellular-cave';
 import type { Grid } from '../core/grid';
@@ -67,14 +67,14 @@ describe('features with rooms', () => {
       ],
     ],
     [
-      'a cavern in an area and scattered rooms, joined by cave tunnels',
+      'a cavern in an area and scattered rooms, joined by veins',
       () => [
         digCellularCave({
           fillChance: 0.5,
           area: { width: { min: 24, max: 24 }, height: { min: 16, max: 16 } },
         }),
         placeScatteredRooms({ roomCount: { min: 4, max: 6 } }),
-        digCaveTunnels(),
+        digVeins({ density: 0 }),
       ],
     ],
   ] as [string, () => AnyStep[]][])(

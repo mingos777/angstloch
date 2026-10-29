@@ -1,7 +1,7 @@
 import { DIRECTIONS } from '../core/directions';
 import type { Grid } from '../core/grid';
 import { Tile } from '../core/tile';
-import { MARGIN } from './dig-vein';
+import { MARGIN } from '../veins/dig-vein';
 
 /** How far each tile is from the mine, and the way to it. */
 export interface Reach {

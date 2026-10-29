@@ -101,6 +101,12 @@ const FOREST = [
   'layFootbridges',
 ];
 
+/** The tunnels of the cave and mine presets: single-width veins that only join the pieces. */
+const TUNNELS: CardSpec = [
+  'digVeins',
+  { density: '0', veinWidthMin: '1', veinWidthMax: '1' },
+];
+
 /** The steps of `generateMine`, with its defaults. It is dug out of wall, so the base tile is set to wall. */
 const MINE: CardSpec[] = ['digFishbone'];
 
@@ -120,14 +126,14 @@ const MINE_WITH_CAVERNS: CardSpec[] = [
       placement: 'beside',
     },
   ],
-  'digCaveTunnels',
+  TUNNELS,
 ];
 
 /** The steps of `generateCave`, with its defaults. It is dug out of wall too. */
-const CAVE = ['digCellularCave', 'digCaveTunnels'];
+const CAVE: CardSpec[] = ['digCellularCave', TUNNELS];
 
 /** The steps of `generateNoiseCave`, with its defaults. */
-const NOISE_CAVE = ['digNoiseCave', 'digCaveTunnels'];
+const NOISE_CAVE: CardSpec[] = ['digNoiseCave', TUNNELS];
 
 /** The steps of `generateMaze`, with its defaults. It is carved out of wall too. */
 const MAZE: CardSpec[] = ['digMaze'];
@@ -183,7 +189,7 @@ const CAVE_WITH_ROOMS: CardSpec[] = [
     },
   ],
   ['placeScatteredRooms', { roomCountMin: '4', roomCountMax: '6' }],
-  'digCaveTunnels',
+  TUNNELS,
 ];
 
 /** Outlines a tile. */

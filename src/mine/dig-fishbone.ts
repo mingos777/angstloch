@@ -5,7 +5,7 @@ import { assertFishboneOptions } from './assert-fishbone-options';
 import type { DigFishboneOptions } from './dig-fishbone-options';
 import { digInAreas } from './dig-in-areas';
 import { layFishbone } from './lay-fishbone';
-import type { MinePassage } from './mine-passage';
+import type { MinePassage } from '../veins/mine-passage';
 
 /**
  * A step that digs a fishbone mine: the main shaft first, through a point near

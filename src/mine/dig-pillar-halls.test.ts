@@ -9,11 +9,10 @@ import { Reserve } from '../pipeline/reserve';
 import { step } from '../pipeline/step';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import type { Random } from '../core/random';
-import { digHallVeins } from './dig-hall-veins';
-import type { DigHallVeinsOptions } from './dig-hall-veins-options';
+import { digVeins } from '../veins/dig-veins';
 import { digPillarHalls } from './dig-pillar-halls';
 import type { DigPillarHallsOptions } from './dig-pillar-halls-options';
-import type { MinePassage } from './mine-passage';
+import type { MinePassage } from '../veins/mine-passage';
 
 const base = emptyMap({ width: 100, height: 60, tile: Tile.Wall });
 
@@ -266,130 +265,6 @@ describe('digPillarHalls', () => {
   });
 });
 
-describe('digPillarHalls with digHallVeins', () => {
-  it('digs the same mine from the same seed', () => {
-    // given
-    const make = () => dig({ random: mulberry32(5) });
-
-    // when
-    const first = make();
-    const second = make();
-
-    // then
-    expect(first.grid.toString()).toBe(second.grid.toString());
-    expect(first.halls).toEqual(second.halls);
-  });
-
-  it('lists the halls and the veins that join them', () => {
-    // given
-    const options = { halls: { min: 3, max: 3 }, random: mulberry32(1) };
-
-    // when
-    const { halls, passages } = dig(options);
-
-    // then
-    expect(halls).toHaveLength(3);
-    expect(passages.length).toBeGreaterThanOrEqual(2);
-    expect(passages.every(({ kind }) => kind === 'vein')).toBe(true);
-  });
-
-  it('digs one connected piece, whatever the seed', () => {
-    // given
-    const seeds = [1, 2, 3, 4, 5, 6];
-
-    // when
-    const pieces = seeds.map(
-      (seed) => findCaveRegions(dig({ random: mulberry32(seed) }).grid).length,
-    );
-
-    // then
-    expect(pieces).toEqual(seeds.map(() => 1));
-  });
-
-  it('joins the halls of every area into one network', () => {
-    // given
-    const options = {
-      halls: { min: 2, max: 2 },
-      area: { width: { min: 40, max: 40 }, height: { min: 25, max: 25 } },
-      count: { min: 2, max: 2 },
-      random: mulberry32(4),
-    };
-
-    // when
-    const { grid, halls } = dig(options);
-
-    // then
-    expect(halls).toHaveLength(4);
-    expect(findCaveRegions(grid)).toHaveLength(1);
-  });
-
-  it('appends to the passages of an earlier step', () => {
-    // given
-    const steps = [earlier, digPillarHalls(), digHallVeins()] as const;
-
-    // when
-    const { passages } = pipeline(base, steps, { random: mulberry32(1) });
-
-    // then
-    expect(passages[0]?.tiles).toEqual([{ x: 0, y: 0 }]);
-    expect(passages.length).toBeGreaterThan(1);
-  });
-
-  it('never digs a vein through a reserved tile', () => {
-    // given
-    const wall = step('reserve', {}, (state) => {
-      for (let y = 0; y < 60; ++y) {
-        state.reserved[y * 100 + 50] = Reserve.Solid;
-      }
-      return {};
-    });
-    const seeds = [1, 2, 3, 4];
-
-    // when
-    const grids = seeds.map(
-      (seed) =>
-        pipeline(
-          base,
-          [wall, digPillarHalls({ density: 0.5 }), digHallVeins()],
-          { random: mulberry32(seed) },
-        ).grid,
-    );
-
-    // then
-    for (const grid of grids) {
-      for (let y = 0; y < 60; ++y) {
-        expect(grid.get(50, y)).toBe(Tile.Wall);
-      }
-    }
-  });
-
-  it('refuses to run before the halls are dug', () => {
-    // given
-    const run = () => pipeline(base, [digHallVeins()] as never);
-
-    // then
-    expect(run).toThrow(/halls/);
-  });
-
-  it('throws a RangeError for a bad option at once', () => {
-    // given
-    const bad = [
-      { hallEntrances: 'middle' as 'edge' },
-      { hallVeins: { min: 0, max: 2 } },
-      { veinWindiness: 2 },
-      { veinWidth: { min: 0, max: 1 } },
-    ];
-
-    // when
-    const makers = bad.map((options) => () => digHallVeins(options));
-
-    // then
-    for (const make of makers) {
-      expect(make).toThrow(RangeError);
-    }
-  });
-});
-
 function floorShare(grid: Grid): number {
   return (grid.toString().split('.').length - 1) / (grid.width * grid.height);
 }
@@ -487,28 +362,20 @@ function findPillars(result: {
   });
 }
 
-/** Digs with `digPillarHalls` and `digHallVeins`, on a map of rock 100 by 60 unless told otherwise. */
+/** Digs with `digPillarHalls` and `digVeins` joining the halls, on a map of rock 100 by 60 unless told otherwise. */
 function dig({
   width = 100,
   height = 60,
   random,
-  hallVeins,
-  hallEntrances,
-  veinWidth,
-  veinWindiness,
   ...options
-}: DigPillarHallsOptions &
-  DigHallVeinsOptions & {
-    width?: number;
-    height?: number;
-    random?: Random;
-  } = {}) {
+}: DigPillarHallsOptions & {
+  width?: number;
+  height?: number;
+  random?: Random;
+} = {}) {
   return pipeline(
     emptyMap({ width, height, tile: Tile.Wall }),
-    [
-      digPillarHalls(options),
-      digHallVeins({ hallVeins, hallEntrances, veinWidth, veinWindiness }),
-    ],
+    [digPillarHalls(options), digVeins({ density: 0 })],
     { random },
   );
 }
@@ -524,22 +391,6 @@ describe('digPillarHalls halls and pillars', () => {
 
     // then
     expect(first.grid.toString()).not.toBe(second.grid.toString());
-  });
-
-  it('lists the veins that join the halls', () => {
-    // given
-    const options = {
-      halls: { min: 3, max: 3 },
-      random: mulberry32(1),
-    };
-
-    // when
-    const { halls, passages } = dig(options);
-
-    // then
-    expect(halls).toHaveLength(3);
-    expect(passages.length).toBeGreaterThanOrEqual(2);
-    expect(passages.every((passage) => passage.kind === 'vein')).toBe(true);
   });
 
   it('makes one connected piece, whatever the settings', () => {
@@ -596,21 +447,6 @@ describe('digPillarHalls halls and pillars', () => {
     expect(halls.length).toBeGreaterThanOrEqual(1);
     expect(halls.length).toBeLessThan(4);
     expect(findCaveRegions(grid)).toHaveLength(1);
-  });
-
-  it('digs no veins for a single hall', () => {
-    // given
-    const options = {
-      halls: { min: 1, max: 1 },
-      random: mulberry32(1),
-    };
-
-    // when
-    const { halls, passages } = dig(options);
-
-    // then
-    expect(halls).toHaveLength(1);
-    expect(passages).toEqual([]);
   });
 
   it('digs halls of the size that hall size says', () => {
@@ -710,7 +546,6 @@ describe('digPillarHalls halls and pillars', () => {
   it('leaves no pillars when none fits in a hall', () => {
     // given
     const options = {
-      hallVeins: { min: 1, max: 1 },
       hallSize: { min: 8, max: 8 },
       pillarSize: { min: 9, max: 9 },
       random: mulberry32(1),
@@ -726,7 +561,6 @@ describe('digPillarHalls halls and pillars', () => {
   it('makes clean rectangles of the pillars at a pillar ragged of 0', () => {
     // given
     const options = {
-      hallVeins: { min: 1, max: 1 },
       pillarRagged: 0,
       pillarSize: { min: 3, max: 6 },
       random: mulberry32(1),
@@ -747,7 +581,6 @@ describe('digPillarHalls halls and pillars', () => {
   it('keeps the pillars within the pillar size', () => {
     // given
     const options = {
-      hallVeins: { min: 1, max: 1 },
       pillarRagged: 0,
       pillarSize: { min: 3, max: 6 },
       random: mulberry32(2),
@@ -769,7 +602,6 @@ describe('digPillarHalls halls and pillars', () => {
   it('roughens the pillars at a pillar ragged of 1', () => {
     // given
     const options = {
-      hallVeins: { min: 1, max: 1 },
       pillarRagged: 1,
       pillarSize: { min: 6, max: 8 },
       random: mulberry32(1),
@@ -794,7 +626,6 @@ describe('digPillarHalls halls and pillars', () => {
     // when
     const mines = seeds.map((seed) =>
       dig({
-        hallVeins: { min: 1, max: 1 },
         pillarJitter: 1,
         random: mulberry32(seed),
       }),
@@ -815,7 +646,6 @@ describe('digPillarHalls halls and pillars', () => {
   it('puts the pillars of a hall on a regular grid at a pillar jitter of 0', () => {
     // given
     const options = {
-      hallVeins: { min: 1, max: 1 },
       halls: { min: 1, max: 1 },
       hallSize: { min: 50, max: 50 },
       hallRagged: 0,
@@ -842,7 +672,6 @@ describe('digPillarHalls halls and pillars', () => {
   it('puts the pillars off the grid at a pillar jitter of 1', () => {
     // given
     const options = {
-      hallVeins: { min: 1, max: 1 },
       halls: { min: 1, max: 1 },
       hallSize: { min: 50, max: 50 },
       hallRagged: 0,
@@ -865,141 +694,6 @@ describe('digPillarHalls halls and pillars', () => {
         (island.y - (first?.y ?? 0)) % 7 !== 0,
     );
     expect(off.length).toBeGreaterThan(0);
-  });
-
-  it('digs as many veins as hall veins says between two halls', () => {
-    // given
-    const options = {
-      width: 160,
-      height: 100,
-      halls: { min: 2, max: 2 },
-      hallSize: { min: 20, max: 24 },
-      hallVeins: { min: 4, max: 4 },
-      random: mulberry32(7),
-    };
-
-    // when
-    const { halls, passages } = dig(options);
-
-    // then
-    expect(halls).toHaveLength(2);
-    expect(passages).toHaveLength(4);
-  });
-
-  it('digs the veins that join the halls even when hall veins asks for fewer', () => {
-    // given
-    const options = {
-      halls: { min: 4, max: 4 },
-      hallVeins: { min: 1, max: 1 },
-      random: mulberry32(2),
-    };
-
-    // when
-    const { halls, passages, grid } = dig(options);
-
-    // then
-    expect(passages).toHaveLength(halls.length - 1);
-    expect(findCaveRegions(grid)).toHaveLength(1);
-  });
-
-  it('digs more veins with more halls and a higher hall veins', () => {
-    // given
-    const make = (hallVeins: number) =>
-      dig({
-        width: 160,
-        height: 100,
-        halls: { min: 3, max: 3 },
-        hallSize: { min: 16, max: 20 },
-        hallVeins: { min: hallVeins, max: hallVeins },
-        random: mulberry32(3),
-      }).passages.length;
-
-    // when
-    const few = make(1);
-    const many = make(7);
-
-    // then
-    expect(few).toBe(2);
-    expect(many).toBeGreaterThanOrEqual(5);
-  });
-
-  it('starts and ends every vein in a hall', () => {
-    // given
-    const options = {
-      halls: { min: 3, max: 3 },
-      hallVeins: { min: 6, max: 6 },
-      random: mulberry32(4),
-    };
-
-    // when
-    const { halls, passages } = dig(options);
-
-    // then
-    const inside = (tile?: { x: number; y: number }) =>
-      halls.some(
-        (hall) =>
-          (tile?.x ?? -1) >= hall.x &&
-          (tile?.x ?? -1) < hall.x + hall.width &&
-          (tile?.y ?? -1) >= hall.y &&
-          (tile?.y ?? -1) < hall.y + hall.height,
-      );
-    for (const { tiles } of passages) {
-      expect(inside(tiles[0])).toBe(true);
-      expect(inside(tiles[tiles.length - 1])).toBe(true);
-    }
-  });
-
-  it('joins the same two halls by veins that start in different places', () => {
-    // given
-    const options = {
-      halls: { min: 2, max: 2 },
-      hallVeins: { min: 4, max: 4 },
-      random: mulberry32(5),
-    };
-
-    // when
-    const { passages } = dig(options);
-
-    // then
-    const starts = new Set(
-      passages.map(
-        ({ tiles }) => `${String(tiles[0]?.x)},${String(tiles[0]?.y)}`,
-      ),
-    );
-    expect(starts.size).toBeGreaterThan(1);
-  });
-
-  it('digs no veins at all for a single hall, whatever hall veins says', () => {
-    // given
-    const options = {
-      halls: { min: 1, max: 1 },
-      hallVeins: { min: 5, max: 5 },
-      random: mulberry32(1),
-    };
-
-    // when
-    const { passages } = dig(options);
-
-    // then
-    expect(passages).toEqual([]);
-  });
-
-  it('keeps the mine connected with many veins', () => {
-    // given
-    const seeds = Array.from({ length: 15 }, (_, i) => i + 1);
-
-    // when
-    const mines = seeds.map((seed) =>
-      dig({
-        hallVeins: { min: 3, max: 9 },
-        random: mulberry32(seed),
-      }),
-    );
-
-    // then
-    for (const { grid } of mines) {
-      expect(findCaveRegions(grid)).toHaveLength(1);
-    }
   });
 
   it('digs a mine on a tiny map without failing', () => {
@@ -1025,8 +719,6 @@ describe('digPillarHalls halls and pillars', () => {
   it.each([
     ['halls', { halls: { min: 0, max: 2 } }],
     ['halls', { halls: { min: 3, max: 2 } }],
-    ['hallVeins', { hallVeins: { min: 0, max: 2 } }],
-    ['hallVeins', { hallVeins: { min: 5, max: 2 } }],
     ['hallSize', { hallSize: { min: 0, max: 5 } }],
     ['hallRagged', { hallRagged: 1.5 }],
     ['pillarSize', { pillarSize: { min: 1.5, max: 3 } }],
@@ -1042,388 +734,5 @@ describe('digPillarHalls halls and pillars', () => {
 
     // then
     expect(generate).toThrow(RangeError);
-  });
-});
-
-describe('digPillarHalls hall entrances', () => {
-  const entranceBase = {
-    width: 120,
-    height: 80,
-    halls: { min: 3, max: 3 },
-    hallSize: { min: 16, max: 20 },
-    hallVeins: { min: 6, max: 6 },
-  };
-
-  /** How many ends of veins lie on the side of their hall that faces the other end of the vein. */
-  function countFacingEnds(result: ReturnType<typeof dig>) {
-    const middle = (hall: Area) => ({
-      x: hall.x + hall.width / 2,
-      y: hall.y + hall.height / 2,
-    });
-    const hallAt = (tile: { x: number; y: number }) =>
-      result.halls.find(
-        (hall) =>
-          tile.x >= hall.x &&
-          tile.x < hall.x + hall.width &&
-          tile.y >= hall.y &&
-          tile.y < hall.y + hall.height,
-      );
-    let facing = 0;
-    let ends = 0;
-    for (const { tiles } of result.passages) {
-      const first = tiles[0];
-      const last = tiles[tiles.length - 1];
-      const start = first && hallAt(first);
-      const end = last && hallAt(last);
-      if (!first || !last || !start || !end || start === end) {
-        continue;
-      }
-      for (const [tile, own, other] of [
-        [first, start, end],
-        [last, end, start],
-      ] as const) {
-        const from = middle(own);
-        const to = middle(other);
-        const reach =
-          (tile.x - from.x) * (to.x - from.x) +
-          (tile.y - from.y) * (to.y - from.y);
-        ends += 1;
-        facing += reach > 0 ? 1 : 0;
-      }
-    }
-    return { facing, ends };
-  }
-
-  it('digs the same mine for facing as for no setting', () => {
-    // given
-    const options = { ...entranceBase, random: mulberry32(7) };
-
-    // when
-    const plain = dig(options);
-    const facing = dig({
-      ...entranceBase,
-      hallEntrances: 'facing',
-      random: mulberry32(7),
-    });
-
-    // then
-    expect(facing.grid.toString()).toBe(plain.grid.toString());
-  });
-
-  it('digs a different mine for edge than for facing', () => {
-    // given
-    const options = { ...entranceBase, random: mulberry32(7) };
-
-    // when
-    const facing = dig(options);
-    const edge = dig({
-      ...options,
-      hallEntrances: 'edge',
-      random: mulberry32(7),
-    });
-
-    // then
-    expect(edge.grid.toString()).not.toBe(facing.grid.toString());
-  });
-
-  it('keeps the mine in one piece with edge entrances', () => {
-    // given
-    const options = {
-      ...entranceBase,
-      hallEntrances: 'edge' as const,
-      random: mulberry32(9),
-    };
-
-    // when
-    const { grid } = dig(options);
-
-    // then
-    expect(findCaveRegions(grid)).toHaveLength(1);
-  });
-
-  it('starts the veins on the side of their halls that faces the other hall', () => {
-    // given
-    const results = [1, 2, 3, 4, 5].map((seed) =>
-      dig({
-        ...entranceBase,
-        hallEntrances: 'facing',
-        random: mulberry32(seed),
-      }),
-    );
-
-    // when
-    const counts = results.map(countFacingEnds);
-
-    // then
-    // a vein that finds no route on that side is tried on the others
-    const ends = counts.reduce((sum, count) => sum + count.ends, 0);
-    const facing = counts.reduce((sum, count) => sum + count.facing, 0);
-    expect(ends).toBeGreaterThan(0);
-    expect(facing / ends).toBeGreaterThanOrEqual(0.8);
-  });
-
-  it('keeps the mine in one piece with facing entrances', () => {
-    // given
-    const options = {
-      ...entranceBase,
-      hallEntrances: 'facing' as const,
-      random: mulberry32(8),
-    };
-
-    // when
-    const { grid } = dig(options);
-
-    // then
-    expect(findCaveRegions(grid)).toHaveLength(1);
-  });
-
-  it('throws a RangeError for hall entrances that do not exist', () => {
-    // given
-    const options = {
-      ...entranceBase,
-      hallEntrances: 'any',
-    } as unknown as Parameters<typeof dig>[0];
-
-    // when
-    const generate = () => dig(options);
-
-    // then
-    expect(generate).toThrow(RangeError);
-  });
-});
-
-describe('digPillarHalls veins', () => {
-  const veinBase = {
-    width: 140,
-    height: 90,
-    halls: { min: 3, max: 3 },
-    hallSize: { min: 24, max: 30 },
-    hallRagged: 0,
-    hallVeins: { min: 5, max: 5 },
-  };
-
-  const insideAHall = (halls: Area[], tile: { x: number; y: number }) =>
-    halls.some(
-      (hall) =>
-        tile.x >= hall.x &&
-        tile.x < hall.x + hall.width &&
-        tile.y >= hall.y &&
-        tile.y < hall.y + hall.height,
-    );
-
-  it('runs the veins around the halls and never across one', () => {
-    // given
-    const seeds = [1, 2, 3, 4, 5, 6];
-
-    // when
-    const results = seeds.map((seed) =>
-      dig({ ...veinBase, random: mulberry32(seed) }),
-    );
-
-    // then
-    for (const { halls, passages } of results) {
-      for (const { tiles } of passages) {
-        expect(
-          tiles.slice(1, -1).some((tile) => insideAHall(halls, tile)),
-        ).toBe(false);
-      }
-    }
-  });
-
-  it('leaves every pillar of a hall standing where no vein touches it', () => {
-    // given
-    const options = { ...veinBase, random: mulberry32(2) };
-
-    // when
-    const { grid, halls } = dig(options);
-
-    // then
-    const islands = findIslands(grid).filter((island) =>
-      island.every((tile) => insideAHall(halls, tile)),
-    );
-    expect(islands.length).toBeGreaterThan(10);
-  });
-
-  it('keeps the veins a wall apart from one another', () => {
-    // given
-    const options = { ...veinBase, random: mulberry32(4) };
-
-    // when
-    const { passages } = dig(options);
-
-    // then
-    const middles = passages.map(({ tiles }) => tiles.slice(5, -5));
-    for (const [i, one] of middles.entries()) {
-      for (const other of middles.slice(i + 1)) {
-        const closest = Math.min(
-          ...one.flatMap((a) =>
-            other.map((b) =>
-              Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)),
-            ),
-          ),
-        );
-        expect(closest).toBeGreaterThanOrEqual(2);
-      }
-    }
-  });
-
-  it('keeps the mine in one piece on crowded maps', () => {
-    // given
-    const seeds = Array.from({ length: 25 }, (_, n) => n + 1);
-
-    // when
-    const results = seeds.map((seed) =>
-      dig({
-        width: 70,
-        height: 50,
-        halls: { min: 4, max: 4 },
-        hallSize: { min: 12, max: 18 },
-        hallVeins: { min: 6, max: 6 },
-        veinWidth: { min: 1, max: 3 },
-        random: mulberry32(seed),
-      }),
-    );
-
-    // then
-    for (const { grid, halls } of results) {
-      expect(halls.length).toBeGreaterThanOrEqual(1);
-      expect(findCaveRegions(grid)).toHaveLength(1);
-    }
-  });
-
-  it('keeps every vein on floor and the mine in one piece on a crowded map', () => {
-    // given
-    const options = {
-      width: 70,
-      height: 50,
-      halls: { min: 5, max: 6 },
-      hallSize: { min: 10, max: 16 },
-      hallVeins: { min: 4, max: 4 },
-      veinWidth: { min: 2, max: 3 },
-      random: mulberry32(14),
-    };
-
-    // when
-    const { grid, passages } = dig(options);
-
-    // then
-    expect(findCaveRegions(grid)).toHaveLength(1);
-    for (const { tiles } of passages) {
-      expect(tiles.every(({ x, y }) => grid.get(x, y) === Tile.Floor)).toBe(
-        true,
-      );
-    }
-  });
-
-  it('keeps floor in every hall it lists', () => {
-    // given
-    const seeds = Array.from({ length: 25 }, (_, n) => n + 1);
-
-    // when
-    const results = seeds.map((seed) =>
-      dig({
-        width: 70,
-        height: 50,
-        halls: { min: 4, max: 4 },
-        hallSize: { min: 12, max: 18 },
-        hallVeins: { min: 6, max: 6 },
-        veinWidth: { min: 1, max: 3 },
-        random: mulberry32(seed),
-      }),
-    );
-
-    // then
-    for (const { grid, halls } of results) {
-      const total = grid.toString().split('.').length - 1;
-      const inHalls = halls.reduce(
-        (sum, hall) =>
-          sum +
-          Array.from(
-            { length: hall.height },
-            (_, y) =>
-              Array.from({ length: hall.width }, (__, x) =>
-                grid.get(hall.x + x, hall.y + y),
-              ).filter((tile) => tile === Tile.Floor).length,
-          ).reduce((a, b) => a + b, 0),
-        0,
-      );
-      expect(inHalls).toBeLessThanOrEqual(total);
-      expect(inHalls).toBeGreaterThan(0);
-    }
-  });
-
-  it('joins every hall that finds room, however many veins hall veins asks for', () => {
-    // given
-    const seeds = Array.from({ length: 12 }, (_, n) => n + 1);
-
-    // when
-    const results = seeds.map((seed) =>
-      dig({
-        width: 160,
-        height: 100,
-        halls: { min: 4, max: 4 },
-        hallSize: { min: 14, max: 22 },
-        hallVeins: { min: 1, max: 1 },
-        random: mulberry32(seed),
-      }),
-    );
-
-    // then
-    for (const { halls, passages, grid } of results) {
-      expect(halls).toHaveLength(4);
-      expect(passages).toHaveLength(3);
-      expect(findCaveRegions(grid)).toHaveLength(1);
-    }
-  });
-
-  it('ends some veins on other veins and not on a hall', () => {
-    // given
-    const seeds = Array.from({ length: 20 }, (_, n) => n + 1);
-
-    // when
-    const results = seeds.map((seed) =>
-      dig({
-        ...veinBase,
-        halls: { min: 5, max: 5 },
-        hallSize: { min: 14, max: 20 },
-        random: mulberry32(seed),
-      }),
-    );
-
-    // then
-    const endsOnVein = results.flatMap(({ halls, passages }) =>
-      passages.filter((passage) => {
-        const last = passage.tiles[passage.tiles.length - 1];
-        return last !== undefined && !insideAHall(halls, last);
-      }),
-    );
-    expect(endsOnVein.length).toBeGreaterThan(0);
-  });
-
-  it('keeps every vein from going much further round than the way between its ends', () => {
-    // given
-    const seeds = Array.from({ length: 12 }, (_, n) => n + 1);
-
-    // when
-    const results = seeds.map((seed) =>
-      dig({
-        width: 140,
-        height: 80,
-        halls: { min: 4, max: 4 },
-        hallVeins: { min: 6, max: 6 },
-        random: mulberry32(seed),
-      }),
-    );
-
-    // then
-    for (const { passages } of results) {
-      for (const { tiles } of passages) {
-        const first = tiles[0] as { x: number; y: number };
-        const last = tiles[tiles.length - 1] as { x: number; y: number };
-        const distance =
-          Math.abs(first.x - last.x) + Math.abs(first.y - last.y);
-        expect(tiles.length).toBeLessThanOrEqual(1.8 * distance + 14);
-      }
-    }
   });
 });

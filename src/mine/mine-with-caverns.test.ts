@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { digNoiseCave } from '../cave/dig-noise-cave';
-import { digCaveTunnels } from '../cave/dig-cave-tunnels';
+import { digVeins } from '../veins/dig-veins';
 import { findCaveRegions } from '../cave/find-cave-regions';
 import { Tile } from '../core/tile';
 import { emptyMap } from '../pipeline/empty-map';
@@ -22,13 +22,13 @@ const steps = [
 
 describe('a mine with caverns', () => {
   it.each([1, 2, 3, 4])(
-    'is joined into one piece by digCaveTunnels (seed %i)',
+    'is joined into one piece by digVeins (seed %i)',
     (seed) => {
       // given
       const apart = pipeline(base, steps, { random: mulberry32(seed) });
 
       // when
-      const { grid } = pipeline(base, [...steps, digCaveTunnels()], {
+      const { grid } = pipeline(base, [...steps, digVeins({ density: 0 })], {
         random: mulberry32(seed),
       });
 

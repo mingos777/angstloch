@@ -142,7 +142,7 @@ describe('generateMine', () => {
       width: 100,
       height: 60,
       pillars: { halls: { min: 3, max: 3 } },
-      hallVeins: { hallVeins: { min: 2, max: 2 } },
+      hallVeins: { density: 0 },
       random: mulberry32(1),
     };
 
@@ -296,7 +296,7 @@ describe('generateMine', () => {
     ['hallRagged', { pillars: { hallRagged: 1.5 } }],
     ['veinWindiness', { pillars: {}, hallVeins: { veinWindiness: 2 } }],
     ['ringWobble', { rings: { ringWobble: 1.5 } }],
-    ['windiness', { caverns: {}, tunnels: { windiness: 2 } }],
+    ['veinWindiness', { caverns: {}, tunnels: { veinWindiness: 2 } }],
     ['count', { exits: { count: { min: -1, max: 1 } } }],
   ])('throws a RangeError for an invalid %s', (name, invalid) => {
     // given

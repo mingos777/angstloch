@@ -5,7 +5,7 @@ import { assertRingOptions } from './assert-ring-options';
 import type { DigRingsOptions } from './dig-rings-options';
 import { digInAreas } from './dig-in-areas';
 import { layRings } from './lay-rings';
-import type { MinePassage } from './mine-passage';
+import type { MinePassage } from '../veins/mine-passage';
 
 /**
  * A step that digs concentric rings around the middle of its area, evenly
