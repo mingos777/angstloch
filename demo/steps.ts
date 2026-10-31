@@ -77,6 +77,15 @@ interface Snapshot {
   extras: Partial<Extras>;
 }
 
+/** Where the steps and the settings of the page are kept between visits. */
+const STORAGE_KEY = 'angstloch.steps';
+
+/** What is kept between visits: the steps, by name with their values, and the values of the page's own controls, by name. */
+interface Stored {
+  cards: [string, Record<string, FieldValue>][];
+  controls: Record<string, FieldValue>;
+}
+
 /** The steps that were added, in order. */
 let cards: Card[] = [];
 
@@ -185,6 +194,79 @@ function newCard(
 
 /** A step to load, by name, with the values that differ from its card's defaults. */
 type CardSpec = string | readonly [string, Record<string, FieldValue>];
+
+/** The controls of the map settings, the overlays and the display. */
+function pageControls(): (HTMLInputElement | HTMLSelectElement)[] {
+  return [form, overlays, display].flatMap((host) =>
+    host
+      ? [
+          host,
+          ...host.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+            'input[name], select[name]',
+          ),
+        ].filter(
+          (control): control is HTMLInputElement | HTMLSelectElement =>
+            (control instanceof HTMLInputElement ||
+              control instanceof HTMLSelectElement) &&
+            keyOf(control) !== '',
+        )
+      : [],
+  );
+}
+
+/** The key a control is kept by: its name, or its id when it has none. */
+function keyOf(control: HTMLInputElement | HTMLSelectElement): string {
+  return control.name || control.id;
+}
+
+/** Keeps the steps and the settings for the next visit. */
+function store(): void {
+  const stored: Stored = {
+    cards: cards.map(({ def, values }) => [def.name, values]),
+    controls: Object.fromEntries(
+      pageControls().map((control) => [
+        keyOf(control),
+        control instanceof HTMLInputElement && control.type === 'checkbox'
+          ? control.checked
+          : control.value,
+      ]),
+    ),
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+  } catch {
+    // storage can be blocked, and the page works without it
+  }
+}
+
+/** The steps and the settings of the last visit, if any were kept. */
+function restore(): Stored | undefined {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(STORAGE_KEY) ?? 'null',
+    ) as Partial<Stored> | null;
+    return stored &&
+      Array.isArray(stored.cards) &&
+      stored.controls instanceof Object
+      ? { cards: stored.cards, controls: stored.controls }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Puts kept values back into the page's own controls. */
+function restoreControls(controls: Record<string, FieldValue>): void {
+  for (const control of pageControls()) {
+    const value = controls[keyOf(control)];
+    // a control with no kept value, one added since, keeps its default
+    if (typeof value === 'boolean' && control instanceof HTMLInputElement) {
+      control.checked = value;
+    } else if (typeof value === 'string') {
+      control.value = value;
+    }
+  }
+}
 
 /** The steps of a forest, to start from. */
 const FOREST = [
@@ -551,6 +633,8 @@ function paint(): void {
   if (!form || !overlays || !after || !display || !canvas || !context) {
     return;
   }
+  // the overlays and the display only paint, so they are kept here
+  store();
   const at = Number(after.value);
   const shown = snapshots[at];
   if (!shown) {
@@ -860,6 +944,7 @@ function render(): void {
   if (!form || !after || !error || !stats || !failures) {
     return;
   }
+  store();
   const data = new FormData(form);
   const value = (name: string): number => Number(data.get(name));
   const kept = after.value;
@@ -1277,4 +1362,11 @@ download?.addEventListener('click', () => {
     downloadCanvas(canvas, 'angstloch-steps.png');
   }
 });
-setCards(FOREST);
+// the steps and the settings of the last visit, or a forest on the first
+const stored = restore();
+if (stored) {
+  restoreControls(stored.controls);
+  setCards(stored.cards);
+} else {
+  setCards(FOREST);
+}
