@@ -111,6 +111,10 @@ export function prepareTemplates(
       });
     });
   }
+  const nameOf = (index: number) => {
+    const name = templates[index]?.name;
+    return name === undefined ? {} : { templateName: name };
+  };
   return {
     placements,
     doors,
@@ -127,6 +131,7 @@ export function prepareTemplates(
         exitCount: 0,
         doorCount: 0,
         template,
+        ...nameOf(template),
         rotation: placement.rotation,
         mirrored: placement.mirrored,
       })),

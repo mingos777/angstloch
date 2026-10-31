@@ -25,6 +25,8 @@ export interface Room {
   group?: number;
   /** Index into the `templates` option of the template this room was made from. Absent for ordinary rooms. */
   template?: number;
+  /** The `name` of the template this room was made from. Absent for ordinary rooms and for templates without a name. */
+  templateName?: string;
   /** The clockwise rotation the template was placed in, for templated rooms. */
   rotation?: Rotation;
   /** Whether the template was placed mirrored, for templated rooms. */

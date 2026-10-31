@@ -476,6 +476,7 @@ export function layRooms(
         ? {}
         : {
             template: room.template,
+            ...(room.name === undefined ? {} : { templateName: room.name }),
             rotation: placement.rotation,
             mirrored: placement.mirrored,
           }),

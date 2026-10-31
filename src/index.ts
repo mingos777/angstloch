@@ -100,6 +100,14 @@ export type { SewerMouth } from './rooms/sewer-mouth';
 export type { SewerOutfall } from './rooms/sewer-outfall';
 export { digSewers } from './sewers/dig-sewers';
 export type { DigSewersOptions } from './sewers/dig-sewers-options';
+export type { CatacombGroup } from './rooms/catacomb-group';
+export type { CatacombSegment } from './rooms/catacomb-segment';
+export type { CatacombNiche } from './rooms/catacomb-niche';
+export type { CatacombChamber } from './rooms/catacomb-chamber';
+export type { CatacombSide } from './rooms/catacomb-side';
+export type { CatacombSegmentWeights } from './catacombs/catacomb-segment-weights';
+export { digCatacombs } from './catacombs/dig-catacombs';
+export type { DigCatacombsOptions } from './catacombs/dig-catacombs-options';
 export { placeCellBlocks } from './rooms/place-cell-blocks';
 export type {
   GuardRoomOptions,

@@ -156,8 +156,13 @@ function paintPointedRoom(
       ? 'no group'
       : `group ${String(room.group)} (${shown.extras.roomGroups?.[room.group]?.kind ?? '?'})`;
   const shared = exits.filter((exit) => (exit?.rooms.length ?? 0) > 1).length;
+  // a templated room says which template, and how it was turned
+  const template =
+    room.template === undefined
+      ? ''
+      : ` "${room.templateName ?? 'unnamed'}" (template ${String(room.template)}, rotated ${String(room.rotation ?? 0)}°${room.mirrored === true ? ', mirrored' : ''})`;
   roomLine.textContent = [
-    `${room.kind} ${String(room.id)}, ${group}, at (${String(room.x)}, ${String(room.y)}), ${String(room.width)} by ${String(room.height)}:`,
+    `${room.kind} ${String(room.id)}${template}, ${group}, at (${String(room.x)}, ${String(room.y)}), ${String(room.width)} by ${String(room.height)}:`,
     `${String(room.exitCount)} exit(s), ${String(room.doorCount)} with a door, ${String(shared)} shared with another room (outlined).`,
   ].join(' ');
 }
@@ -310,6 +315,61 @@ const SEWER: CardSpec[] = [
 const SEWER_WITH_CISTERNS: CardSpec[] = [
   ['digSewers', { cisternsMin: '1', cisternsMax: '2' }],
   ...SEWER.slice(1),
+];
+
+/** A catacomb in the middle part of the map, then rooms round it, joined by corridors that reach its galleries on its boundary. */
+const CATACOMBS: CardSpec[] = [
+  [
+    'digCatacombs',
+    {
+      areaWidthMin: '36',
+      areaWidthMax: '44',
+      areaHeightMin: '24',
+      areaHeightMax: '28',
+    },
+  ],
+  'placeScatteredRooms',
+  'digCorridors',
+];
+
+/** A crypt of 5 by 3 behind a door, in any rotation, two or three of them. */
+const CRYPT_TEMPLATES = JSON.stringify([
+  {
+    name: 'crypt',
+    cells: [
+      [2, 2, 2, 2, 2, 2, 2],
+      [2, 1, 1, 1, 1, 1, 2],
+      [2, 1, 1, 1, 1, 1, 4],
+      [2, 1, 1, 1, 1, 1, 2],
+      [2, 2, 2, 2, 2, 2, 2],
+    ],
+    count: { min: 2, max: 3 },
+    rotate: [0, 90, 180, 270],
+  },
+]);
+
+/** Rooms first, then a catacomb on the whole map with crypts, which routes round the rooms and enters them, and corridors for the rooms it could not enter. */
+const CATACOMBS_WITH_CRYPTS: CardSpec[] = [
+  ['placeScatteredRooms', { roomCountMin: '3', roomCountMax: '5' }],
+  ['digCatacombs', { templates: CRYPT_TEMPLATES }],
+  'digCorridors',
+];
+
+/** A catacomb on the whole map, mirrored four ways, with a crypt in each quarter. */
+const SYMMETRIC_CATACOMBS: CardSpec[] = [
+  [
+    'digCatacombs',
+    {
+      symmetry: 'both',
+      templates: JSON.stringify(
+        (JSON.parse(CRYPT_TEMPLATES) as object[]).map((template) => ({
+          ...template,
+          count: { min: 1, max: 1 },
+        })),
+      ),
+      templateSymmetry: true,
+    },
+  ],
 ];
 
 /** Outlines a tile. */
@@ -639,6 +699,61 @@ function paint(): void {
         }
         for (const { position } of group.outfalls) {
           mark(context, position, Color.BrightGreen, tileSize);
+        }
+      }
+    }
+  }
+  if (show.has('showCatacombs')) {
+    // an outline round the floor of every segment of a catacomb's galleries,
+    // yellow on a main gallery and cyan on a side one, solid when its walls
+    // are lined with niches or chambers and dashed when they are bare, a
+    // magenta mark on every niche, a green outline round every burial
+    // chamber, red when it closes a dead end, and a white one round every
+    // crypt, walls included
+    context.lineWidth = Math.max(1, tileSize / 8);
+    for (const group of extras.roomGroups ?? []) {
+      if (group.kind === 'catacomb') {
+        for (const { floor, main, character } of group.segments) {
+          context.strokeStyle = main ? Color.BrightYellow : Color.BrightCyan;
+          context.setLineDash(
+            character === 'bare' ? [tileSize / 3, tileSize / 4] : [],
+          );
+          context.strokeRect(
+            floor.x * tileSize + 1,
+            floor.y * tileSize + 1,
+            floor.width * tileSize - 2,
+            floor.height * tileSize - 2,
+          );
+        }
+        context.setLineDash([]);
+        for (const { tiles } of group.niches) {
+          for (const tile of tiles) {
+            mark(context, tile, Color.BrightMagenta, tileSize);
+          }
+        }
+        for (const { room, deadEnd } of group.chambers) {
+          const floor = extras.rooms?.[room];
+          if (floor) {
+            context.strokeStyle = deadEnd ? Color.BrightRed : Color.BrightGreen;
+            context.strokeRect(
+              floor.x * tileSize + 1,
+              floor.y * tileSize + 1,
+              floor.width * tileSize - 2,
+              floor.height * tileSize - 2,
+            );
+          }
+        }
+        context.strokeStyle = Color.BrightWhite;
+        for (const id of group.crypts) {
+          const box = extras.rooms?.[id];
+          if (box) {
+            context.strokeRect(
+              box.x * tileSize + 1,
+              box.y * tileSize + 1,
+              box.width * tileSize - 2,
+              box.height * tileSize - 2,
+            );
+          }
         }
       }
     }
@@ -1029,6 +1144,19 @@ document
   .querySelector('#load-sewer-cisterns')
   ?.addEventListener('click', () => {
     setWallCards(SEWER_WITH_CISTERNS);
+  });
+document.querySelector('#load-catacombs')?.addEventListener('click', () => {
+  setWallCards(CATACOMBS);
+});
+document
+  .querySelector('#load-catacombs-crypts')
+  ?.addEventListener('click', () => {
+    setWallCards(CATACOMBS_WITH_CRYPTS);
+  });
+document
+  .querySelector('#load-catacombs-symmetric')
+  ?.addEventListener('click', () => {
+    setWallCards(SYMMETRIC_CATACOMBS);
   });
 document.querySelector('#load-prison')?.addEventListener('click', () => {
   setWallCards(PRISON);

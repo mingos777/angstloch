@@ -428,6 +428,20 @@ describe.each([
       expect(roomShapes[0]?.cells).toEqual(expect.arrayContaining([[W, F, W]]));
     });
 
+    it('names a templated room after its template, when the template has a name', () => {
+      // given
+      const nameless: RoomTemplate = { cells: closet.cells };
+      const options = { templates: [closet, nameless] };
+
+      // when
+      const { rooms } = place(options);
+
+      // then
+      expect(rooms[0]?.templateName).toBe('closet');
+      expect(rooms[1]).not.toHaveProperty('templateName');
+      expect(rooms.slice(2).some((room) => 'templateName' in room)).toBe(false);
+    });
+
     it('lists the door of a fixed exit in the shape, and reserves it as openable', () => {
       // given
       const options = { templates: [upright] };

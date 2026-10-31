@@ -88,9 +88,12 @@ All optional; each needs a design talk.
 - **Veins**: best of several routes per vein; halls only 4 tiles apart take one vein at a time through the gap, and wide veins (3) need the whole gap, so a crowded map gets fewer extras.
 - **Corridor-first dungeon**: tunnels laid first (straight, lattice-friendly), rooms sprouted off them where they fit, with doors, and dead ends where none fit. It is kept only if it makes dungeons clearly distinct from `placeScatteredRooms`, `placePartitionedRooms` and `placeClusteredRooms` with `digCorridors`, and from a mine with rooms; otherwise it is dropped. Needs a design talk.
 
-### Catacombs
+### Catacombs, follow-ups
 
-A `digCatacombs` step, being designed in `designs/catacombs.md`.
+`digCatacombs` is done and documented in the README. Optional follow-ups, each needs a design talk:
+
+- **Decay**: collapsed stretches of gallery and rubble, once the mine's cave-ins exist.
+- **A standalone `digNiches`** for other maps, built on the niche code (`carveNiche`).
 
 ### Ponds, lakes and swamps
 
@@ -106,4 +109,5 @@ The first iteration of rooms inside mazes is done. Still open, from earlier sess
 - **Wilderness or overworld.** Usually a single level, and games often make it by hand, so it is not worth a generator here.
 - **A separate noise package.** The forest needs a default noise, and the code is small and isolated in `src/noise/`.
 - **Sub-pipelines.** Running a pipeline on a smaller map and stamping it onto the parent. Steps in areas, joined by `digVeins` or `digCorridors`, already cover it, without translating every extra into the parent's coordinates.
+- **Catacomb phases.** Blocks of their own spacing joined by irregular links: too much detail for a roguelike map. One `digCatacombs` per area, joined by `digVeins` or `digCorridors`, covers sections that differ.
 - **Cellular automata for forests.** Noise gives broad woods and glades, and a cellular automaton cannot.

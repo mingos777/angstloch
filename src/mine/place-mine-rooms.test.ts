@@ -166,6 +166,21 @@ describe('placeMineRooms', () => {
     });
   });
 
+  it('names a templated room after its template', () => {
+    // given
+    const steps = [
+      mine,
+      placeMineRooms({ roomCount: { min: 1, max: 1 }, templates: [closet] }),
+    ] as const;
+
+    // when
+    const { rooms } = pipeline(base, steps, { random: mulberry32(4) });
+
+    // then
+    expect(rooms[0]?.templateName).toBe('closet');
+    expect(rooms[1]).not.toHaveProperty('templateName');
+  });
+
   it('records the door decisions of a template in its shape', () => {
     // given
     const steps = [
