@@ -5,6 +5,8 @@ import { pipeline } from '../pipeline/pipeline';
 import { Reserve } from '../pipeline/reserve';
 import { step } from '../pipeline/step';
 import { mulberry32 } from '../test-helpers/mulberry32';
+import { digSewers } from '../sewers/dig-sewers';
+import { sewersOf } from '../test-helpers/sewers-of';
 import { openExits } from './open-exits';
 
 const base = emptyMap({ width: 21, height: 15, tile: Tile.Wall });
@@ -18,6 +20,16 @@ const hall = step('hall', {}, ({ grid }) => {
   }
   return {};
 });
+
+/** A sewer with a trunk along a wall map of 50 by 30 and both its outfalls. */
+const sewer = () =>
+  digSewers({
+    orientation: 'horizontal',
+    branches: { min: 0, max: 0 },
+    outfalls: { min: 2, max: 2 },
+  });
+
+const sewerMap = emptyMap({ width: 50, height: 30, tile: Tile.Wall });
 
 describe('openExits', () => {
   it('adds no exits by default', () => {
@@ -212,6 +224,7 @@ describe('openExits', () => {
     ['an unknown symmetry', { symmetry: 'diagonal' as 'both' }],
     ['a chance above 1', { symmetryChance: 1.5 }],
     ['a tile that is not one', { tile: 99 as Tile }],
+    ['an unknown place', { at: 'corners' as 'border' }],
   ])('throws a RangeError at once for %s', (_, options) => {
     // given
     const make = () => openExits(options);
@@ -221,5 +234,90 @@ describe('openExits', () => {
 
     // then
     expect(call).toThrow(RangeError);
+  });
+
+  describe('at the outfalls', () => {
+    it('opens as many outfalls as asked, with the tile it is given', () => {
+      // given
+      const steps = [
+        sewer(),
+        openExits({
+          at: 'outfalls',
+          count: { min: 1, max: 1 },
+          tile: Tile.Floor,
+        }),
+      ] as const;
+
+      // when
+      const { grid, exits, roomGroups } = pipeline(sewerMap, steps, {
+        random: mulberry32(1),
+      });
+
+      // then
+      const outfalls = sewersOf(roomGroups)[0]?.outfalls ?? [];
+      const tiles = outfalls.map(({ position }) =>
+        grid.get(position.x, position.y),
+      );
+      expect(exits).toHaveLength(1);
+      expect(outfalls.map(({ position }) => position)).toContainEqual(exits[0]);
+      expect(tiles.sort()).toEqual([Tile.Wall, Tile.Floor].sort());
+    });
+
+    it('records each opened outfall with openReserved and leaves the rest Openable', () => {
+      // given
+      const steps = [
+        sewer(),
+        openExits({ at: 'outfalls', count: { min: 1, max: 1 } }),
+      ] as const;
+
+      // when
+      const { grid, reserved, exits, roomGroups } = pipeline(sewerMap, steps, {
+        random: mulberry32(2),
+      });
+
+      // then
+      const opened = new Set(exits.map(({ x, y }) => y * grid.width + x));
+      for (const { position } of sewersOf(roomGroups)[0]?.outfalls ?? []) {
+        const at = position.y * grid.width + position.x;
+        expect(reserved[at]).toBe(
+          opened.has(at) ? Reserve.Solid : Reserve.Openable,
+        );
+      }
+    });
+
+    it('opens every outfall when fewer are left than asked for', () => {
+      // given
+      const steps = [
+        sewer(),
+        openExits({ at: 'outfalls', count: { min: 1, max: 1 } }),
+        openExits({ at: 'outfalls', count: { min: 5, max: 5 } }),
+      ] as const;
+
+      // when
+      const { grid, exits } = pipeline(sewerMap, steps, {
+        random: mulberry32(3),
+      });
+
+      // then
+      expect(exits).toHaveLength(2);
+      expect(exits.map(({ x, y }) => grid.get(x, y))).toEqual([
+        Tile.Door,
+        Tile.Door,
+      ]);
+    });
+
+    it('opens nothing on a map with no sewer', () => {
+      // given
+      const steps = [
+        hall,
+        openExits({ at: 'outfalls', count: { min: 2, max: 2 } }),
+      ] as const;
+
+      // when
+      const { exits } = pipeline(base, steps, { random: mulberry32(1) });
+
+      // then
+      expect(exits).toEqual([]);
+    });
   });
 });

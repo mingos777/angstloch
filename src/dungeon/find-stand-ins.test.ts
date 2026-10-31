@@ -81,7 +81,7 @@ describe('findStandIns', () => {
     expect(shapes[0]?.exits).toEqual([]);
   });
 
-  it('makes a shape of each piece of floor, its walls round it as potential exits', () => {
+  it('makes a shape of each piece of floor, its walls round it as potential exits and its corners as walls', () => {
     // given
     const state = mapOf(['#####', '#####', '##.##', '##..#', '#####']);
 
@@ -91,14 +91,33 @@ describe('findStandIns', () => {
     // then
     expect(shapes).toHaveLength(1);
     expect(shapes[0]?.cells).toEqual([
-      [U, O, U, U],
-      [O, F, O, U],
+      [W, O, W, U],
+      [O, F, O, W],
       [O, F, F, O],
-      [U, O, O, U],
+      [W, O, O, W],
     ]);
     expect([shapes[0]?.x, shapes[0]?.y]).toEqual([1, 1]);
     expect(floors).toEqual([{ x: 2, y: 2, width: 2, height: 2 }]);
     expect(firsts).toEqual([{ x: 2, y: 2 }]);
+  });
+
+  it('takes no wall as a potential exit that touches another piece corner to corner', () => {
+    // given
+    const state = mapOf(['######', '#.####', '###.##', '######']);
+
+    // when
+    const { shapes } = findStandIns(state, []);
+
+    // then
+    const exitsOf = (index: number) =>
+      (shapes[index]?.exits ?? []).map(({ x, y }) => [
+        (shapes[index]?.x ?? 0) + x,
+        (shapes[index]?.y ?? 0) + y,
+      ]);
+    expect(exitsOf(0)).not.toContainEqual([2, 1]);
+    expect(exitsOf(0)).toContainEqual([1, 2]);
+    expect(exitsOf(1)).not.toContainEqual([2, 2]);
+    expect(exitsOf(1)).toContainEqual([3, 1]);
   });
 
   it('points each potential exit away from the piece', () => {

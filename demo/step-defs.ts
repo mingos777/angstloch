@@ -22,6 +22,7 @@ import {
   plantTrees,
   placeScatteredRooms,
   placeCellBlocks,
+  digSewers,
 } from '../src';
 import type {
   AnyStep,
@@ -709,6 +710,53 @@ export const STEP_DEFS: StepDef[] = [
       }),
   },
   {
+    name: 'digSewers',
+    summary:
+      'a sewer: a trunk canal with branches at right angles, chambers and cisterns where they meet, walkways and bridges (needs a wall map)',
+    fields: [
+      select('orientation', 'Trunk orientation', 'any', [
+        ['any', 'any'],
+        ['horizontal', 'horizontal'],
+        ['vertical', 'vertical'],
+      ]),
+      ...pair('trunkWidth', 'Trunk width', 2, 3, POSITIVE),
+      ...pair('branchWidth', 'Branch width', 1, 1, POSITIVE),
+      ...pair('branches', 'Branches', 3, 6, { min: '0' }),
+      ...pair('branchLength', 'Branch length', 5, 12, POSITIVE),
+      ...pair('chamberSize', 'Chamber size', 5, 9, POSITIVE),
+      number('headChance', 'Head chamber chance', 0.5, FRACTION),
+      number('bridgeChance', 'Extra bridge chance', 0.25, FRACTION),
+      ...pair('cisterns', 'Cisterns', 0, 0, { min: '0' }),
+      ...pair('cisternSize', 'Cistern size', 7, 11, POSITIVE),
+      ...pair('cisternLedges', 'Cistern ledges', 1, 4, { min: '1', max: '4' }),
+      number('columnChance', 'Column chance', 0.5, FRACTION),
+      ...pair('columnSpacing', 'Column spacing', 2, 3, POSITIVE),
+      ...pair('outfalls', 'Outfalls', 1, 2, { min: '0', max: '2' }),
+      check('pierceBorder', 'Water pierces the border', false),
+      ...areaFields(),
+    ],
+    make: (v) =>
+      digSewers({
+        orientation: v.text('orientation') as 'horizontal' | 'vertical' | 'any',
+        trunkWidth: v.range('trunkWidth'),
+        branchWidth: v.range('branchWidth'),
+        branches: v.range('branches'),
+        branchLength: v.range('branchLength'),
+        chamberSize: v.range('chamberSize'),
+        headChance: v.number('headChance'),
+        bridgeChance: v.number('bridgeChance'),
+        cisterns: v.range('cisterns'),
+        cisternSize: v.range('cisternSize'),
+        cisternLedges: v.range('cisternLedges'),
+        columnChance: v.number('columnChance'),
+        columnSpacing: v.range('columnSpacing'),
+        outfalls: v.range('outfalls'),
+        pierceBorder: v.flag('pierceBorder'),
+        area: v.area(),
+        count: v.range('count'),
+      }),
+  },
+  {
     name: 'placeScatteredRooms',
     summary:
       'dungeon rooms tried at random spots, not opened yet (needs a wall map)',
@@ -797,8 +845,13 @@ export const STEP_DEFS: StepDef[] = [
   },
   {
     name: 'openExits',
-    summary: 'doors on the border, with tunnels to the nearest floor',
+    summary:
+      'doors on the border, with tunnels to the nearest floor, or at the outfalls of the sewers',
     fields: [
+      select('at', 'At', 'border', [
+        ['border', 'the border'],
+        ['outfalls', 'the sewer outfalls'],
+      ]),
       ...pair('count', 'Exits', 1, 2, { min: '0' }),
       check('lattice', 'Odd coordinates only (maze)', false),
       select('symmetry', 'Symmetry', 'none', SYMMETRIES),
@@ -810,6 +863,7 @@ export const STEP_DEFS: StepDef[] = [
     ],
     make: (v) =>
       openExits({
+        at: v.text('at') as 'border' | 'outfalls',
         count: v.range('count'),
         lattice: v.flag('lattice'),
         symmetry: v.text('symmetry') as LayoutSymmetry,

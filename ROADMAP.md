@@ -4,7 +4,7 @@ What is wanted next, roughly in the user's order, and what was rejected. Finishe
 
 ## Next up
 
-The sewers, also needed by the user's own game, come next under More generators, and the parallel adits of the fishbone are wanted under Mines, follow-ups.
+The parallel adits of the fishbone are wanted next, under Mines, follow-ups.
 
 ## Backlog
 
@@ -47,10 +47,10 @@ The first entry is wanted; the rest are optional:
 
 ### More generators
 
-Wanted, not designed yet. Each needs a design talk. Prison and sewers are needed by the user's own game, so they come first.
+Wanted, not designed yet. Each needs a design talk. Prison and sewers, needed by the user's own game, came first and are done.
 
-- **Prison**: became the `placeCellBlocks` step, see Cell blocks under Next up.
-- **Sewers**: a `digSewers` step, being designed in `designs/sewers.md`.
+- **Prison**: became the `placeCellBlocks` step, see Cell blocks, follow-ups.
+- **Sewers**: became the `digSewers` step, see Sewers, follow-ups.
 - **Graveyard**: grave plots on a lattice, paths from `src/roads/`, a fence or wall, crypts and chapels from room templates, trees from the forest noise.
 - **Ruins**: a decayed dungeon, town or building. Whether it is a generator of its own or an option on the existing ones is open (see the open questions below).
 - **Farmland or countryside**: a patchwork of fields split by hedges and lanes, with farmhouses from templates. The natural surround of the village.
@@ -65,6 +65,14 @@ Decisions:
 Open questions:
 
 - **Ruins**: a "post-processor" would be a function or option that takes a finished map and changes it, such as breaking gaps in the walls with noise and scattering rubble or trees, instead of generating one from scratch. It would break the rule that results are composed by the caller, so the user is unsure about it. The alternative is a `ruined` option (with a decay amount) on the generators that make buildings.
+
+### Sewers, follow-ups
+
+All optional; each needs a design talk.
+
+- **Round cisterns**, besides the rectangular ones.
+- **A cistern step of its own**, for maps without a sewer, built on the same basin code (`layCistern`).
+- **Sluice gates and the like**: separate steps, designed separately, not options of `digSewers`.
 
 ### Cell blocks, follow-ups
 

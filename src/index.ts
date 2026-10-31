@@ -94,6 +94,12 @@ export type { RoomGroup } from './rooms/room-group';
 export type { CellBlockGroup } from './rooms/cell-block-group';
 export type { CaveGroup } from './rooms/cave-group';
 export type { PillarHallsGroup } from './rooms/pillar-halls-group';
+export type { SewerGroup } from './rooms/sewer-group';
+export type { SewerCanal } from './rooms/sewer-canal';
+export type { SewerMouth } from './rooms/sewer-mouth';
+export type { SewerOutfall } from './rooms/sewer-outfall';
+export { digSewers } from './sewers/dig-sewers';
+export type { DigSewersOptions } from './sewers/dig-sewers-options';
 export { placeCellBlocks } from './rooms/place-cell-blocks';
 export type {
   GuardRoomOptions,

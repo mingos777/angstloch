@@ -14,9 +14,10 @@ Currently available:
 - [`generateDigDungeon`](#grown-dungeons): dungeons that grow out of a first room: each room is built beyond a wall of one there is, and corridors join them.
 - [`pipeline`](#composing-maps): builds a map from an empty base and a list of steps, with retries. The generators are being rebuilt on it, one at a time.
 - [`placeCellBlocks`](#placecellblocks): the cell blocks of a prison, rows of cells along a corridor, for a dungeon of your own.
+- [`digSewers`](#digsewers): sewers, a trunk canal with branches at right angles, chambers and cisterns where they meet, walkways along the water and bridges over it.
 - [`measureDistances`](#walking-distances): the walk between rooms or any other places of a finished map, for putting the stairs far apart.
-- [`measureRoomDistances`](#measureroomdistances): the walk between every two rooms of a finished map, halls and caverns included.
-- [`createRoomMap`](#createroommap): the room each tile of a finished map belongs to, halls and caverns included.
+- [`measureRoomDistances`](#measureroomdistances): the walk between every two rooms of a finished map, halls, caverns and sewers included.
+- [`createRoomMap`](#createroommap): the room each tile of a finished map belongs to, halls, caverns and sewers included.
 
 ## Concepts
 
@@ -1256,23 +1257,25 @@ The fields that every dungeon reports; the generators return a [`RoomDungeonResu
 
 ### `Room`
 
-| Field             | Description                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `id`              | The room's index in `rooms`.                                                                                                                                                                                                                                                                                                                                                                                 |
-| `kind`            | What the room is (`RoomKind`): `'room'` for the rooms of every room placement step, templated rooms included, `'cell'` for a cell of [`placeCellBlocks`](#placecellblocks), `'guardRoom'` for a [guard room](#guard-rooms) of one, `'pillarHall'` for a hall of [`digPillarHalls`](#digpillarhalls) and `'cavern'` for a cavern of [`digCellularCave`](#digcellularcave) or [`digNoiseCave`](#dignoisecave). |
-| `group`           | The index in `roomGroups` of the group the room belongs to, such as the cell block of a cell (see [`RoomGroup`](#roomgroup)). Absent for a room of no group.                                                                                                                                                                                                                                                 |
-| `x`, `y`          | Position of the room's top-left floor tile. The room's wall is not included.                                                                                                                                                                                                                                                                                                                                 |
-| `width`, `height` | Dimensions of the room's floor in tiles.                                                                                                                                                                                                                                                                                                                                                                     |
-| `exits`           | Indices into `DungeonResult#exits` (or the `roomExits` of the other results and of the steps) of the room's exits. A hall's or cavern's are the places where a corridor, a vein or a tunnel enters it.                                                                                                                                                                                                       |
-| `exitCount`       | Number of exits of the room.                                                                                                                                                                                                                                                                                                                                                                                 |
-| `doorCount`       | Number of exits of the room that have a door.                                                                                                                                                                                                                                                                                                                                                                |
-| `template`        | Templated rooms only: the index of the room's template in `templates`.                                                                                                                                                                                                                                                                                                                                       |
-| `rotation`        | Templated rooms only: the clockwise rotation the template was placed in.                                                                                                                                                                                                                                                                                                                                     |
-| `mirrored`        | Templated rooms only: whether the template was placed mirrored.                                                                                                                                                                                                                                                                                                                                              |
+| Field             | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | The room's index in `rooms`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `kind`            | What the room is (`RoomKind`): `'room'` for the rooms of every room placement step, templated rooms included, `'cell'` for a cell of [`placeCellBlocks`](#placecellblocks), `'guardRoom'` for a [guard room](#guard-rooms) of one, `'pillarHall'` for a hall of [`digPillarHalls`](#digpillarhalls), `'cavern'` for a cavern of [`digCellularCave`](#digcellularcave) or [`digNoiseCave`](#dignoisecave), and `'sewerChamber'`, `'cistern'` and `'sewerTunnel'` for a chamber, a cistern and a stretch of tunnel of [`digSewers`](#digsewers). |
+| `group`           | The index in `roomGroups` of the group the room belongs to, such as the cell block of a cell (see [`RoomGroup`](#roomgroup)). Absent for a room of no group.                                                                                                                                                                                                                                                                                                                                                                                   |
+| `x`, `y`          | Position of the room's top-left floor tile. The room's wall is not included.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `width`, `height` | Dimensions of the room's floor in tiles.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `exits`           | Indices into `DungeonResult#exits` (or the `roomExits` of the other results and of the steps) of the room's exits. A hall's or cavern's are the places where a corridor, a vein or a tunnel enters it.                                                                                                                                                                                                                                                                                                                                         |
+| `exitCount`       | Number of exits of the room.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `doorCount`       | Number of exits of the room that have a door.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `template`        | Templated rooms only: the index of the room's template in `templates`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `rotation`        | Templated rooms only: the clockwise rotation the template was placed in.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `mirrored`        | Templated rooms only: whether the template was placed mirrored.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 For a templated room, `x`, `y`, `width` and `height` describe the template's bounding box, walls included, as the floor of such a room need not be a rectangle. Ordinary rooms have no `template`, `rotation` or `mirrored`; whether a room is templated is told by `template`, not by `kind`.
 
 **Halls and caverns are rooms too.** A hall of `digPillarHalls` and a cavern of the cave steps are listed in `rooms`, so the game finds every place of the map in one list, but the steps treat them as [features](#features), by their `kind`: they reserve nothing, their shape in `roomShapes` is their floor alone (the rest of the box `Unused`, with no potential exits), which blocks nothing, a later room placement step ignores it, [`digCorridors`](#digcorridors) joins them on their boundary like any other piece of floor and never drops them, and [`openMazeRooms`](#openmazerooms) leaves them alone. A hall's `x`, `y`, `width` and `height` are the rectangle it was dug in, and a cavern's the smallest rectangle that holds its floor, so either may have wall in its corners, and the pillars of a hall are rock inside it.
+
+**So are the parts of a sewer.** The chambers, cisterns and tunnels of [`digSewers`](#digsewers), kinds `'sewerChamber'`, `'cistern'` and `'sewerTunnel'`, are features in the same way: their shapes are all their tiles, water and bridges included, but the columns of a cistern, and block nothing, the joining steps join the sewer anywhere on its boundary, never drop it and record where they enter it as exits, as for a hall. They differ in one thing: the sewer reserves the walls beside its water `Solid`, so a corridor or a vein only ever reaches a walkway. Each is a rectangle with no wall inside it, but a cistern, whose columns stand in its water.
 
 #### Ways into halls and caverns
 
@@ -1280,7 +1283,7 @@ A hall or a cavern has no walls of its own to open, so the joining steps record 
 
 ### `RoomGroup`
 
-Rooms that one copy of a step built together form a group, listed in the `roomGroups` extra, and each of them points to its group with `Room.group`. Groups never move, so `group` stays right when `digCorridors` drops and renumbers rooms. A group says what it is in `kind`: `'cellBlock'`, `'cave'` or `'pillarHalls'`.
+Rooms that one copy of a step built together form a group, listed in the `roomGroups` extra, and each of them points to its group with `Room.group`. Groups never move, so `group` stays right when `digCorridors` drops and renumbers rooms. A group says what it is in `kind`: `'cellBlock'`, `'cave'`, `'pillarHalls'` or `'sewer'`.
 
 A `'cellBlock'` group (`CellBlockGroup`) is a block of [`placeCellBlocks`](#placecellblocks):
 
@@ -1296,6 +1299,42 @@ Two blocks themed differently, one for prisoners and one for monsters, say, are 
 
 A `'cave'` group (`CaveGroup`) is one cave of [`digCellularCave`](#digcellularcave) or [`digNoiseCave`](#dignoisecave), in one area, and its rooms are its caverns. A `'pillarHalls'` group (`PillarHallsGroup`) is the halls that [`digPillarHalls`](#digpillarhalls) dug in one area. Both have one more field, `area`: the box the cave or the halls were dug in, in the coordinates of the map. A cave or an area that got no floor makes no group.
 
+A `'sewer'` group (`SewerGroup`) is one sewer of [`digSewers`](#digsewers), and its rooms are its chambers and tunnels:
+
+| Field      | Description                                                                                                                                                                                                                                                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`     | `'sewer'`.                                                                                                                                                                                                                                                                                                                       |
+| `area`     | The box the sewer was dug in, in the coordinates of the map.                                                                                                                                                                                                                                                                     |
+| `canals`   | Its canals (`SewerCanal`), the trunk first, then the branches in the order they were dug.                                                                                                                                                                                                                                        |
+| `mouths`   | Every end of a canal (`SewerMouth`), in the order of `canals`: the trunk has two, a branch one, at its far end. Where a branch meets its parent is no mouth, since its water runs into the parent's, or into the basin of a cistern there. A game themes the mouths as it likes: a culvert under bars, a sump grate, a crevasse. |
+| `outfalls` | The ends of the trunk that reach the border of the map (`SewerOutfall`), at most two, in the order of their mouths.                                                                                                                                                                                                              |
+
+A `SewerCanal` is a straight canal:
+
+| Field        | Description                                                                                                                                                                                                                                                                                                                                           |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `level`      | `'trunk'` for the canal the branches grow from, `'branch'` for every other.                                                                                                                                                                                                                                                                           |
+| `centerline` | The tiles of its middle line, as `Point`s, from one end to the other: a branch's from the tile beside its parent's water, or from the ledge of the cistern where it meets its parent, out to its mouth, the trunk's from its left or top end. With an even width, the line nearer the top or the left of the two middle ones. A tile may be a bridge. |
+| `width`      | How many tiles wide its water is.                                                                                                                                                                                                                                                                                                                     |
+| `parent`     | The index in `canals` of the canal a branch meets at right angles. Absent for the trunk.                                                                                                                                                                                                                                                              |
+
+A `SewerMouth` is an end of a canal:
+
+| Field      | Description                                                                                                                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `position` | The tile of water at the end of the canal's centerline, or the bridge that carries the ledge of a cistern over it where the canal runs into one.                                               |
+| `wall`     | The wall tile beyond `position` that the water meets. Absent at an outfall with `pierceBorder`, where the water runs onto the border and off the map, and where the canal runs into a cistern. |
+| `canal`    | The index in `canals` of the canal it ends.                                                                                                                                                    |
+
+A `SewerOutfall` is an end of the trunk at the border of the map:
+
+| Field      | Description                                                                                                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `position` | The border tile at the end of the walkway beside the trunk's water, reserved `Openable`. It stays wall until [`openExits`](#openexits) with `at: 'outfalls'` opens it into a way out. |
+| `mouth`    | The index in `mouths` of the end of the trunk it lies beside: 0 for the left or top end, 1 for the right or bottom one.                                                               |
+
+The sewer has no direction of flow: which way the water runs, and so which mouth is a source and which a drain, is the game's call. An outfall is only where the trunk meets the border.
+
 ### `Exit`
 
 | Field      | Description                                                                                                                |
@@ -1308,7 +1347,7 @@ For a hall or a cavern, `position` is the first tile dug beside its floor (see [
 
 ### `createRoomMap`
 
-`createRoomMap(result)` tells which room each tile of a finished map belongs to: an `Int32Array` with one number per tile, row by row (`y * width + x`), the id of the room whose floor holds it, or -1. It takes anything with a `grid` and `roomShapes`, the result of a generator or of [`pipeline`](#pipeline). Every room counts, of every kind, through the `Floor` cells of its shape: an ordinary room's floor, a templated room's floor cells, a hall's floor without its pillars, a cavern's floor. Walls, exits and doors belong to no room, since an exit may belong to two, and neither do corridors, veins, tunnels or any floor outside the rooms.
+`createRoomMap(result)` tells which room each tile of a finished map belongs to: an `Int32Array` with one number per tile, row by row (`y * width + x`), the id of the room whose floor holds it, or -1. It takes anything with a `grid` and `roomShapes`, the result of a generator or of [`pipeline`](#pipeline). Every room counts, of every kind, through the `Floor` cells of its shape: an ordinary room's floor, a templated room's floor cells, a hall's floor without its pillars, a cavern's floor, every tile of a sewer's chambers and tunnels, water and bridges included, and of its cisterns but their columns. Walls, exits and doors belong to no room, since an exit may belong to two, and neither do corridors, veins, tunnels or any floor outside the rooms.
 
 ```ts
 const result = pipeline(
@@ -1480,31 +1519,32 @@ const { grid, scattered, attempts, failures } = pipeline(
 
 Every ready-made step, grouped by the map it was made for, though any of them may go in any pipeline. **Needs** are the extras that an earlier step must have added, which `pipeline` checks before the first attempt; **adds** are the extras it reports (an extra that is there already is appended to, or replaced, as the step's section says). **Rock** marks the steps that dig out of rock and need a map that starts as wall. **Area** marks the steps that take an [`area`](#areas), and **count** those that also take a number of copies.
 
-| Step                                              | What it does                                                    | Needs                 | Adds                                             | Rock | Area, count |
-| ------------------------------------------------- | --------------------------------------------------------------- | --------------------- | ------------------------------------------------ | ---- | ----------- |
-| [`plantTrees`](#planttrees)                       | plants trees by noise on the base tile                          |                       |                                                  |      |             |
-| [`layStreams`](#laystreams)                       | lays streams and rivers, with banks and tributaries             |                       | `streams`                                        |      |             |
-| [`layRoads`](#layroads)                           | lays roads, with crossings, branches and bridges over streams   |                       | `roads`, `junctions`, `exits`, `bridges`         |      |             |
-| [`placeClearings`](#placeclearings)               | clears ragged glades                                            |                       | `clearings`                                      |      |             |
-| [`placeTemplates`](#placetemplates)               | stamps templates in clearings or on free spots                  |                       | `templates`                                      |      |             |
-| [`layClearingPaths`](#layclearingpaths)           | lays paths from the roads to the clearings that ask for one     | `clearings`           | `roads`, `junctions`, `exits`, `bridges`         |      |             |
-| [`layFootbridges`](#layfootbridges)               | joins the land that streams cut apart                           | `streams`             | `bridges`                                        |      |             |
-| [`digFishbone`](#digfishbone)                     | a main shaft with adits off it                                  |                       | `passages`                                       | yes  | area, count |
-| [`digVeins`](#digveins)                           | veins that join every piece of floor, and a web of their own    |                       | `passages`, `rooms`, `roomExits`                 | yes  |             |
-| [`digPillarHalls`](#digpillarhalls)               | halls with pillars                                              |                       | `rooms`, `roomShapes`, `roomGroups`              | yes  | area, count |
-| [`digRings`](#digrings)                           | rings joined by spokes                                          |                       | `passages`                                       | yes  | area, count |
-| [`placeMineRooms`](#placeminerooms)               | rooms in the rock, each joined to the nearest floor by a tunnel |                       | `passages`, `rooms`, `roomExits`, `roomShapes`   | yes  |             |
-| [`digCellularCave`](#digcellularcave)             | a cave from a cellular automaton                                |                       | `rooms`, `roomShapes`, `roomGroups`              | yes  | area, count |
-| [`digNoiseCave`](#dignoisecave)                   | a cave from thresholded noise                                   |                       | `rooms`, `roomShapes`, `roomGroups`              | yes  | area, count |
-| [`placeMazeRooms`](#placemazerooms)               | rooms on the maze lattice, not opened yet                       |                       | `rooms`, `roomShapes`                            | yes  | area        |
-| [`digMaze`](#digmaze)                             | a maze by the recursive backtracker, round whatever is there    |                       | `start`                                          | yes  | area, count |
-| [`openMazeRooms`](#openmazerooms)                 | opens the maze rooms into the maze                              | `rooms`, `roomShapes` | `rooms`, `roomExits`                             |      |             |
-| [`placeScatteredRooms`](#placescatteredrooms)     | dungeon rooms at random spots                                   |                       | `rooms`, `roomShapes`                            | yes  | area, count |
-| [`placePartitionedRooms`](#placepartitionedrooms) | one dungeon room per area of a binary space partition           |                       | `rooms`, `roomShapes`                            | yes  | area, count |
-| [`placeClusteredRooms`](#placeclusteredrooms)     | dungeon rooms grown off each other, clustered                   |                       | `rooms`, `roomShapes`                            | yes  | area, count |
-| [`placeCellBlocks`](#placecellblocks)             | cell blocks of a prison, entered at one end                     |                       | `rooms`, `roomShapes`, `roomExits`, `roomGroups` | yes  | area, count |
-| [`digCorridors`](#digcorridors)                   | joins the rooms, and every other piece of floor, by corridors   | `rooms`, `roomShapes` | `rooms`, `roomShapes`, `roomExits`               | yes  |             |
-| [`openExits`](#openexits)                         | carves exits into the border                                    |                       | `exits`                                          |      |             |
+| Step                                              | What it does                                                             | Needs                 | Adds                                             | Rock | Area, count |
+| ------------------------------------------------- | ------------------------------------------------------------------------ | --------------------- | ------------------------------------------------ | ---- | ----------- |
+| [`plantTrees`](#planttrees)                       | plants trees by noise on the base tile                                   |                       |                                                  |      |             |
+| [`layStreams`](#laystreams)                       | lays streams and rivers, with banks and tributaries                      |                       | `streams`                                        |      |             |
+| [`layRoads`](#layroads)                           | lays roads, with crossings, branches and bridges over streams            |                       | `roads`, `junctions`, `exits`, `bridges`         |      |             |
+| [`placeClearings`](#placeclearings)               | clears ragged glades                                                     |                       | `clearings`                                      |      |             |
+| [`placeTemplates`](#placetemplates)               | stamps templates in clearings or on free spots                           |                       | `templates`                                      |      |             |
+| [`layClearingPaths`](#layclearingpaths)           | lays paths from the roads to the clearings that ask for one              | `clearings`           | `roads`, `junctions`, `exits`, `bridges`         |      |             |
+| [`layFootbridges`](#layfootbridges)               | joins the land that streams cut apart                                    | `streams`             | `bridges`                                        |      |             |
+| [`digFishbone`](#digfishbone)                     | a main shaft with adits off it                                           |                       | `passages`                                       | yes  | area, count |
+| [`digVeins`](#digveins)                           | veins that join every piece of floor, and a web of their own             |                       | `passages`, `rooms`, `roomExits`                 | yes  |             |
+| [`digPillarHalls`](#digpillarhalls)               | halls with pillars                                                       |                       | `rooms`, `roomShapes`, `roomGroups`              | yes  | area, count |
+| [`digRings`](#digrings)                           | rings joined by spokes                                                   |                       | `passages`                                       | yes  | area, count |
+| [`placeMineRooms`](#placeminerooms)               | rooms in the rock, each joined to the nearest floor by a tunnel          |                       | `passages`, `rooms`, `roomExits`, `roomShapes`   | yes  |             |
+| [`digCellularCave`](#digcellularcave)             | a cave from a cellular automaton                                         |                       | `rooms`, `roomShapes`, `roomGroups`              | yes  | area, count |
+| [`digNoiseCave`](#dignoisecave)                   | a cave from thresholded noise                                            |                       | `rooms`, `roomShapes`, `roomGroups`              | yes  | area, count |
+| [`placeMazeRooms`](#placemazerooms)               | rooms on the maze lattice, not opened yet                                |                       | `rooms`, `roomShapes`                            | yes  | area        |
+| [`digMaze`](#digmaze)                             | a maze by the recursive backtracker, round whatever is there             |                       | `start`                                          | yes  | area, count |
+| [`openMazeRooms`](#openmazerooms)                 | opens the maze rooms into the maze                                       | `rooms`, `roomShapes` | `rooms`, `roomExits`                             |      |             |
+| [`placeScatteredRooms`](#placescatteredrooms)     | dungeon rooms at random spots                                            |                       | `rooms`, `roomShapes`                            | yes  | area, count |
+| [`placePartitionedRooms`](#placepartitionedrooms) | one dungeon room per area of a binary space partition                    |                       | `rooms`, `roomShapes`                            | yes  | area, count |
+| [`placeClusteredRooms`](#placeclusteredrooms)     | dungeon rooms grown off each other, clustered                            |                       | `rooms`, `roomShapes`                            | yes  | area, count |
+| [`placeCellBlocks`](#placecellblocks)             | cell blocks of a prison, entered at one end                              |                       | `rooms`, `roomShapes`, `roomExits`, `roomGroups` | yes  | area, count |
+| [`digSewers`](#digsewers)                         | a sewer: a trunk canal and branches, with walkways, bridges and cisterns |                       | `rooms`, `roomShapes`, `roomGroups`              | yes  | area, count |
+| [`digCorridors`](#digcorridors)                   | joins the rooms, and every other piece of floor, by corridors            | `rooms`, `roomShapes` | `rooms`, `roomShapes`, `roomExits`               | yes  |             |
+| [`openExits`](#openexits)                         | carves exits into the border, or opens the outfalls of sewers            |                       | `exits`                                          |      |             |
 
 The presets are these steps in this order: a forest is `plantTrees`, then the outdoor steps it is given; a cave is `digCellularCave` or `digNoiseCave`, `digVeins` and `openExits`; a mine is one layout step, then `digNoiseCave` and `digVeins` for caverns, `placeMineRooms` and `openExits`; a maze is `placeMazeRooms`, `digMaze`, `openMazeRooms` and `openExits`; a room-first dungeon is `placeScatteredRooms` or `placePartitionedRooms`, then `digCorridors`; a grown dungeon is `placeClusteredRooms`, then `digCorridors`. The building blocks for steps of your own are [`MapState`](#mapstate) and its helpers, [`pruneVerge`](#verges-and-pruneverge) and [areas](#areas).
 
@@ -1784,6 +1824,7 @@ const { grid, exits } = pipeline(
 
 | Option           | Default     | Meaning                                                                                                                                                                                      |
 | ---------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `at`             | `'border'`  | Where the exits go: `'border'`, anywhere on the border with a tunnel to the nearest floor, or `'outfalls'`, at the [outfalls](#digsewers) of the sewers.                                     |
 | `count`          | `{ 0, 0 }`  | How many exits to carve, a `Range` of whole numbers of at least 0. The default adds none. The twins that `symmetry` makes count towards it.                                                  |
 | `lattice`        | `false`     | Puts doors on odd border coordinates only, which is where a maze has its cells.                                                                                                              |
 | `symmetry`       | `'none'`    | `'horizontal'` (left to right), `'vertical'` (top to bottom), `'both'` or `'rotational'` (by 180°): an exit gets twins on the mirror images of its place that a tunnel can reach floor from. |
@@ -1793,6 +1834,22 @@ const { grid, exits } = pipeline(
 - **Where.** A side of the map is picked at random, and then one of the exits on it with the shortest tunnels. A tunnel never digs through a tile that is [reserved](#mapstate), and a door is never on one. A door is never next to another door, diagonals included.
 - **Misses.** An exit may be left out for lack of floor to reach or of room. The step stops when it has made `count` exits or when ten tries in a row have come to nothing, and it never throws for that, so a map with no floor gets no exits.
 - **Reserved.** Each door is recorded with `openReserved`, so the `Openable` tiles round it become `Solid`. The tiles it stamps stop being prunable.
+- **At the outfalls.** With `at: 'outfalls'` the step opens outfalls of the `'sewer'` groups in `roomGroups` instead: `count` of those still reserved `Openable`, picked at random, or all of them when fewer are left. Each becomes `tile`, with no tunnel, since the sewer's walkway reaches it, and is recorded with `openReserved`. An outfall left unopened stays wall. `lattice`, `symmetry` and `symmetryChance` are not used, and a map with no sewer gets no exits.
+
+```ts
+const { grid, exits } = pipeline(
+  emptyMap({ width: 80, height: 50, tile: Tile.Wall }),
+  [
+    digSewers({ outfalls: { min: 2, max: 2 } }),
+    placeScatteredRooms(),
+    digCorridors(),
+    // one of the two outfalls becomes a way out
+    openExits({ at: 'outfalls', count: { min: 1, max: 1 } }),
+  ],
+  { random: mulberry32(42) },
+);
+```
+
 - **Adds** `exits`: the points of the doors. An `exits` extra that is in the state already is kept, and its doors count as neighbors to keep away from, so the step can run more than once, with different options.
 
 ### `digFishbone`
@@ -1843,6 +1900,7 @@ The options are those of the fishbone layout of [`generateMine`](#mineoptions), 
 - **Never inside a piece.** The routing is the one under [the pillars layout](#the-pillars-layout): it may not use any floor and no reserved tile, so the pillars of a hall stand, and no vein runs through a room. A vein starts from a tile of a piece that has free rock beside it, never from one that only touches a pillar.
 - **Density.** `density` is the share of the rock that was free when the step began that the veins dig out, counted from the veins that join the pieces on. With `0` nothing else is dug. Above that, junctions are scattered, each one nearest the network is joined first, until the share is reached. On a map with pieces, a junction is joined by two veins, the second to another part of the network than the first, so it is a bend on the way between two parts and no vein ends in rock; a junction that cannot get both is left out. On an empty map the web is a web of its own, and a junction gets one vein, so it may end in rock. When the junctions give out, finer ones are scattered in between (down to about 6 tiles apart), and then extra veins make loops. The share is a target, met as far as the map has room, so a crowded map stops short.
 - **Thin walls and boxed-in pieces.** A vein keeps a wall between itself and the floor where it can. Where that leaves no way (a single wall between two caverns, as in a cave), a second try lets the vein pass close to the floor, and a last try lets it run through the rock that floor shuts in, which a piece surrounded by others needs. That last try is only made for a piece that nothing else reaches, so the pillars of a hall are safe whenever a hall can be joined at all. A piece that still cannot be reached is left as it is.
+- **No slipping past a corner.** Where a dug vein touches other floor corner to corner only, with wall on both tiles between, a walker who moves diagonally could slip past the wall. A tile that the vein's width added there goes back to wall; a tile of its middle line gets one of the two tiles between dug, which turns the corner into an edge, unless both are reserved or at the edge of the map. A vein that cannot be mended is not dug, as if there were no route.
 - **A piece that cannot be reached** (sealed in, or walled in by reserved tiles) is left as it is.
 - **Cell blocks.** A [cell block](#placecellblocks) is one piece, its cells and corridor joined by their doors, and its only potential exit is its entrance, so a vein enters it there, as it enters a room, and nowhere else.
 - **Touching pieces.** An `Openable` tile with the floor of two different pieces on opposite sides, such as a block entrance that a later hall reaches, is opened as floor, before the veins are dug and again after, since no vein through rock can reach it. Once two pieces are joined that way, no other such tile between them is opened.
@@ -2416,6 +2474,120 @@ const { grid } = pipeline(
 
 Over 200 seeds of that run, with and without guard rooms, no map failed and none needed a second map; with the free placement of the blocks, 131 of 200 failed.
 
+### `digSewers`
+
+`digSewers(options?)` is a step that digs a sewer: a straight trunk canal along its area, with straight branches off it, or off earlier branches, at right angles. A branch meets its parent in a junction chamber, and may end in a head chamber; with `cisterns`, some of those chambers are cisterns, with a basin of water. The canals are `ShallowWater`, with a walkway of `Floor` one tile wide on each side, and `Bridge` tiles carry the walkways over the water. It digs no corridors: [`digCorridors`](#digcorridors) or [`digVeins`](#digveins) joins the sewer to the rest of the map, on its walkways. Like `digPillarHalls` it needs a map that starts as wall, takes `area` and `count`, and checks every option when it is made.
+
+```ts
+import {
+  digCorridors,
+  digSewers,
+  emptyMap,
+  pipeline,
+  placeScatteredRooms,
+  Tile,
+} from 'angstloch';
+
+const { grid, rooms, roomGroups } = pipeline(
+  emptyMap({ width: 80, height: 50, tile: Tile.Wall }),
+  [
+    digSewers(),
+    // the rooms keep clear of the sewer, and the corridors reach its walkways
+    placeScatteredRooms(),
+    digCorridors(),
+  ],
+  { random: mulberry32(42) },
+);
+const sewer = roomGroups.find(({ kind }) => kind === 'sewer');
+```
+
+A sewer of 44 by 22 with a horizontal trunk two tiles wide, both ends of it outfalls, and two branches, before it is joined (`~` is water, `=` a bridge, `o` an outfall, still wall):
+
+```
+############################################
+############################################
+############################################
+############################################
+############################################
+############################################
+#..........................................#
+#~=~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~=~~#
+#~=~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~=~~#
+o..............=.............=.............o
+############...~....######...~....##########
+############...~....######...~....##########
+############...~....######...~....##########
+##############.~.###########.~.#############
+##############.~.###########.~.#############
+##############.~.###########.~.#############
+##############.~.###########.~.#############
+##############.~.###########.~.#############
+##############.~.###########.~.#############
+############################################
+############################################
+############################################
+```
+
+| Option          | Default       | Meaning                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orientation`   | `'any'`       | Which way the trunk runs: `'horizontal'`, `'vertical'`, or `'any'`, drawn for each sewer among the ways that fit its area.                                                                                                                                                                                                                                                                   |
+| `trunkWidth`    | `{ 2, 3 }`    | The width of the trunk's water in whole tiles, 1 or more, drawn once per sewer and cut down to what the area has room for.                                                                                                                                                                                                                                                                   |
+| `branchWidth`   | `{ 1, 1 }`    | The width of a branch's water in whole tiles, 1 or more, drawn for each branch.                                                                                                                                                                                                                                                                                                              |
+| `branches`      | `{ 3, 6 }`    | How many branches each sewer gets, a `Range` of whole numbers, 0 or more. Each grows off the trunk or off an earlier branch, at a spot picked by the length of the canals. A branch that finds no room is left out, so a crowded area gets fewer: a sewer on 70 by 40 holds about 4.                                                                                                         |
+| `branchLength`  | `{ 5, 12 }`   | The length of a branch's tunnel, from its junction chamber to its end or its head chamber, in whole tiles, 1 or more. A branch is cut down to the room it has, and left out below `min`.                                                                                                                                                                                                     |
+| `chamberSize`   | `{ 5, 9 }`    | The width and the height of a chamber in whole tiles, each side drawn on its own, and raised to hold the tunnels that meet there: a junction chamber spans its parent's tunnel and reaches at least a tile past it on the branch's side and past the branch's walkways along the parent; a head chamber reaches a tile past the branch's walkways on each side and is at least 3 tiles long. |
+| `headChance`    | 0.5           | The chance that a branch ends in a head chamber, from 0 to 1. A head chamber that finds no room is left out.                                                                                                                                                                                                                                                                                 |
+| `cisterns`      | `{ 0, 0 }`    | How many cisterns each sewer gets, a `Range` of whole numbers, 0 or more. A cistern takes the place of the junction chamber or the head chamber of a branch, so a sewer has at most as many as it has branches, and one that finds no room is left out.                                                                                                                                      |
+| `cisternSize`   | `{ 7, 11 }`   | The width and the height of a cistern in whole tiles, ledges included, each side drawn on its own and raised to hold the tunnels that meet there: at a junction as for a chamber, with a tile more across the parent's tunnel, for the basin; at a head as for a chamber, and to at least 4 tiles long.                                                                                      |
+| `cisternLedges` | `{ 1, 4 }`    | How many sides of a cistern have a ledge, a `Range` of whole numbers from 1 to 4, drawn for each cistern and raised to the ledges its canals need (see cisterns below).                                                                                                                                                                                                                      |
+| `columnChance`  | 0.5           | The chance that a cistern has columns standing in its water, from 0 to 1.                                                                                                                                                                                                                                                                                                                    |
+| `columnSpacing` | `{ 2, 3 }`    | The water between two columns in whole tiles, 1 or more, drawn once for each cistern.                                                                                                                                                                                                                                                                                                        |
+| `bridgeChance`  | 0.25          | The chance that a stretch of tunnel gets a bridge across its canal besides the ones that keep the walkways joined, from 0 to 1.                                                                                                                                                                                                                                                              |
+| `outfalls`      | `{ 1, 2 }`    | How many ends of the trunk reach the border of the map as outfalls, a `Range` of whole numbers from 0 to 2. The trunk runs a way that allows the number drawn, or as many as its area allows. `{ 0, 0 }` keeps the sewer off the border.                                                                                                                                                     |
+| `pierceBorder`  | `false`       | Whether the water of an outfall breaks through the border: `false` stops it at a mouth in the border wall, `true` runs it onto the border tile, off the map.                                                                                                                                                                                                                                 |
+| `area`          | the whole map | The size of the part of the map to dig in, see [areas](#areas). The sewer is closed in by a ring of wall inside it. Its smallest size must hold a trunk: 10 tiles along it and 5 across, or the step throws a `RangeError` before the first attempt.                                                                                                                                         |
+| `count`         | `{ 1, 1 }`    | How many sewers to dig, each in an area of its own.                                                                                                                                                                                                                                                                                                                                          |
+
+With `orientation: 'horizontal'`, `branches: { min: 2, max: 3 }`, `cisterns: { min: 2, max: 2 }` and `columnChance: 1` on 50 by 26, a sewer gets a cistern at the junction of a branch on the left, its basin holding the trunk's water, and one at the head of a branch on the right, with ledges on all four sides, and an outfall at the left end of the trunk (the top rows of rock left out):
+
+```
+##################################################
+##################################################
+o..............................................###
+#~~~~~~=~~~~~~~~~~~~~=~~~~~~~~~~~~~~~~~~~~~~~~~###
+#~~~~~~=~~~~~~~~~~~~~=~~~~~~~~~~~~~~~~~~~~~~~~~###
+#~~~~~~=~~~~~~~~~~~~~=~~~~~~~~~~~~~~~~~~~~~~~~~###
+#.......~~~~~~~~...........=...................###
+#######.~~~~~~~~#########..~...###################
+#######.~#~~~#~~##########.~.#####################
+#######.~~~~~~~~##########.~.#####################
+#######.~~~~~~~~##########.~.#####################
+#######....=....##########.~.#####################
+##########.~.#############.~.#####################
+##########.~.##########....=....##################
+##########.~.##########.~~~~~~~.##################
+##########.~.##########.~#~~~#~.##################
+##########.~.##########.~~~~~~~.##################
+##########.~.##########.~~~~~~~.##################
+##########.~.##########.~~~~~~~.##################
+##########.~.##########.~#~~~#~.##################
+#######################.~~~~~~~.##################
+#######################.........##################
+##################################################
+```
+
+- **The trunk** runs the length of its area, along the middle half of it where it fits. An end that is no outfall stops 3 tiles short of the edge of the area: a wall and 2 tiles of rock behind its mouth.
+- **Outfalls.** An outfall is an end of the trunk at the border of the map. Its walkways run up to the border wall; its water stops one tile short, at a mouth whose wall is the border, or, with `pierceBorder`, runs onto the border tile and leaves the map. The border tile at the end of one walkway, picked at random, is reserved `Openable`: the outfall, a way out that [`openExits`](#openexits) with `at: 'outfalls'` opens, and that stays wall otherwise. Water on the border is no exit and is not in `exits`; whether the game lets anything leave by it is the game's call. An outfall needs the area to touch the border at an end of the trunk, which an area as big as the map always does. A smaller area goes on a random spot (see [areas](#areas)), so with `outfalls.min` above 0 most attempts fail and [`pipeline`](#pipeline) often runs out of them: give such a sewer an `outfalls.min` of 0, or an area as wide or as tall as the map.
+- **Chambers.** A junction chamber is a rectangle across the parent's tunnel where a branch leaves it, widened on the branch's side; the parent's water runs straight through it. The walkway beside the parent's water crosses the branch on a bridge there. A head chamber is a rectangle at the far end of a branch, and the branch's water runs through it to its far wall, as if it fell from above.
+- **Cisterns.** A cistern is a large chamber with a rectangular basin of `ShallowWater` and a ledge of `Floor`, one tile wide, along some of its sides, always sides next to each other, so the ledges make one walkway. The canals and the corridors come in on a ledge, and where a canal crosses a ledge, the ledge is a bridge. A cistern at a head takes the branch's water in on its ledge, where the branch's canal ends at a mouth with no wall. A cistern at a junction holds its parent's water, which runs straight through its basin, with a ledge along the parent's walkway on the far side, one where the branch leaves, and one between them, so at least three; the branch's canal starts on its ledge. With `columnChance`, columns of wall, a tile each, stand in the basin in a grid `columnSpacing` apart, a tile clear of the ledges, the walls and the parent's water. A cistern still owed takes the first tries of the next branch, which is made without one when none fits. The game can turn the basin deep if it wants.
+- **Always walkable.** Every walkway tile reaches every other without wading: besides the bridges in the junction chambers and on the ledges of the cisterns, bridges across the canals join the walkways that the water still keeps apart, at random spots, then each stretch of tunnel gets one more by `bridgeChance`. A random bridge keeps two tiles of water from the other bridges along its canal, unless only a bridge closer to one joins the walkways.
+- **Every canal ends at a wall,** never in open floor: the end wall of its tunnel, the far wall of its head chamber, or the border wall at an outfall, unless the water pierces it, or else in the basin of its head cistern. Each end is a mouth in the group.
+- **Apart.** Parts of the sewer that do not meet keep 3 tiles of rock between them, room for a corridor between two walls.
+- **Reserved ground.** No part covers a [reserved](#mapstate) tile or one that is not free. The walls beside the water are reserved `Solid`, so a corridor or a vein never ends in a canal, and so are the columns of a cistern and the 2 tiles of rock behind each mouth's wall, as wide as the canal, so no corridor is dug right behind it; a mouth into a cistern has no wall and no rock behind it. An outfall is `Openable`. Nothing else is reserved: the other walls are free for a joining step to open. No joining step reaches an outfall, since nothing lies beyond the border.
+- **Fails** with an ordinary `Error` when the trunk finds no free room in its area, or its area reaches the border at fewer ends of a trunk than `outfalls.min`, which [`pipeline`](#pipeline) answers with a new map. Run it before the steps that fill its area.
+- **Rooms and the group.** Every chamber is a [`Room`](#room) of kind `'sewerChamber'`, every cistern one of kind `'cistern'`, and every stretch of tunnel between them, or between one and the end of its canal, one of kind `'sewerTunnel'`, walkways included. Each is a rectangle, and its shape in `roomShapes` is all its tiles but the columns of a cistern, so [`createRoomMap`](#createroommap) gives every tile of the sewer a room. Each sewer adds a `'sewer'` [group](#roomgroup) with its canals, mouths and outfalls. They are [features](#features), joined on their walkways and ledges and never dropped.
+- **Uses** `rooms`, `roomShapes` and `roomGroups`, from the steps before it, and **adds** all three again with its own appended, the ids following on.
+
 ### `digCorridors`
 
 `digCorridors(options?)` is a step that joins the rooms of a dungeon with corridors and doors, the second step of [`generateRoomDungeon`](#dungeons) (see [connections](#connections)): the rooms of [`placeScatteredRooms`](#placescatteredrooms), [`placePartitionedRooms`](#placepartitionedrooms) or [`placeClusteredRooms`](#placeclusteredrooms), or of a step of your own that adds `rooms` and `roomShapes`. Only rooms that have no exits yet are joined by their own exits; a room opened by another step counts as one with the floor its doors open onto, and is joined with it as a [feature](#features). It needs a map that starts as wall, and it checks every option when it is made.
@@ -2465,7 +2637,7 @@ const { grid, rooms, roomExits } = pipeline(
 
 #### Features
 
-Any tile outside the shapes of the rooms that have no exits yet that is not the base tile is floor of a feature, and the pieces it makes, joined along edges, are joined like rooms. A room that has exits already, such as a cell of a [cell block](#placecellblocks) or a room of [`openMazeRooms`](#openmazerooms), is part of the piece its doors open onto: rooms and floor joined by open doors count as one thing to join. A feature need not say what it is: whatever made it, `digCorridors` finds it on the map. The halls of `digPillarHalls` and the caverns of the cave steps are listed in `rooms` all the same, by their kinds `'pillarHall'` and `'cavern'`, but are joined as features, on their floor (see [halls and caverns](#room)), and get an exit wherever a corridor enters them (see [ways into halls and caverns](#ways-into-halls-and-caverns)). This makes "rooms round a cavern and a pillar hall" a list of steps:
+Any tile outside the shapes of the rooms that have no exits yet that is not the base tile is floor of a feature, and the pieces it makes, joined along edges, are joined like rooms. A room that has exits already, such as a cell of a [cell block](#placecellblocks) or a room of [`openMazeRooms`](#openmazerooms), is part of the piece its doors open onto: rooms and floor joined by open doors count as one thing to join. A feature need not say what it is: whatever made it, `digCorridors` finds it on the map. The halls of `digPillarHalls`, the caverns of the cave steps and the chambers, cisterns and tunnels of [`digSewers`](#digsewers) are listed in `rooms` all the same, by their kinds `'pillarHall'`, `'cavern'`, `'sewerChamber'`, `'cistern'` and `'sewerTunnel'`, but are joined as features, on their floor (see [halls and caverns](#room)), and get an exit wherever a corridor enters them (see [ways into halls and caverns](#ways-into-halls-and-caverns)). This makes "rooms round a cavern and a pillar hall" a list of steps:
 
 ```ts
 import {
@@ -2496,11 +2668,12 @@ const { grid, rooms } = pipeline(
 );
 ```
 
-- **The shape of a feature.** Its floor, and the walls that touch it from outside, which are its potential exits: a wall of rock that is free (not reserved), or one reserved `Openable` that the shape of no room to join holds, such as the entrance of a [cell block](#placecellblocks), or a potential exit of a room that has exits already, such as the entrance in the far wall of a [guard room](#guard-rooms) the block is entered through. Rock that the feature encloses and that nothing else reaches, such as a pillar, is no exit, and corridors stay out of it. The distance to a feature, which orders the links, is measured to its nearest wall, not to the box round it, since the box of a whole mine covers the map.
+- **The shape of a feature.** Its floor, and the walls that touch it from outside, which are its potential exits: a wall of rock that is free (not reserved), or one reserved `Openable` that the shape of no room to join holds, such as the entrance of a [cell block](#placecellblocks), or a potential exit of a room that has exits already, such as the entrance in the far wall of a [guard room](#guard-rooms) the block is entered through. A wall that touches another feature corner to corner is no exit, since opening it would join the two through the corner. Rock that the feature encloses and that nothing else reaches, such as a pillar, is no exit, and corridors stay out of it.
+- **No slipping past a corner.** The wall off a corner of a feature's floor, which touches the floor corner to corner only, is part of its shape, and corridors stay out of it too, so a corridor never meets a feature, a chamber of a sewer or the edge of a cavern, diagonally, where a walker who moves diagonally could slip between them past the wall. The distance to a feature, which orders the links, is measured to its nearest wall, not to the box round it, since the box of a whole mine covers the map.
 - **How it is joined.** Like a templated room: corridors route round its floor and walls, never through it, and it gets the exits that `exitsPerRoom` draws, loops and dead ends like any room. It is never joined by a door in a shared wall.
 - **Where a corridor reaches it,** the wall turns into floor: no door, whatever `doorChance` says, and no entry in `roomExits`, which stays about rooms. Nothing is reserved there, since features reserve nothing. A wall that was reserved `Openable` is the exception: it is an entrance that a step left on purpose, so it gets a door by `doorChance` and is opened through [`openReserved`](#mapstate). It gets no entry in `roomExits`, unless it is in the shape of a room that had exits already: then it is an [`Exit`](#exit) of that room, appended to `roomExits` and listed on the room, so the room keeps a list of all its ways in. The same holds for such a wall opened with no corridor, because floor reaches it from beyond.
 - **It is never dropped.** A feature that cannot be joined to the largest group of rooms fails like a templated room: the corridors are routed again, up to 3 times, and then the step throws an `Error` that names a tile of its floor, which [`pipeline`](#pipeline) answers with a new map. `digCorridors` adds no feature to `rooms`; the halls and caverns that are there already stay there, with their shapes, their ids following the renumbering.
-- **Over 200 seeds** of the run above with 0, 2 and 5 templated rooms (`npm run check:dungeon`), no map failed; at 5 templated rooms, 3 seeds needed a second map, and a map took 5 to 21 ms on average.
+- **Over 200 seeds** of the run above with 0, 2 and 5 templated rooms (`npm run check:dungeon`), no map failed; at 5 templated rooms, 6 seeds needed a second map, and a map took 6 to 20 ms on average.
 
 ## Walking distances
 

@@ -127,7 +127,8 @@ function paintPointedRoom(
   const id = pointedRoom(shown);
   const room = shown.extras.rooms?.[id];
   if (!room) {
-    roomLine.textContent = 'Point at a room, hall or cavern to see what it is.';
+    roomLine.textContent =
+      'Point at a room, hall, cavern or part of a sewer to see what it is.';
     return;
   }
   const map = roomMapOf(shown);
@@ -295,6 +296,20 @@ const LATTICE_PRISON: CardSpec[] = [
   ],
   ['placeScatteredRooms', { placement: 'lattice' }],
   ['digCorridors', { placement: 'lattice' }],
+];
+
+/** A sewer, then rooms in the rock round it, joined by corridors that reach its walkways, and a way out at an outfall or two. */
+const SEWER: CardSpec[] = [
+  'digSewers',
+  'placeScatteredRooms',
+  'digCorridors',
+  ['openExits', { at: 'outfalls' }],
+];
+
+/** The same with a cistern or two. */
+const SEWER_WITH_CISTERNS: CardSpec[] = [
+  ['digSewers', { cisternsMin: '1', cisternsMax: '2' }],
+  ...SEWER.slice(1),
 ];
 
 /** Outlines a tile. */
@@ -595,6 +610,37 @@ function paint(): void {
         width * tileSize,
         height * tileSize,
       );
+    }
+  }
+  if (show.has('showSewers')) {
+    // an outline round every chamber of a sewer, yellow, and every cistern,
+    // cyan, and a mark on every mouth: red on the water, yellow on the wall it
+    // meets, and green on the way out of every outfall
+    context.lineWidth = Math.max(1, tileSize / 6);
+    for (const { kind, x, y, width, height } of (extras.rooms ?? []).filter(
+      ({ kind }) => kind === 'sewerChamber' || kind === 'cistern',
+    )) {
+      context.strokeStyle =
+        kind === 'cistern' ? Color.BrightCyan : Color.BrightYellow;
+      context.strokeRect(
+        x * tileSize,
+        y * tileSize,
+        width * tileSize,
+        height * tileSize,
+      );
+    }
+    for (const group of extras.roomGroups ?? []) {
+      if (group.kind === 'sewer') {
+        for (const { position, wall } of group.mouths) {
+          mark(context, position, Color.BrightRed, tileSize);
+          if (wall) {
+            mark(context, wall, Color.BrightYellow, tileSize);
+          }
+        }
+        for (const { position } of group.outfalls) {
+          mark(context, position, Color.BrightGreen, tileSize);
+        }
+      }
     }
   }
   if (show.has('showBlocks')) {
@@ -976,6 +1022,14 @@ document.querySelector('#load-cave-rooms')?.addEventListener('click', () => {
   setDungeonSize();
   setWallCards(CAVE_WITH_ROOMS);
 });
+document.querySelector('#load-sewer')?.addEventListener('click', () => {
+  setWallCards(SEWER);
+});
+document
+  .querySelector('#load-sewer-cisterns')
+  ?.addEventListener('click', () => {
+    setWallCards(SEWER_WITH_CISTERNS);
+  });
 document.querySelector('#load-prison')?.addEventListener('click', () => {
   setWallCards(PRISON);
 });

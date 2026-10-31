@@ -17,7 +17,7 @@ function boundsOf(tiles: readonly Point[]): Area {
 }
 
 /**
- * Appends a hall or a cavern to the rooms of `into`, with the next id: its box
+ * Appends a hall, a cavern or a part of a sewer to the rooms of `into`, with the next id: its box
  * is `box`, which must hold every tile, or else the smallest rectangle that
  * holds its floor `tiles` (there must be at least one), and its shape is that
  * floor, every other cell of the box `Unused`, with no exits, so it blocks
@@ -25,7 +25,10 @@ function boundsOf(tiles: readonly Point[]): Area {
  */
 export function addFeatureRoom(
   into: FeatureRooms,
-  kind: Extract<RoomKind, 'pillarHall' | 'cavern'>,
+  kind: Extract<
+    RoomKind,
+    'pillarHall' | 'cavern' | 'sewerChamber' | 'sewerTunnel' | 'cistern'
+  >,
   group: number,
   tiles: readonly Point[],
   box: Area = boundsOf(tiles),

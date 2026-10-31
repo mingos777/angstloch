@@ -11,8 +11,10 @@ import type { TemplatePlacement } from '../rooms/templates/template-placement';
 export interface StandIns {
   /**
    * One shape per piece, in the order of their first tile, row by row: the
-   * piece's tiles as `Floor` cells, and the free walls that touch it from
-   * outside as `OptionalExit` cells, each leading away from the piece.
+   * piece's tiles as `Floor` cells, the free walls that touch it from
+   * outside as `OptionalExit` cells, each leading away from the piece, and
+   * the walls that touch it only corner to corner as `Wall` cells, which
+   * keep corridors from slipping past its corners.
    */
   shapes: TemplatePlacement[];
   /** The floor of each piece, as a box, in the order of `shapes`. */
@@ -31,7 +33,10 @@ export interface StandIns {
  * and nothing is built in it. A wall is a potential exit of a piece when it
  * holds the base and is not a hole, and is either not reserved, or reserved
  * `Openable` outside every room's shape, which is how the entrance of a cell
- * block is entered.
+ * block is entered, and does not touch another piece corner to corner, which
+ * opening it would join through the corner. A wall that touches a piece only
+ * corner to corner, off a corner of its floor, is a `Wall` cell of its shape,
+ * so that no corridor runs there and passes the floor diagonally.
  */
 export function findStandIns(
   state: Pick<MapState, 'grid' | 'base' | 'reserved'>,
@@ -93,23 +98,57 @@ export function findStandIns(
     );
   };
   const floors: StandIns['floors'] = [];
-  const placements = pieces.map((tiles) => {
+  const open = (x: number, y: number): boolean =>
+    grid.inBounds(x, y) && grid.get(x, y) !== base;
+  // whether a wall touches a piece other than `own` corner to corner
+  const touchesOther = (x: number, y: number, own: number): boolean =>
+    [-1, 1].some((dy) =>
+      [-1, 1].some((dx) => {
+        const other = grid.inBounds(x + dx, y + dy)
+          ? (piece[(y + dy) * width + x + dx] ?? 0)
+          : 0;
+        return other !== 0 && other !== own;
+      }),
+    );
+  const placements = pieces.map((tiles, index) => {
     // the walls round the piece, with the ways out of each
     const ways = new Map<number, number[]>();
+    // the walls off its corners, which it touches corner to corner only
+    const corners = new Set<number>();
     for (const { x, y } of tiles) {
       for (const [direction, step] of DIRECTIONS.entries()) {
         const [wx, wy] = [x + step.x, y + step.y];
-        if (isExit(wx, wy)) {
+        if (isExit(wx, wy) && !touchesOther(wx, wy, index + 1)) {
           const key = wy * width + wx;
           ways.set(key, [...(ways.get(key) ?? []), direction]);
         }
       }
+      for (const [dx, dy] of [
+        [1, 1],
+        [1, -1],
+        [-1, 1],
+        [-1, -1],
+      ] as const) {
+        const [cx, cy] = [x + dx, y + dy];
+        if (
+          grid.inBounds(cx, cy) &&
+          !open(cx, cy) &&
+          !covered[cy * width + cx] &&
+          !open(cx, y) &&
+          !open(x, cy)
+        ) {
+          corners.add(cy * width + cx);
+        }
+      }
+    }
+    for (const key of ways.keys()) {
+      corners.delete(key);
     }
     const floor = boxOf(tiles);
     floors.push(floor);
     const box = boxOf([
       ...tiles,
-      ...[...ways.keys()].map((key) => ({
+      ...[...ways.keys(), ...corners].map((key) => ({
         x: key % width,
         y: Math.floor(key / width),
       })),
@@ -122,6 +161,10 @@ export function findStandIns(
     );
     for (const { x, y } of tiles) {
       (cells[y - box.y] as TemplateCell[])[x - box.x] = TemplateCell.Floor;
+    }
+    for (const key of corners) {
+      const [x, y] = [key % width, Math.floor(key / width)];
+      (cells[y - box.y] as TemplateCell[])[x - box.x] = TemplateCell.Wall;
     }
     const exits: TemplateExit[] = [];
     for (const [key, directions] of [...ways.entries()].sort(

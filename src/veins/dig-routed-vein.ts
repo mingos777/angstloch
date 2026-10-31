@@ -4,6 +4,7 @@ import { Tile } from '../core/tile';
 import type { NoiseFunction } from '../noise/noise-function';
 import { carvePassageTiles } from './carve-passage-tiles';
 import { MARGIN } from './dig-vein';
+import { mendCornerTouches } from './mend-corner-touches';
 import { findRockRoute } from './find-rock-route';
 import type { MinePassage } from './mine-passage';
 import { wobbleRoute } from './wobble-route';
@@ -115,7 +116,10 @@ function findMouths(
  * the halls and never across one, and then it is given a natural look and
  * carved. A vein that would be much longer than the distance between its ends,
  * along the grid, is not dug: there is no route then. A vein never runs over
- * a tile that `protect` marks with anything but a 0. `relaxed` is a last
+ * a tile that `protect` marks with anything but a 0. Where it would touch
+ * other floor corner to corner only, which would let a walker slip past the
+ * corner, it is mended (see `mendCornerTouches`), and a vein that cannot be
+ * is not dug: there is no route then. `relaxed` is a last
  * resort for ends that are boxed in: only floor blocks the route, there is no
  * limit to its length, and veins may run close to the halls and to each other.
  * Returns the vein and the tiles of floor it made, as indexes into the grid,
@@ -180,5 +184,12 @@ export function digRoutedVein(
     },
     style.protect,
   );
+  const line = new Set(tiles.map(({ x, y }) => y * grid.width + x));
+  if (!mendCornerTouches(grid, carved, line, MARGIN, style.protect)) {
+    for (const at of carved) {
+      grid.set(at % grid.width, Math.floor(at / grid.width), Tile.Wall);
+    }
+    return undefined;
+  }
   return { passage: { kind: 'vein', tiles, width: style.width }, carved };
 }
