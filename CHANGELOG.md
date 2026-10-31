@@ -21,4 +21,10 @@ Initial release. The README documents everything below in full.
 - **Determinism**: every generator takes an injected `Random`, so a seed gives the same map.
 - **Walking distances**: `measureDistances` measures the walk between places of a finished map, with the `manhattan`, `chebyshev` and `euclidean` metrics and a cost factor per tile, and `measureRoomDistances` between every two rooms of a result, halls and caverns included.
 - **Data model**: `Grid` and `Tile` (`Wall`, `Floor`, `Door`, `Grass`, `Tree`, `Road`, `ShallowWater`, `DeepWater`, `Bridge`) with plain `{ x, y }` points.
+- **Area windows**: `area.x` and `area.y` (`AreaWindow`) limit where a feature step puts its area along each axis: the `anchor` of the box (`'left'`, `'center'` or `'right'` across, `'top'`, `'center'` or `'bottom'` down) falls between `min` and `max`. Every step with an `area` takes them, and on the lattice a box may end one tile off the window. `assertAreaSpec` checks them, with a new `lattice` option, and the cave steps reject a window with `placement: 'beside'`.
+- **Area gravity**: `area.gravity` (`AreaGravity`) slides a feature step's area from the random spot it was drawn on toward a side, a corner or the middle of the map (`toward`), by a share of the way (`strength`), stopping against whatever is in the way, so several copies pile up against each other. Every step with an `area` takes it, instead of a window; the cave steps reject it with `placement: 'beside'`.
 - Zero runtime dependencies, ESM only, tree-shakable.
+
+### Changed
+
+- **Areas**: the type of the `area` option is `AreaSpec` (was `AreaSize`), and its check is `assertAreaSpec` (was `assertAreaSize`), since it is to say more than a size.

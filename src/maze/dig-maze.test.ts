@@ -577,6 +577,11 @@ describe('digMaze', () => {
       /exceed/,
     ],
     ['two copies on the whole map', { count: { min: 2, max: 2 } }, /count/],
+    [
+      'a window with no even coordinate',
+      { area: { width: { min: 9, max: 9 }, x: { min: 5, max: 5 } } },
+      /even coordinate/,
+    ],
   ])('rejects %s', (_, options: DigMazeOptions, message) => {
     // given
     const map = emptyMap({ width: 21, height: 21, tile: Tile.Wall });

@@ -1,5 +1,5 @@
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 
 /** Options of `digPillarHalls`. */
 export interface DigPillarHallsOptions {
@@ -20,7 +20,7 @@ export interface DigPillarHallsOptions {
   /** How far the pillars stray from a regular pattern, from 0 (a perfect grid) to 1 (as far as they can without touching). Defaults to 0.5. */
   pillarJitter?: number;
   /** The size of the part of the map to dig in. Defaults to the whole map. A smaller area goes on a random free spot, and the halls are closed in by a ring of wall inside it. The halls are joined by `digVeins`, which is a step of its own. */
-  area?: AreaSize;
+  area?: AreaSpec;
   /** How many groups of halls to dig, each in an area of its own, a `Range` of whole numbers of at least 0. One is picked. Defaults to `{ min: 1, max: 1 }`. */
   count?: Range;
 }

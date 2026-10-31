@@ -1,5 +1,5 @@
-import type { AreaSize } from '../pipeline/area-size';
-import { assertAreaSize } from '../pipeline/assert-area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
+import { assertAreaSpec } from '../pipeline/assert-area-spec';
 import { assertWallBase } from '../pipeline/assert-wall-base';
 import type { MapState } from '../pipeline/map-state';
 import { validateTemplateAreas } from '../rooms/templates/validate-template-areas';
@@ -8,7 +8,7 @@ import { sideRoom } from './side-room';
 
 /**
  * Checks what `digCatacombs` needs of the map, for its `validate`: the map
- * starts as wall, the `area` fits the map (see `assertAreaSize`), and the
+ * starts as wall, the `area` fits the map (see `assertAreaSpec`), and the
  * smallest area holds two side galleries of the narrowest width each way, the
  * narrowest rock between them, the room for niches and chambers (see
  * `sideRoom`) and the ring of wall round them, and the areas of the templates
@@ -16,12 +16,12 @@ import { sideRoom } from './side-room';
  */
 export function assertCatacombArea(
   state: MapState,
-  area: AreaSize,
+  area: AreaSpec,
   settings: CatacombSettings,
 ): void {
   const { width, height } = state.grid;
   assertWallBase('digCatacombs', state);
-  assertAreaSize(area, { min: 1, max: 1 }, width, height);
+  assertAreaSpec(area, { min: 1, max: 1 }, width, height);
   const needed =
     2 +
     2 * settings.sideWidth.min +

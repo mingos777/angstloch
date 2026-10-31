@@ -1,6 +1,6 @@
 import type { Point } from '../core/point';
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 import type { MazeSymmetry } from './maze-options';
 
 /** Options of `digMaze`. */
@@ -22,7 +22,7 @@ export interface DigMazeOptions {
   /** Where carving starts, in the coordinates of the map: a maze cell, with odd coordinates inside the map, that nothing has reserved. Only for a maze on the whole map. Defaults to the free cell nearest the middle. */
   start?: Point;
   /** The size of the box each copy goes in (see Areas), placed on the lattice: odd sizes at even coordinates. Defaults to the whole map. */
-  area?: AreaSize;
+  area?: AreaSpec;
   /** How many mazes to carve, each in its own box. Defaults to 1 to 1. */
   count?: Range;
 }

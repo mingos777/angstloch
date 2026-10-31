@@ -4,7 +4,7 @@ import type { Random } from '../core/random';
 import type { Range } from '../core/range';
 import type { NoiseFunction } from '../noise/noise-function';
 import { createSimplexNoise } from '../noise/create-simplex-noise';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 import { buildInArea } from '../pipeline/build-in-area';
 import type { MapState } from '../pipeline/map-state';
 import { placeAreas } from '../pipeline/place-areas';
@@ -29,7 +29,7 @@ export interface DugHall {
 export function digInAreas(
   state: MapState & { passages?: MinePassage[] },
   random: Random,
-  area: AreaSize,
+  area: AreaSpec,
   count: Range,
   lay: (
     scratch: MapState,

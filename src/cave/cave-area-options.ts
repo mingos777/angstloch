@@ -1,6 +1,6 @@
 import type { LayoutSymmetry } from '../core/layout-symmetry';
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 import type { CavePlacement } from './cave-placement';
 
 /** The options that `digCellularCave` and `digNoiseCave` share: where the cave goes, its border, its symmetry and which of its caverns it keeps. */
@@ -15,8 +15,8 @@ export interface CaveAreaOptions {
   minRegionSize?: number;
   /** Keeps only the largest cavern of the area. Defaults to false. */
   largestOnly?: boolean;
-  /** The size of the part of the map to carve the cave in. Defaults to the whole map. A smaller area goes on a spot that `placement` picks. */
-  area?: AreaSize;
+  /** The size of the part of the map to carve the cave in, and where it may go (see Areas). Defaults to the whole map. A smaller area goes on a spot that `placement` picks; a window (`x`, `y`) or `gravity` cannot be used with `beside`. */
+  area?: AreaSpec;
   /** How many caves to carve, each in an area of its own, a `Range` of whole numbers of at least 0. One is picked. Defaults to `{ min: 1, max: 1 }`. */
   count?: Range;
   /** Where a smaller area goes. `free`: on a random spot where the box and a margin of one tile are all free. `beside`: the cave is built and culled first, then tried at 100 random spots, and goes where its floor and the 8 tiles round every floor tile are free, as near the dug ground as it finds; the box may overlap tunnels, the floor never touches them. `overlap`: on any spot, clear of the other copies, with floor laid on the free tiles only, so the cave runs into what is there. No placement digs a reserved tile. With `free` a copy that finds no spot fails the attempt; with `beside` the copies up to `count.min` do, and the ones above it are left out. Defaults to `free`. */

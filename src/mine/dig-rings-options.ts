@@ -1,5 +1,5 @@
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 import type { MineRingShape } from './mine-ring-shape';
 
 /** Options of `digRings`. */
@@ -21,7 +21,7 @@ export interface DigRingsOptions {
   /** How much the spokes wind, from 0 (straight) to 1. Defaults to 0.5. */
   veinWindiness?: number;
   /** The size of the part of the map to dig in. Defaults to the whole map. A smaller area goes on a random free spot, and the rings are fitted inside it, closed in by a ring of wall. */
-  area?: AreaSize;
+  area?: AreaSpec;
   /** How many sets of rings to dig, each in an area of its own, a `Range` of whole numbers of at least 0. One is picked. Defaults to `{ min: 1, max: 1 }`. */
   count?: Range;
 }

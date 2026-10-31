@@ -26,6 +26,14 @@ export function assertCaveAreaOptions(options: CaveAreaOptions): void {
       `placement must be 'free', 'beside' or 'overlap', got ${placement}`,
     );
   }
+  if (
+    placement === 'beside' &&
+    (options.area?.x || options.area?.y || options.area?.gravity)
+  ) {
+    throw new RangeError(
+      "area.x, area.y and area.gravity cannot be used with placement 'beside', which picks its own spot",
+    );
+  }
   if (options.count) {
     assertRange('count', options.count, 0);
   }

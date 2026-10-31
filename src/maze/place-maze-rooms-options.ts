@@ -1,6 +1,6 @@
 import type { Point } from '../core/point';
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 
 /** Options of `placeMazeRooms`. */
@@ -20,5 +20,5 @@ export interface PlaceMazeRoomsOptions {
   /** A tile, in the coordinates of the map, that the rooms leave free, such as the cell a maze starts from. The ordinary rooms keep off it; a template that covers it fails the attempt, which `pipeline` retries. Defaults to none. */
   keepClear?: Point;
   /** The size of the box the rooms go in (see Areas), placed on the lattice: odd sizes at even coordinates. Defaults to the whole map. */
-  area?: AreaSize;
+  area?: AreaSpec;
 }

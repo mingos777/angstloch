@@ -1,6 +1,6 @@
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
-import { assertAreaSize } from '../pipeline/assert-area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
+import { assertAreaSpec } from '../pipeline/assert-area-spec';
 import { assertWallBase } from '../pipeline/assert-wall-base';
 import type { MapState } from '../pipeline/map-state';
 import type { DigSewersOptions } from './dig-sewers-options';
@@ -8,19 +8,19 @@ import { MIN_SEWER_ACROSS, MIN_SEWER_ALONG } from './sewer-limits';
 
 /**
  * Checks what `digSewers` needs of the map, for its `validate`: the map starts
- * as wall, the `area` and `count` fit the map (see `assertAreaSize`), and the
+ * as wall, the `area` and `count` fit the map (see `assertAreaSpec`), and the
  * smallest area holds a trunk the way `orientation` allows. Throws a
  * `RangeError`.
  */
 export function assertSewerArea(
   state: MapState,
-  area: AreaSize,
+  area: AreaSpec,
   count: Range,
   orientation: NonNullable<DigSewersOptions['orientation']>,
 ): void {
   const { width, height } = state.grid;
   assertWallBase('digSewers', state);
-  assertAreaSize(area, count, width, height);
+  assertAreaSpec(area, count, width, height);
   const smallest = {
     width: area.width?.min ?? width,
     height: area.height?.min ?? height,

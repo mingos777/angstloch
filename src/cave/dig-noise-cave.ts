@@ -3,7 +3,7 @@ import { assertWholeNumber } from '../core/assert-whole-number';
 import { createFractalNoise } from '../noise/create-fractal-noise';
 import { createSimplexNoise } from '../noise/create-simplex-noise';
 import { transformNoise } from '../noise/transform-noise';
-import { assertAreaSize } from '../pipeline/assert-area-size';
+import { assertAreaSpec } from '../pipeline/assert-area-spec';
 import { assertWallBase } from '../pipeline/assert-wall-base';
 import type { MapStep } from '../pipeline/map-step';
 import { step } from '../pipeline/step';
@@ -82,7 +82,7 @@ export function digNoiseCave(
       adds: ['rooms', 'roomShapes', 'roomGroups'],
       validate: (state) => {
         assertWallBase('digNoiseCave', state);
-        assertAreaSize(area, count, state.grid.width, state.grid.height);
+        assertAreaSpec(area, count, state.grid.width, state.grid.height);
       },
     },
     (state, { random }) => {

@@ -1,5 +1,5 @@
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 import type { Placement } from './dungeon-options';
 
 /** Options of the guard room of a cell block. */
@@ -35,7 +35,7 @@ export interface PlaceCellBlocksOptions {
   /** A guard room for each block, a room of kind `'guardRoom'` in the group of its block. Absent means none. */
   guardRoom?: GuardRoomOptions;
   /** The size of the part of the map to place blocks in. Defaults to the whole map. A smaller area goes on a random free spot. */
-  area?: AreaSize;
+  area?: AreaSpec;
   /** How many areas to place blocks in, a `Range` of whole numbers of at least 0. One is picked. Defaults to `{ min: 1, max: 1 }`. */
   count?: Range;
 }

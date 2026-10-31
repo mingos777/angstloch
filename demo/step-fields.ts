@@ -1,4 +1,11 @@
-import type { AreaSize, DistanceMetric, Range, Tile, Verge } from '../src';
+import type {
+  AreaGravity,
+  AreaSpec,
+  DistanceMetric,
+  Range,
+  Tile,
+  Verge,
+} from '../src';
 
 /** What a control of a step holds: text for numbers and selects, a boolean for a checkbox. */
 export type FieldValue = string | boolean;
@@ -78,7 +85,7 @@ export function vergeFields(clearance: number, falloff: number): Field[] {
   ];
 }
 
-/** The fields of `area` and `count` of a feature step: sizes blank for the size of the map, and how many copies, unless `copies` is false. */
+/** The fields of `area` and `count` of a feature step: sizes blank for the size of the map, windows blank for anywhere, gravity (none by default), and how many copies, unless `copies` is false. */
 export function areaFields(copies = true): Field[] {
   const size = { min: '1' };
   return [
@@ -86,6 +93,37 @@ export function areaFields(copies = true): Field[] {
     number('areaWidthMax', 'Area width max (blank: map)', '', size),
     number('areaHeightMin', 'Area height min (blank: map)', '', size),
     number('areaHeightMax', 'Area height max (blank: map)', '', size),
+    number('areaXMin', 'Area x window min (blank: anywhere)', ''),
+    number('areaXMax', 'Area x window max (blank: anywhere)', ''),
+    select('areaXAnchor', 'Area x anchor', 'center', [
+      ['left', 'left'],
+      ['center', 'center'],
+      ['right', 'right'],
+    ]),
+    number('areaYMin', 'Area y window min (blank: anywhere)', ''),
+    number('areaYMax', 'Area y window max (blank: anywhere)', ''),
+    select('areaYAnchor', 'Area y anchor', 'center', [
+      ['top', 'top'],
+      ['center', 'center'],
+      ['bottom', 'bottom'],
+    ]),
+    select('areaGravity', 'Area gravity (with no window)', 'none', [
+      ['none', 'none'],
+      ['left', 'left'],
+      ['top left', 'top left'],
+      ['top', 'top'],
+      ['top right', 'top right'],
+      ['right', 'right'],
+      ['bottom right', 'bottom right'],
+      ['bottom', 'bottom'],
+      ['bottom left', 'bottom left'],
+      ['center', 'center'],
+    ]),
+    number('areaGravityStrength', 'Area gravity strength', 1, {
+      min: '0',
+      max: '1',
+      step: '0.1',
+    }),
     ...(copies ? pair('count', 'Copies', 1, 1, { min: '0' }) : []),
   ];
 }
@@ -141,12 +179,33 @@ export class Values {
   }
 
   /** The `area` option, from the controls of `areaFields`. */
-  area(): AreaSize {
+  area(): AreaSpec {
     const width = this.optionalRange('areaWidth');
     const height = this.optionalRange('areaHeight');
+    const x = this.optionalRange('areaX');
+    const y = this.optionalRange('areaY');
+    const toward = this.text('areaGravity');
     return {
       ...(width && { width }),
       ...(height && { height }),
+      ...(x && {
+        x: {
+          ...x,
+          anchor: this.text('areaXAnchor') as 'left' | 'center' | 'right',
+        },
+      }),
+      ...(y && {
+        y: {
+          ...y,
+          anchor: this.text('areaYAnchor') as 'top' | 'center' | 'bottom',
+        },
+      }),
+      ...(toward !== 'none' && {
+        gravity: {
+          toward: toward as AreaGravity['toward'],
+          strength: this.number('areaGravityStrength'),
+        },
+      }),
     };
   }
 

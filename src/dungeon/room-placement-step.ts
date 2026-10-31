@@ -1,5 +1,5 @@
 import type { Random } from '../core/random';
-import { assertAreaSize } from '../pipeline/assert-area-size';
+import { assertAreaSpec } from '../pipeline/assert-area-spec';
 import { assertWallBase } from '../pipeline/assert-wall-base';
 import { buildInArea } from '../pipeline/build-in-area';
 import type { MapState } from '../pipeline/map-state';
@@ -158,7 +158,7 @@ export function roomPlacementStep(
       validate: (state) => {
         const { width, height } = state.grid;
         assertWallBase(name, state);
-        assertAreaSize(area, count, width, height);
+        assertAreaSpec(area, count, width, height, { lattice });
         templates.forEach((template, index) => {
           validateTemplateAreas(template, index, width, height, lattice);
         });

@@ -1837,15 +1837,75 @@ const { grid, bridges } = pipeline(
 
 A step that makes a feature (a cave, a maze, a room layout) can build it in part of the map. Such a step takes two options, which every feature step has, and which this section describes once:
 
-- `area`, an `AreaSize`: `{ width?: Range; height?: Range }`, the size in tiles of the part it builds in. A size is drawn from each range for every copy. A missing range is the size of the map, so a step without an `area` builds on the whole map, as it always did. An area may be smaller than the map but never larger: a range that is not whole numbers of at least 1, or reaches beyond the map, throws a `RangeError` when the pipeline starts.
+- `area`, an `AreaSpec`: `{ width?: Range; height?: Range; x?: AreaWindow; y?: AreaWindow; gravity?: AreaGravity }`, the size in tiles of the part it builds in, and where it may go. A size is drawn from each range for every copy. A missing range is the size of the map, so a step without an `area` builds on the whole map, as it always did. An area may be smaller than the map but never larger: a range that is not whole numbers of at least 1, or reaches beyond the map, throws a `RangeError` when the pipeline starts. `x` and `y` are windows and `gravity` a pull toward a side, see [Where an area goes](#where-an-area-goes).
 - `count`, a `Range` of whole numbers of at least 0, default 1 to 1: how many copies of the feature to make. Each copy gets a spot of its own. A `count` above 1 with an area as big as the map throws a `RangeError`, since two copies cannot fit. A smaller `area` with a `count` of 2 gives two features on the map.
 
 A copy that is as big as the map takes the whole map. Any other goes on a random free spot: a box whose tiles, and a margin of one tile round it, are all [free](#mapstate) (untouched ground or ground cover that nothing has reserved). The copies of one step never touch, and floor that earlier steps dug is not free, so a feature never lands on another. After 100 tries without a spot, an ordinary `Error` is thrown, which `pipeline` answers with a new map. A feature in a smaller area is built on a scratch map the size of the box, so it knows nothing of the rest of the map; a symmetry mirrors about the center of the area. The cave steps have a `placement` option with two more rules, a spot beside what is there and a spot over it (see [`digCellularCave`](#digcellularcave)). Later rules, such as keeping off roads, may be added.
 
+#### Where an area goes
+
+A window limits where a box goes along one axis. `x` is an `AreaWindow` of `{ min, max, anchor? }` with the anchor `'left'`, `'center'` or `'right'`, and `y` the same with `'top'`, `'center'` or `'bottom'`:
+
+| Field    | Default    | Meaning                                                                                                                                                                                            |
+| -------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `min`    | (required) | The first tile the anchor may fall on, in map coordinates, a whole number. It may lie off the map; the window is cut to the map.                                                                   |
+| `max`    | (required) | The last tile the anchor may fall on, a whole number of at least `min`.                                                                                                                            |
+| `anchor` | `'center'` | The point of the box that must fall in the window: its first tile (`'left'`, `'top'`), its last tile (`'right'`, `'bottom'`) or its center tile (`x + floor(width / 2)`, `y + floor(height / 2)`). |
+
+A missing window leaves its axis free, so a box may have a window across the map and none down it. Each copy is placed on its own with the same window: a random spot is drawn from those whose anchor falls in the window, and the other rules stay (the box and its margin free, clear of the other copies, 100 tries). A box as big as the map takes the whole map, whatever the window.
+
+```ts
+// a cave on the left edge of the map, anywhere down it
+digCellularCave({
+  area: {
+    width: { min: 20, max: 30 },
+    height: { min: 15, max: 25 },
+    x: { min: 0, max: 0, anchor: 'left' },
+  },
+});
+
+// two sets of rooms whose centers lie in the middle third of the map's height (on a map 60 tall)
+placeScatteredRooms({
+  area: {
+    width: { min: 20, max: 20 },
+    height: { min: 10, max: 14 },
+    y: { min: 20, max: 39 },
+  },
+  count: { min: 2, max: 2 },
+});
+```
+
+On the lattice (`digMaze`, `placeMazeRooms`, and the room steps and `placeCellBlocks` with `placement: 'lattice'`) a box starts on even coordinates. When no even start puts the anchor in the window, as with a center anchor on a single odd column, the box goes one tile off the window's edge instead.
+
+A window that is wrong throws a `RangeError` when the pipeline starts: `min` or `max` that is not a whole number, `min` above `max`, an unknown `anchor`, a window with no spot for the largest box the size range draws (checked for the largest, which is the hardest), and on the lattice a window of one odd coordinate. A window that is right but too crowded is the ordinary `Error` after 100 tries, which `pipeline` answers with a new map. The cave steps throw a `RangeError` when they are made for a window with `placement: 'beside'`, which picks its own spot; `'free'` and `'overlap'` keep to the window.
+
+Gravity pulls a box toward a side, a corner or the middle of the map instead. `gravity` is an `AreaGravity` of `{ toward, strength }`:
+
+| Field      | Default    | Meaning                                                                                                                                                                                                                                                                                  |
+| ---------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `toward`   | (required) | Where the box is pulled: `'left'`, `'top'`, `'right'` or `'bottom'` flush to that side and centered along it, `'top left'`, `'top right'`, `'bottom right'` or `'bottom left'` flush into that corner, or `'center'` centered both ways. Centered is `round((map size - box size) / 2)`. |
+| `strength` | (required) | The share of the way to that spot the box slides, from 0 to 1. At 0 it stays where it was drawn, at 1 it goes all the way unless something stops it.                                                                                                                                     |
+
+The box is drawn on a random spot as usual, then slides `round(strength × distance)` tiles toward its target on each axis, one tile at a time and the two axes in turn. A move is only made when the box and its margin are still free and clear of the other copies, so an axis that meets something stops there for good while the other carries on: a box pulled to the `'bottom left'` past a room ends against the room's side, and as low as it can go. It never jumps over anything, so a box drawn on the far side of a room stays against that room. The copies of one step are placed in turn, so with gravity they pile up against the side and then against each other. It is all best effort: gravity never makes a step fail.
+
+```ts
+// three caverns pulled up toward the top of the map, piling up against each other
+digCellularCave({
+  area: {
+    width: { min: 15, max: 20 },
+    height: { min: 10, max: 12 },
+    gravity: { toward: 'top', strength: 1 },
+  },
+  count: { min: 3, max: 3 },
+});
+```
+
+On the lattice a box slides two tiles at a time, and its target is snapped down to an even coordinate. A box as big as the map takes the whole map, whatever the gravity. Gravity cannot be given with a window: one with `x` or `y`, an unknown `toward` or a `strength` outside 0 to 1 throws a `RangeError` when the pipeline starts, and the cave steps throw one when they are made for gravity with `placement: 'beside'`.
+
 The building blocks are public, for steps of your own:
 
-- `assertAreaSize(area, count, width, height)` checks the two options against the size of the map. Call it from the `validate` of the step.
-- `placeAreas(state, random, area, count, { lattice?, overlap? })` returns one box (`Area`: `x`, `y`, `width`, `height`) per copy, or throws when a copy finds no spot. With `lattice: true` the boxes have odd sizes and start on even coordinates, so that a maze or the rooms of a lattice line up with the map's lattice. With `overlap: true` a spot need only be clear of the other boxes, and may cover anything.
+- `assertAreaSpec(area, count, width, height, { lattice? })` checks the two options against the size of the map, the windows and the gravity included. Call it from the `validate` of the step, with `lattice: true` when the boxes go on the lattice.
+- `placeAreas(state, random, area, count, { lattice?, overlap? })` returns one box (`Area`: `x`, `y`, `width`, `height`) per copy, or throws when a copy finds no spot. With `lattice: true` the boxes have odd sizes and start on even coordinates, so that a maze or the rooms of a lattice line up with the map's lattice. The windows of `area` limit the spots and its gravity slides the boxes, as above. With `overlap: true` a spot need only be clear of the other boxes, and may cover anything.
 - `placeBeside(state, random, size, floor)` picks a spot for a shape that is already made: `size` is its `width` and `height`, and `floor` lists its floor tiles in its own coordinates. It tries 100 random spots and returns the box at the one where every floor tile and the 8 tiles round it are free, nearest the dug ground, or `undefined` when none fits. The step stamps the shape itself.
 - `buildInArea(state, box, build)` makes a scratch `MapState` from a copy of the box (the grid, `prunable` and `reserved`), runs `build` on it, copies the three back and returns what `build` returned. Coordinates in `build` start at the corner of the box, so the step shifts the extras it returns by the box's `x` and `y` itself. When `build` throws, the map is left as it was. For a box as big as the map the result is the same as building in place.
 
@@ -2124,7 +2184,7 @@ const { grid, rooms, roomGroups } = pipeline(
 - **Laid over the map.** The cave is grown on its own, then laid over its area: its floor is stamped on the [free](#mapstate) tiles, and every other tile keeps what it has, so nothing that earlier steps made is lost, and no floor goes on a reserved tile. With `'free'` a smaller `area` only lands on free ground, so this matters for an area as big as the map, and for `'overlap'`.
 - **Placement.** `placement` says where a smaller `area` goes, and no placement ever digs a reserved tile:
   - `'free'`, the default, is the rule of [areas](#areas): a random spot where the box and a margin of one tile round it are all free. A copy that finds none fails the attempt.
-  - `'beside'` puts a cave beside what is there, as the [caverns](#caverns) of a mine are. The cave is grown, and culled by `minRegionSize` and `largestOnly`, on its own first, and then up to 100 random spots are tried. A spot fits when every floor tile of the cave, and the 8 tiles round it, is free, so the cave's floor keeps a wall between it and anything on the map, while its box may overlap tunnels. Of the spots that fit, the one whose floor comes nearest the dug ground (any tile that is not the base) wins; on a map with nothing dug, the first that fits. When no spot fits, the copies up to `count.min` fail the attempt, with an ordinary `Error` that `pipeline` answers with a new map, and the copies above it are left out, so a `count` with a `min` of 0 never fails. A cave with no floor left after culling is left out, and is not listed in `caverns`.
+  - `'beside'` puts a cave beside what is there, as the [caverns](#caverns) of a mine are. It picks its own spot, so it takes no window (`area.x`, `area.y`) and no `area.gravity` (see [Where an area goes](#where-an-area-goes)): one throws a `RangeError` when the step is made. The cave is grown, and culled by `minRegionSize` and `largestOnly`, on its own first, and then up to 100 random spots are tried. A spot fits when every floor tile of the cave, and the 8 tiles round it, is free, so the cave's floor keeps a wall between it and anything on the map, while its box may overlap tunnels. Of the spots that fit, the one whose floor comes nearest the dug ground (any tile that is not the base) wins; on a map with nothing dug, the first that fits. When no spot fits, the copies up to `count.min` fail the attempt, with an ordinary `Error` that `pipeline` answers with a new map, and the copies above it are left out, so a `count` with a `min` of 0 never fails. A cave with no floor left after culling is left out, and is not listed in `caverns`.
   - `'overlap'` puts the box on any random spot, clear only of the other copies of the step, and lays the cave over what is there: it runs into the tunnels and floor it meets, like a cave-in, and its caverns are measured with that floor, as above.
 - **Caverns and the floor that was there.** `minRegionSize` and `largestOnly` measure the caverns after that: unreserved floor that was there already counts as part of a cavern it touches, so a cavern cut in two by an earlier tunnel is still one cavern, and reserved tiles count as wall. Floor that no new floor touches is never left out, whatever its size.
 - **Caverns are rooms.** Every cavern that is kept is a [`Room`](#room) of kind `'cavern'`, its box the smallest rectangle that holds its floor and its shape in `roomShapes` that floor, which blocks nothing and reserves nothing (see [halls and caverns](#room)). It holds only the floor this cave dug, not the floor that was there. The caverns of one copy are a `'cave'` [group](#roomgroup) with the box the copy was grown in. They are the caverns as the step dug them: a later step that joins them, or digs into them, does not change them.
@@ -2198,7 +2258,7 @@ const { grid, rooms, roomShapes, reserved } = pipeline(
 | `templates`      | none       | [`RoomTemplate`](#room-templates) objects, placed before the ordinary rooms. They must fit the lattice, which is checked when the step is made; one that cannot be placed fails the attempt. |
 | `doorChance`     | 1          | Chance that an `Exit` cell of a template gets a door, from 0 to 1. `Door` cells always do. The other openings are decided by the step that opens the rooms.                                  |
 | `keepClear`      | none       | A tile, `{ x, y }` in whole coordinates of the map, that the rooms leave free, such as the cell a maze starts from. Ordinary rooms keep off it; a template that covers it fails the attempt. |
-| `area`           | the map    | The size of the box the rooms go in, an `AreaSize` (see [Areas](#areas)), placed on the lattice: odd sizes at even coordinates. There is one box, so the step takes no `count`.              |
+| `area`           | the map    | The size of the box the rooms go in, an `AreaSpec` (see [Areas](#areas)), placed on the lattice: odd sizes at even coordinates. There is one box, so the step takes no `count`.              |
 
 - **Spacing.** At least three wall tiles separate the floors of two rooms, ordinary or templated, which leaves room for a maze cell between them.
 - **Templates.** A template that cannot be placed, or that covers `keepClear`, throws a [`TemplatePlacementError`](#room-templates), which [`pipeline`](#pipeline) answers with a new map, up to its `attempts`. `Room.template` is an index into the `templates` of the step that placed the room.
@@ -2245,7 +2305,7 @@ const { grid, rooms, roomExits, exits } = pipeline(
 | `pattern`        | `'none'`   | `'whirlpool'` twirls corridors around the middle of the maze, `'snowflake'` makes them radiate from it.                                                                                           |
 | `patternChance`  | 1          | How strongly the pattern is enforced, from 0 to 1.                                                                                                                                                |
 | `start`          | the middle | Where carving starts, `{ x, y }` in the coordinates of the map: a maze cell, with odd coordinates inside the map. Only for a maze on the whole map. Defaults to the free cell nearest the middle. |
-| `area`           | the map    | The size of the box each maze goes in, an `AreaSize` (see [Areas](#areas)) of at least 3 a side, placed on the lattice: odd sizes at even coordinates.                                            |
+| `area`           | the map    | The size of the box each maze goes in, an `AreaSpec` (see [Areas](#areas)) of at least 3 a side, placed on the lattice: odd sizes at even coordinates.                                            |
 | `count`          | `{ 1, 1 }` | How many mazes to carve, each in its own box. More than one needs an `area` smaller than the map.                                                                                                 |
 
 - **Parts.** Tiles that are not free can cut the maze into parts, such as a room across the map. Each part is carved in turn, the start's first, and the parts are not joined to each other: [`openMazeRooms`](#openmazerooms) joins them through the rooms.
@@ -2305,7 +2365,7 @@ const { grid, rooms, roomShapes, reserved } = pipeline(
 | `doorChance`        | 1               | Chance that an `Exit` cell of a template gets a door, from 0 to 1. `Door` cells always do. The other openings are decided by the step that joins the rooms.                                                          |
 | `symmetry`          | `'none'`        | Mirrors or rotates the rooms about the middle of their area: `'horizontal'`, `'vertical'`, `'both'` or `'rotational'`, as [layout symmetry](#layout-symmetry) does for a dungeon. A room is put in the middle first. |
 | `symmetryChance`    | 1               | How often a room gets its twins, from 0 (never) to 1 (always).                                                                                                                                                       |
-| `area`              | the map         | The size of the box each set of rooms goes in, an `AreaSize` (see [Areas](#areas)), on the lattice with `'lattice'` placement.                                                                                       |
+| `area`              | the map         | The size of the box each set of rooms goes in, an `AreaSpec` (see [Areas](#areas)), on the lattice with `'lattice'` placement.                                                                                       |
 | `count`             | `{ 1, 1 }`      | How many sets of rooms to place, each in its own box. More than one needs an `area` smaller than the map.                                                                                                            |
 
 - **What is in the way.** Ordinary rooms keep `roomSpacing` from each other, from the templates, from the tiles in front of the fixed exits of templates, and from every tile that is not free (see [`isFree`](#mapstate)), such as a mine, a cave or the rooms of an earlier step; templates keep the same distance from those tiles. So rooms of an earlier step are at least two wall tiles away, with no shared wall.

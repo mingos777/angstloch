@@ -1,5 +1,5 @@
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 
 /** Options of `digFishbone`. */
 export interface DigFishboneOptions {
@@ -22,7 +22,7 @@ export interface DigFishboneOptions {
   /** The chance, from 0 to 1, that an adit that runs into another tunnel breaks through and joins it, which makes a loop, instead of stopping short and ending in a dead end. Defaults to 0, which makes no loops. */
   loops?: number;
   /** The size of the part of the map to dig in. Defaults to the whole map. A smaller area goes on a random free spot, and the mine is closed in by a ring of wall inside it. */
-  area?: AreaSize;
+  area?: AreaSpec;
   /** How many mines to dig, each in an area of its own, a `Range` of whole numbers of at least 0. One is picked. Defaults to `{ min: 1, max: 1 }`. */
   count?: Range;
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Area } from '../core/area';
+import type { AreaSpec } from './area-spec';
 import { Tile } from '../core/tile';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { emptyMap } from './empty-map';
@@ -244,6 +245,346 @@ describe('placeAreas', () => {
       // then
       expect(box?.width).toBe(3);
       expect(box?.height).toBe(1);
+    });
+  });
+
+  describe('with a window', () => {
+    const SEEDS = 40;
+
+    function placeMany(
+      area: AreaSpec,
+      count = ONE,
+      lattice = false,
+      size = { width: 60, height: 40 },
+    ): Area[] {
+      const state = emptyMap({ ...size, tile: Tile.Wall })();
+      return Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), area, count, { lattice }),
+      ).flat();
+    }
+
+    it('puts the left edge in the window', () => {
+      // given
+      const area = {
+        width: { min: 5, max: 10 },
+        height: { min: 5, max: 5 },
+        x: { min: 10, max: 14, anchor: 'left' as const },
+      };
+
+      // when
+      const boxes = placeMany(area);
+
+      // then
+      for (const { x } of boxes) {
+        expect(x).toBeGreaterThanOrEqual(10);
+        expect(x).toBeLessThanOrEqual(14);
+      }
+    });
+
+    it('puts the right edge in the window', () => {
+      // given
+      const area = {
+        width: { min: 5, max: 10 },
+        height: { min: 5, max: 5 },
+        x: { min: 50, max: 59, anchor: 'right' as const },
+      };
+
+      // when
+      const boxes = placeMany(area);
+
+      // then
+      for (const { x, width } of boxes) {
+        expect(x + width - 1).toBeGreaterThanOrEqual(50);
+        expect(x + width - 1).toBeLessThanOrEqual(59);
+      }
+    });
+
+    it('puts the center in the window by default', () => {
+      // given
+      const area = {
+        width: { min: 5, max: 10 },
+        height: { min: 5, max: 5 },
+        x: { min: 30, max: 30 },
+      };
+
+      // when
+      const boxes = placeMany(area);
+
+      // then
+      for (const { x, width } of boxes) {
+        expect(x + Math.floor(width / 2)).toBe(30);
+      }
+    });
+
+    it('puts the top and bottom edges in a window down the map', () => {
+      // given
+      const top = {
+        width: { min: 5, max: 5 },
+        height: { min: 4, max: 8 },
+        y: { min: 0, max: 2, anchor: 'top' as const },
+      };
+      const bottom = {
+        ...top,
+        y: { min: 37, max: 39, anchor: 'bottom' as const },
+      };
+
+      // when
+      const high = placeMany(top);
+      const low = placeMany(bottom);
+
+      // then
+      for (const { y } of high) {
+        expect(y).toBeLessThanOrEqual(2);
+      }
+      for (const { y, height } of low) {
+        expect(y + height - 1).toBeGreaterThanOrEqual(37);
+      }
+    });
+
+    it('leaves the other axis free', () => {
+      // given
+      const area = {
+        width: { min: 5, max: 5 },
+        height: { min: 5, max: 5 },
+        x: { min: 0, max: 0, anchor: 'left' as const },
+      };
+
+      // when
+      const boxes = placeMany(area);
+
+      // then
+      expect(new Set(boxes.map(({ y }) => y)).size).toBeGreaterThan(5);
+    });
+
+    it('puts every copy in the window', () => {
+      // given
+      const area = {
+        width: { min: 6, max: 6 },
+        height: { min: 6, max: 6 },
+        y: { min: 0, max: 10, anchor: 'top' as const },
+      };
+
+      // when
+      const boxes = placeMany(area, { min: 3, max: 3 });
+
+      // then
+      expect(boxes).toHaveLength(3 * SEEDS);
+      for (const { y } of boxes) {
+        expect(y).toBeLessThanOrEqual(10);
+      }
+    });
+
+    it('starts on even coordinates on a lattice', () => {
+      // given
+      const area = {
+        width: { min: 5, max: 9 },
+        height: { min: 5, max: 9 },
+        x: { min: 10, max: 20, anchor: 'right' as const },
+        y: { min: 10, max: 20 },
+      };
+
+      // when
+      const boxes = placeMany(area, ONE, true, { width: 41, height: 31 });
+
+      // then
+      for (const { x, y, width, height } of boxes) {
+        expect(x % 2).toBe(0);
+        expect(y % 2).toBe(0);
+        expect(x + width - 1).toBeGreaterThanOrEqual(10);
+        expect(x + width - 1).toBeLessThanOrEqual(20);
+        expect(y + Math.floor(height / 2)).toBeGreaterThanOrEqual(10);
+        expect(y + Math.floor(height / 2)).toBeLessThanOrEqual(20);
+      }
+    });
+
+    it('ends at most one tile off the window on a lattice when no even spot fits it', () => {
+      // given
+      const area = {
+        width: { min: 7, max: 7 },
+        height: { min: 5, max: 5 },
+        x: { min: 10, max: 10 },
+      };
+
+      // when
+      const boxes = placeMany(area, ONE, true, { width: 41, height: 31 });
+
+      // then
+      for (const { x } of boxes) {
+        expect(x % 2).toBe(0);
+        expect(Math.abs(x + 3 - 10)).toBe(1);
+      }
+    });
+  });
+
+  describe('with gravity', () => {
+    const SEEDS = 30;
+    const BOX = { width: { min: 10, max: 10 }, height: { min: 8, max: 8 } };
+
+    it.each([
+      ['left', 0, 11],
+      ['top left', 0, 0],
+      ['top', 15, 0],
+      ['top right', 30, 0],
+      ['right', 30, 11],
+      ['bottom right', 30, 22],
+      ['bottom', 15, 22],
+      ['bottom left', 0, 22],
+      ['center', 15, 11],
+    ] as const)(
+      'pulls a box %s on an empty map at full strength',
+      (toward, x, y) => {
+        // given
+        const state = emptyMap({ width: 40, height: 30, tile: Tile.Wall })();
+        const area = { ...BOX, gravity: { toward, strength: 1 } };
+
+        // when
+        const boxes = Array.from({ length: SEEDS }, (_, seed) =>
+          placeAreas(state, mulberry32(seed), area, ONE),
+        ).flat();
+
+        // then
+        for (const box of boxes) {
+          expect(box).toEqual({ x, y, width: 10, height: 8 });
+        }
+      },
+    );
+
+    it('stops against what is in the way while the other axis carries on', () => {
+      // given
+      const state = emptyMap({ width: 40, height: 30, tile: Tile.Wall })();
+      for (let y = 0; y < 30; ++y) {
+        state.reserved.fill(Reserve.Solid, y * 40, y * 40 + 11);
+      }
+      const area = {
+        ...BOX,
+        gravity: { toward: 'bottom left' as const, strength: 1 },
+      };
+
+      // when
+      const boxes = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), area, ONE),
+      ).flat();
+
+      // then
+      for (const box of boxes) {
+        expect(box).toEqual({ x: 12, y: 22, width: 10, height: 8 });
+      }
+    });
+
+    it('leaves the box where it was drawn at strength 0', () => {
+      // given
+      const state = emptyMap({ width: 40, height: 30, tile: Tile.Wall })();
+      const area = {
+        ...BOX,
+        gravity: { toward: 'top left' as const, strength: 0 },
+      };
+
+      // when
+      const pulled = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), area, ONE),
+      );
+      const free = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), BOX, ONE),
+      );
+
+      // then
+      expect(pulled).toEqual(free);
+    });
+
+    it('slides half the way at strength 0.5', () => {
+      // given
+      const state = emptyMap({ width: 40, height: 30, tile: Tile.Wall })();
+      const area = {
+        ...BOX,
+        gravity: { toward: 'bottom right' as const, strength: 0.5 },
+      };
+
+      // when
+      const pulled = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), area, ONE),
+      ).flat();
+      const free = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), BOX, ONE),
+      ).flat();
+
+      // then
+      pulled.forEach((box, index) => {
+        const drawn = free[index] as Area;
+        expect(box.x).toBe(drawn.x + Math.round(0.5 * (30 - drawn.x)));
+        expect(box.y).toBe(drawn.y + Math.round(0.5 * (22 - drawn.y)));
+      });
+    });
+
+    it('piles copies up against each other', () => {
+      // given
+      const state = emptyMap({ width: 40, height: 10, tile: Tile.Wall })();
+      const area = {
+        width: { min: 6, max: 6 },
+        height: { min: 10, max: 10 },
+        gravity: { toward: 'left' as const, strength: 1 },
+      };
+
+      // when
+      const boxes = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), area, { min: 3, max: 3 }),
+      );
+
+      // then
+      for (const copies of boxes) {
+        expect(copies.map(({ x }) => x)).toEqual([0, 7, 14]);
+      }
+    });
+
+    it('lands on even coordinates on a lattice', () => {
+      // given
+      const state = emptyMap({ width: 40, height: 30, tile: Tile.Wall })();
+      const area = {
+        width: { min: 9, max: 9 },
+        height: { min: 7, max: 7 },
+        gravity: { toward: 'bottom right' as const, strength: 1 },
+      };
+
+      // when
+      const boxes = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), area, ONE, { lattice: true }),
+      ).flat();
+
+      // then
+      for (const box of boxes) {
+        expect(box).toEqual({ x: 30, y: 22, width: 9, height: 7 });
+      }
+    });
+
+    it('centers on even coordinates on a lattice', () => {
+      // given
+      const state = emptyMap({ width: 41, height: 31, tile: Tile.Wall })();
+      const area = {
+        width: { min: 9, max: 9 },
+        height: { min: 9, max: 9 },
+        gravity: { toward: 'center' as const, strength: 1 },
+      };
+
+      // when
+      const boxes = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), area, ONE, { lattice: true }),
+      ).flat();
+
+      // then
+      for (const box of boxes) {
+        expect(box).toEqual({ x: 16, y: 10, width: 9, height: 9 });
+      }
+    });
+
+    it('takes the whole map for a box as big as the map', () => {
+      // given
+      const state = emptyMap({ width: 40, height: 30, tile: Tile.Wall })();
+      const area = { gravity: { toward: 'left' as const, strength: 1 } };
+
+      // when
+      const boxes = placeAreas(state, mulberry32(1), area, ONE);
+
+      // then
+      expect(boxes).toEqual([{ x: 0, y: 0, width: 40, height: 30 }]);
     });
   });
 });

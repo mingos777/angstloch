@@ -1,6 +1,6 @@
 import type { LayoutSymmetry } from '../core/layout-symmetry';
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 import type { Placement } from '../rooms/dungeon-options';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 
@@ -31,7 +31,7 @@ export interface RoomPlacementOptions {
   /** How often a room gets its twins, from 0 (never) to 1 (always). Defaults to 1. */
   symmetryChance?: number;
   /** The size of the part of the map the rooms go in. Defaults to the whole map. A smaller area goes on a random spot where it and a margin of one tile are free, on the lattice with `lattice` placement. */
-  area?: AreaSize;
+  area?: AreaSpec;
   /** How many areas of rooms to place, each with rooms of its own, a `Range` of whole numbers of at least 0. One is picked. Defaults to `{ min: 1, max: 1 }`. */
   count?: Range;
 }

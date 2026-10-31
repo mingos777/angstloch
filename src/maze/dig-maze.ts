@@ -1,5 +1,5 @@
 import type { Point } from '../core/point';
-import { assertAreaSize } from '../pipeline/assert-area-size';
+import { assertAreaSpec } from '../pipeline/assert-area-spec';
 import { assertWallBase } from '../pipeline/assert-wall-base';
 import { buildInArea } from '../pipeline/build-in-area';
 import { isFree } from '../pipeline/is-free';
@@ -73,7 +73,7 @@ export function digMaze(
       validate: (state) => {
         const { width, height } = state.grid;
         assertWallBase('digMaze', state);
-        assertAreaSize(area, count, width, height);
+        assertAreaSpec(area, count, width, height, { lattice: true });
         if (
           Math.min(width, area.width?.min ?? width) < MIN_SIDE ||
           Math.min(height, area.height?.min ?? height) < MIN_SIDE

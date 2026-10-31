@@ -1,5 +1,5 @@
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 
 /** Options of `digSewers`. */
 export interface DigSewersOptions {
@@ -34,7 +34,7 @@ export interface DigSewersOptions {
   /** The water between two columns of a cistern in whole tiles, as a `Range` of at least 1, picked once for each cistern. Defaults to `{ min: 2, max: 3 }`. */
   columnSpacing?: Range;
   /** The size of the part of the map to dig in. Defaults to the whole map. A smaller area goes on a random free spot, and the sewer is closed in by a ring of wall inside it. Its smallest size must hold a trunk: 10 tiles along it and 5 across. */
-  area?: AreaSize;
+  area?: AreaSpec;
   /** How many sewers to dig, each in an area of its own, a `Range` of whole numbers of at least 0. One is picked. Defaults to `{ min: 1, max: 1 }`. */
   count?: Range;
 }

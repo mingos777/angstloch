@@ -1,7 +1,7 @@
 import type { Area } from '../core/area';
 import type { Point } from '../core/point';
 import { randomInt } from '../core/random-int';
-import { assertAreaSize } from '../pipeline/assert-area-size';
+import { assertAreaSpec } from '../pipeline/assert-area-spec';
 import { assertWallBase } from '../pipeline/assert-wall-base';
 import { buildInArea } from '../pipeline/build-in-area';
 import type { MapStep } from '../pipeline/map-step';
@@ -82,7 +82,9 @@ export function placeCellBlocks(
       adds: ['rooms', 'roomShapes', 'roomExits', 'roomGroups'],
       validate: (state) => {
         assertWallBase('placeCellBlocks', state);
-        assertAreaSize(area, count, state.grid.width, state.grid.height);
+        assertAreaSpec(area, count, state.grid.width, state.grid.height, {
+          lattice: placement === 'lattice',
+        });
       },
     },
     (state, { random }) => {

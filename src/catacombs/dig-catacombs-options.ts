@@ -1,6 +1,6 @@
 import type { LayoutSymmetry } from '../core/layout-symmetry';
 import type { Range } from '../core/range';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 import type { CatacombSegmentWeights } from './catacomb-segment-weights';
 
@@ -47,5 +47,5 @@ export interface DigCatacombsOptions {
   /** How often a segment's niches and chambers get their twins, rolled once for a segment and its twins, and once for a dead end and its twins, from 0 (never) to 1 (always). Defaults to 1. */
   symmetryChance?: number;
   /** The size of the part of the map to dig in. Defaults to the whole map. A smaller area goes on a random free spot, and the catacomb is closed in by a ring of wall inside it. Its smallest size must hold two side galleries each way, with the room for their niches and chambers. */
-  area?: AreaSize;
+  area?: AreaSpec;
 }

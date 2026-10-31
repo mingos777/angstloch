@@ -1,6 +1,6 @@
 import { assertFraction } from '../core/assert-fraction';
 import { assertWholeNumber } from '../core/assert-whole-number';
-import { assertAreaSize } from '../pipeline/assert-area-size';
+import { assertAreaSpec } from '../pipeline/assert-area-spec';
 import { assertWallBase } from '../pipeline/assert-wall-base';
 import type { MapStep } from '../pipeline/map-step';
 import { step } from '../pipeline/step';
@@ -68,7 +68,7 @@ export function digCellularCave(
       adds: ['rooms', 'roomShapes', 'roomGroups'],
       validate: (state) => {
         assertWallBase('digCellularCave', state);
-        assertAreaSize(area, count, state.grid.width, state.grid.height);
+        assertAreaSpec(area, count, state.grid.width, state.grid.height);
       },
     },
     (state, { random }) => ({

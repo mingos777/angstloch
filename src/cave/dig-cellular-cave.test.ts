@@ -536,6 +536,12 @@ describe('digCellularCave', () => {
     { minRegionSize: -1 },
     { count: { min: 2, max: 1 } },
     { placement: 'anywhere' as 'free' },
+    { placement: 'beside' as const, area: { x: { min: 0, max: 9 } } },
+    { placement: 'beside' as const, area: { y: { min: 0, max: 9 } } },
+    {
+      placement: 'beside' as const,
+      area: { gravity: { toward: 'left' as const, strength: 1 } },
+    },
   ])('throws a RangeError at once for %o', (options) => {
     // given
     const bad: DigCellularCaveOptions = options;

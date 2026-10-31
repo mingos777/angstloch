@@ -5,7 +5,7 @@ import type { Random } from '../core/random';
 import { randomInt } from '../core/random-int';
 import type { Range } from '../core/range';
 import { Tile } from '../core/tile';
-import type { AreaSize } from '../pipeline/area-size';
+import type { AreaSpec } from '../pipeline/area-spec';
 import { buildInArea } from '../pipeline/build-in-area';
 import { isFree } from '../pipeline/is-free';
 import type { MapState } from '../pipeline/map-state';
@@ -21,7 +21,7 @@ import { findCaveRegions } from './find-cave-regions';
 
 /** What `carveCaveInAreas` needs to know besides the cave itself. */
 export interface CaveAreaSettings {
-  area: AreaSize;
+  area: AreaSpec;
   count: Range;
   minRegionSize: number;
   largestOnly: boolean;
