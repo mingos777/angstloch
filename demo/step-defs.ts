@@ -62,7 +62,21 @@ export interface StepDef {
   summary: string;
   fields: Field[];
   /** Makes the step from the values of its controls. Throws for a bad option. */
-  make: (values: Values) => AnyStep;
+  make: (values: Values) => MadeStep;
+}
+
+/** A step, with the options it was made with, for the code the playground shows. */
+export interface MadeStep {
+  step: AnyStep;
+  options: unknown;
+}
+
+/** Makes a step and keeps its options. */
+function withOptions<O>(
+  create: (options: O) => AnyStep,
+  options: NoInfer<O>,
+): MadeStep {
+  return { step: create(options), options };
 }
 
 const POSITIVE = { min: '1' };
@@ -170,7 +184,7 @@ export const STEP_DEFS: StepDef[] = [
       select('tile', 'Planted tile', '4', TILES),
     ],
     make: (v) =>
-      plantTrees({
+      withOptions(plantTrees, {
         scaleX: v.number('scaleX'),
         scaleY: v.number('scaleY'),
         rotation: v.number('rotation'),
@@ -205,7 +219,7 @@ export const STEP_DEFS: StepDef[] = [
       ...vergeFields(0, 2),
     ],
     make: (v) =>
-      layStreams({
+      withOptions(layStreams, {
         angle: v.optional('angle') ?? 'random',
         width: v.range('width'),
         windiness: v.number('windiness'),
@@ -244,7 +258,7 @@ export const STEP_DEFS: StepDef[] = [
       json('specs', 'Exact roads (JSON, blank: generated)'),
     ],
     make: (v) =>
-      layRoads({
+      withOptions(layRoads, {
         angle: v.optional('angle') ?? 'random',
         width: v.range('width'),
         windiness: v.number('windiness'),
@@ -293,7 +307,7 @@ export const STEP_DEFS: StepDef[] = [
       };
       const several = (count: number, at?: 'branch-end' | 'stream') =>
         Array.from({ length: count }, (): ClearingSpec => ({ at, ...shape }));
-      return placeClearings({
+      return withOptions(placeClearings, {
         clearings: [
           ...((v.json('exact') as ClearingSpec[] | undefined) ?? []),
           ...several(v.number('random')),
@@ -326,7 +340,7 @@ export const STEP_DEFS: StepDef[] = [
       ]),
     ],
     make: (v) =>
-      placeTemplates({
+      withOptions(placeTemplates, {
         templates: [
           {
             ...(FOREST_TEMPLATES[v.text('kind')] ?? { cells: [] }),
@@ -343,13 +357,13 @@ export const STEP_DEFS: StepDef[] = [
     name: 'layClearingPaths',
     summary: 'the paths that clearings asked for',
     fields: vergeFields(1, 2),
-    make: (v) => layClearingPaths(v.verge()),
+    make: (v) => withOptions(layClearingPaths, v.verge()),
   },
   {
     name: 'layFootbridges',
     summary: 'footbridges that join land the water cuts apart',
     fields: [number('minimum', 'At least this many bridges', 0, { min: '0' })],
-    make: (v) => layFootbridges({ minimum: v.number('minimum') }),
+    make: (v) => withOptions(layFootbridges, { minimum: v.number('minimum') }),
   },
   {
     name: 'digFishbone',
@@ -371,7 +385,7 @@ export const STEP_DEFS: StepDef[] = [
       ...areaFields(),
     ],
     make: (v) =>
-      digFishbone({
+      withOptions(digFishbone, {
         density: v.number('density'),
         shaftWidth: v.range('shaftWidth'),
         shaftWindiness: v.number('shaftWindiness'),
@@ -402,7 +416,7 @@ export const STEP_DEFS: StepDef[] = [
       number('symmetryChance', 'Symmetry chance', 1, FRACTION),
     ],
     make: (v) =>
-      digVeins({
+      withOptions(digVeins, {
         density: v.number('density'),
         veinWidth: v.range('veinWidth'),
         veinWindiness: v.number('veinWindiness'),
@@ -429,7 +443,7 @@ export const STEP_DEFS: StepDef[] = [
       ...areaFields(),
     ],
     make: (v) =>
-      digPillarHalls({
+      withOptions(digPillarHalls, {
         density: v.number('density'),
         halls: v.range('halls'),
         hallSize: v.optionalRange('hallSize'),
@@ -461,7 +475,7 @@ export const STEP_DEFS: StepDef[] = [
       ...areaFields(),
     ],
     make: (v) =>
-      digRings({
+      withOptions(digRings, {
         density: v.number('density'),
         rings: v.optionalRange('rings'),
         ringShape: v.text('ringShape') as MineRingShape,
@@ -493,7 +507,7 @@ export const STEP_DEFS: StepDef[] = [
       number('veinWindiness', 'Tunnel windiness', 0.5, FRACTION),
     ],
     make: (v) =>
-      placeMineRooms({
+      withOptions(placeMineRooms, {
         roomCount: v.range('roomCount'),
         roomWidth: v.range('roomWidth'),
         roomHeight: v.range('roomHeight'),
@@ -523,7 +537,7 @@ export const STEP_DEFS: StepDef[] = [
       ...caveFields(),
     ],
     make: (v) =>
-      digCellularCave({
+      withOptions(digCellularCave, {
         fillChance: v.number('fillChance'),
         iterations: v.number('iterations'),
         neighborhood: v.text('neighborhood') as CaveNeighborhood,
@@ -552,7 +566,7 @@ export const STEP_DEFS: StepDef[] = [
       ...caveFields(),
     ],
     make: (v) =>
-      digNoiseCave({
+      withOptions(digNoiseCave, {
         shape: v.text('shape') as NoiseCaveShape,
         fill: v.number('fill'),
         cornerBias: v.number('cornerBias'),
@@ -587,7 +601,7 @@ export const STEP_DEFS: StepDef[] = [
     make: (v) => {
       const x = v.optional('keepClearX');
       const y = v.optional('keepClearY');
-      return placeMazeRooms({
+      return withOptions(placeMazeRooms, {
         roomCount: v.range('roomCount'),
         roomWidth: v.range('roomWidth'),
         roomHeight: v.range('roomHeight'),
@@ -622,7 +636,7 @@ export const STEP_DEFS: StepDef[] = [
     make: (v) => {
       const x = v.optional('startX');
       const y = v.optional('startY');
-      return digMaze({
+      return withOptions(digMaze, {
         horizontalBias: v.number('horizontalBias'),
         verticalBias: v.number('verticalBias'),
         loopChance: v.number('loopChance'),
@@ -644,7 +658,7 @@ export const STEP_DEFS: StepDef[] = [
       number('doorChance', 'Door chance', 1, FRACTION),
     ],
     make: (v) =>
-      openMazeRooms({
+      withOptions(openMazeRooms, {
         exitsPerRoom: v.range('exitsPerRoom'),
         doorChance: v.number('doorChance'),
       }),
@@ -686,7 +700,7 @@ export const STEP_DEFS: StepDef[] = [
       ...areaFields(),
     ],
     make: (v) =>
-      placeCellBlocks({
+      withOptions(placeCellBlocks, {
         blocks: v.range('blocks'),
         cellSize: { width: v.range('cellWidth'), depth: v.range('cellDepth') },
         cellsPerSide: v.range('cellsPerSide'),
@@ -737,7 +751,7 @@ export const STEP_DEFS: StepDef[] = [
       ...areaFields(),
     ],
     make: (v) =>
-      digSewers({
+      withOptions(digSewers, {
         orientation: v.text('orientation') as 'horizontal' | 'vertical' | 'any',
         trunkWidth: v.range('trunkWidth'),
         branchWidth: v.range('branchWidth'),
@@ -796,7 +810,7 @@ export const STEP_DEFS: StepDef[] = [
       ...areaFields(false),
     ],
     make: (v) =>
-      digCatacombs({
+      withOptions(digCatacombs, {
         mainGalleries: v.range('mainGalleries'),
         mainWidth: v.range('mainWidth'),
         sideWidth: v.range('sideWidth'),
@@ -833,7 +847,7 @@ export const STEP_DEFS: StepDef[] = [
       'dungeon rooms tried at random spots, not opened yet (needs a wall map)',
     fields: roomPlacementFields(),
     make: (v) =>
-      placeScatteredRooms({
+      withOptions(placeScatteredRooms, {
         ...roomPlacementOptions(v),
         spacingUniformity: v.number('spacingUniformity'),
       }),
@@ -844,7 +858,7 @@ export const STEP_DEFS: StepDef[] = [
       'dungeon rooms, one in each part of a binary space partition, not opened yet (needs a wall map)',
     fields: roomPlacementFields(),
     make: (v) =>
-      placePartitionedRooms({
+      withOptions(placePartitionedRooms, {
         ...roomPlacementOptions(v),
         spacingUniformity: v.number('spacingUniformity'),
       }),
@@ -860,7 +874,7 @@ export const STEP_DEFS: StepDef[] = [
       ...roomPlacementFields().filter(({ key }) => key !== 'spacingUniformity'),
     ],
     make: (v) =>
-      placeClusteredRooms({
+      withOptions(placeClusteredRooms, {
         ...roomPlacementOptions(v),
         gap: v.range('gap'),
         horizontalBias: v.number('horizontalBias'),
@@ -898,7 +912,7 @@ export const STEP_DEFS: StepDef[] = [
       number('corridorSymmetryChance', 'Corridor symmetry chance', 1, FRACTION),
     ],
     make: (v) =>
-      digCorridors({
+      withOptions(digCorridors, {
         connection: v.text('connection') as RoomConnection,
         exitsPerRoom: v.range('exitsPerRoom'),
         loopChance: v.number('loopChance'),
@@ -933,7 +947,7 @@ export const STEP_DEFS: StepDef[] = [
       ]),
     ],
     make: (v) =>
-      openExits({
+      withOptions(openExits, {
         at: v.text('at') as 'border' | 'outfalls',
         count: v.range('count'),
         lattice: v.flag('lattice'),

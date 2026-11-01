@@ -93,14 +93,17 @@ canvas {
   padding: 0.5rem;
   border: 1px solid #444;
 }
-.step header {
+.step summary {
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
   font-size: 0.8rem;
+  cursor: pointer;
 }
-.step header span {
+.step[open] summary {
+  margin-bottom: 0.5rem;
+}
+.step summary span {
   flex: 1;
   color: #999;
 }
@@ -116,4 +119,47 @@ canvas {
   font-family: monospace;
   box-sizing: border-box;
   width: 100%;
+}
+#presets,
+#code {
+  max-width: 60rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid #444;
+  font-size: 0.8rem;
+}
+#presets summary,
+#code summary {
+  cursor: pointer;
+}
+#presets summary,
+#code summary,
+.step summary {
+  list-style: none;
+}
+#presets summary::-webkit-details-marker,
+#code summary::-webkit-details-marker,
+.step summary::-webkit-details-marker {
+  display: none;
+}
+#presets summary::before,
+#code summary::before,
+.step summary::before {
+  content: '▸';
+  margin-right: 0.25rem;
+}
+#presets[open] summary::before,
+#code[open] summary::before,
+.step[open] summary::before {
+  content: '▾';
+}
+#presets .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+#code pre {
+  margin: 0.5rem 0 0;
+  overflow-x: auto;
 }

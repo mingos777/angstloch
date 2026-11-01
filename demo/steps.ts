@@ -25,6 +25,7 @@ import { findCaveRegions } from '../src/cave/find-cave-regions';
 import { isFeatureRoom } from '../src/rooms/is-feature-room';
 import { mulberry32 } from '../src/test-helpers/mulberry32';
 import { downloadCanvas } from './download-canvas';
+import { mapCode } from './map-code';
 import { Color, drawGrid } from './draw-grid';
 import type { DisplayMode } from './draw-grid';
 import { STEP_DEFS } from './step-defs';
@@ -47,12 +48,14 @@ const failures = document.querySelector<HTMLElement>('#failures');
 const distanceLine = document.querySelector<HTMLElement>('#distances');
 const roomLine = document.querySelector<HTMLElement>('#room');
 const templatePanel = document.querySelector<HTMLElement>('#templates');
+const code = document.querySelector<HTMLElement>('#code pre');
 const context = canvas?.getContext('2d');
 
 /** A step in the list, with what its controls hold. */
 interface Card {
   def: StepDef;
   values: Record<string, FieldValue>;
+  folded: boolean;
 }
 
 /** What the steps have reported by the time a snapshot was taken. */
@@ -188,6 +191,7 @@ function newCard(
         ...Object.fromEntries(def.fields.map(({ key, value }) => [key, value])),
         ...values,
       },
+      folded: false,
     }
   );
 }
@@ -957,12 +961,24 @@ function render(): void {
   traced = undefined;
   try {
     // a bad option throws when its step is made
-    const steps = cards.map(({ def, values }) => def.make(new Values(values)));
-    const makeBase = emptyMap({
+    const made = cards.map(({ def, values }) => def.make(new Values(values)));
+    const steps = made.map(({ step }) => step);
+    const base = {
       width: value('width'),
       height: value('height'),
       tile: value('baseTile') as Tile,
-    });
+    };
+    if (code) {
+      code.textContent = mapCode({
+        ...base,
+        attempts: value('attempts'),
+        steps: made.map(({ step, options }) => ({
+          name: step.stepName,
+          options,
+        })),
+      });
+    }
+    const makeBase = emptyMap(base);
     const run = pipeline(
       () => {
         // a new attempt starts here, so keep the snapshots of the last one only
@@ -1107,10 +1123,14 @@ function control(card: Card, field: Field): HTMLLabelElement {
 function renderCards(): void {
   list?.replaceChildren(
     ...cards.map((card, index) => {
-      const box = document.createElement('section');
+      const box = document.createElement('details');
       box.className = 'step';
       box.dataset.index = String(index);
-      const head = document.createElement('header');
+      box.open = !card.folded;
+      box.addEventListener('toggle', () => {
+        card.folded = !box.open;
+      });
+      const head = document.createElement('summary');
       const title = document.createElement('strong');
       title.textContent = `${String(index + 1)}. ${card.def.name}`;
       const summary = document.createElement('span');
@@ -1257,6 +1277,9 @@ if (templatePanel) {
   createTemplateEditor(templatePanel, () => undefined);
 }
 
+document.querySelector('#copy-code')?.addEventListener('click', () => {
+  void navigator.clipboard.writeText(code?.textContent ?? '');
+});
 document.querySelector('#clear-steps')?.addEventListener('click', () => {
   setCards([]);
 });
@@ -1270,6 +1293,8 @@ list?.addEventListener('click', (event) => {
   if (!box || !action) {
     return;
   }
+  // the buttons sit in the summary, which would fold the step otherwise
+  event.preventDefault();
   const card = cards[index];
   if (action === 'remove') {
     cards.splice(index, 1);
