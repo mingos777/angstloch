@@ -16,7 +16,7 @@ import { digFishbone } from './dig-fishbone';
 import type { MinePassage } from '../veins/mine-passage';
 import { placeMineRooms } from './place-mine-rooms';
 
-const { Floor: F, Wall: W, Exit: E } = TemplateCell;
+const { Floor: F, Wall: W, Exit: E, OptionalExit: O } = TemplateCell;
 
 const base = emptyMap({ width: 100, height: 60, tile: Tile.Wall });
 const mine = digFishbone({ density: 0.05 });
@@ -68,6 +68,50 @@ function countPieces(grid: Grid): number {
 }
 
 describe('placeMineRooms', () => {
+  it('opens the optional exits of a template with the doors its shape records', () => {
+    // given
+    const optional: RoomTemplate = {
+      cells: [
+        [W, O, W],
+        [O, F, O],
+        [W, O, W],
+      ],
+      name: 'optional',
+    };
+    const options = {
+      roomCount: { min: 1, max: 1 },
+      templates: [optional],
+      exitsPerRoom: { min: 2, max: 4 },
+      doorChance: 0.5,
+    };
+
+    // when
+    const results = [1, 2, 3, 4, 5, 6, 7, 8].map((seed) =>
+      pipeline(base, [mine, placeMineRooms(options)], {
+        random: mulberry32(seed),
+      }),
+    );
+
+    // then
+    const pairs = results.flatMap(({ rooms, roomShapes, roomExits }) =>
+      rooms
+        .filter(({ template }) => template !== undefined)
+        .flatMap((room) =>
+          room.exits.map((index) => {
+            const exit = roomExits[index] as Exit;
+            const recorded = roomShapes[room.id]?.doors.find(
+              ({ x, y }) => x === exit.position.x && y === exit.position.y,
+            );
+            return [exit.door, recorded?.door];
+          }),
+        ),
+    );
+    expect(new Set(pairs.map(([door]) => door))).toEqual(
+      new Set([true, false]),
+    );
+    expect(pairs.every(([door, recorded]) => door === recorded)).toBe(true);
+  });
+
   it('marks every room as a room, templated rooms included', () => {
     // given
     const options = { roomCount: { min: 3, max: 3 }, templates: [closet] };

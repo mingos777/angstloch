@@ -7,6 +7,6 @@ import type { TemplatePlacement } from './templates/template-placement';
  * wall corners (see `createRoomShape`); a templated room's is its placement.
  */
 export interface RoomShape extends TemplatePlacement {
-  /** Whether each `Exit` and `Door` cell of the shape got a door, in the coordinates of the map. Empty for an ordinary room. */
+  /** Whether each `Exit`, `Door` and `OptionalExit` cell of the shape gets a door, in the coordinates of the map, decided when the room was placed: an optional exit that a later step opens is a door as its entry says, and one that is never opened stays a wall whatever its entry says. Empty for an ordinary room, whose exits get the `doorChance` of the step that opens them. */
   doors: { x: number; y: number; door: boolean }[];
 }

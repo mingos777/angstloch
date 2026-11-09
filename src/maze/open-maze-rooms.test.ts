@@ -293,6 +293,60 @@ describe('openMazeRooms', () => {
     expect(roomExits[0]?.door).toBe(true);
   });
 
+  describe('doors of optional exits', () => {
+    const exitsPerRoom = { min: 3, max: 3 };
+
+    /** The tiles of every exit of room 0, over the seeds. */
+    function exitTiles(rooms: PlaceMazeRoomsOptions, doorChance: number) {
+      return SEEDS.flatMap((seed) => {
+        const { grid, roomExits } = open({
+          rooms,
+          open: { exitsPerRoom, doorChance },
+          seed,
+        });
+        return roomExits
+          .filter(({ rooms: ids }) => ids.includes(0))
+          .map(({ position }) => grid.get(position.x, position.y));
+      });
+    }
+
+    it('makes them doors by the door chance of the template, not of the openings', () => {
+      // given
+      const rooms = { roomCount: noRooms, templates: [hall], doorChance: 1 };
+
+      // when
+      const tiles = exitTiles(rooms, 0);
+
+      // then
+      expect(tiles).toHaveLength(3 * SEEDS.length);
+      expect(tiles.every((tile) => tile === Tile.Door)).toBe(true);
+    });
+
+    it('makes them no doors with a door chance of 0 on the template', () => {
+      // given
+      const rooms = { roomCount: noRooms, templates: [hall], doorChance: 0 };
+
+      // when
+      const tiles = exitTiles(rooms, 1);
+
+      // then
+      expect(tiles).toHaveLength(3 * SEEDS.length);
+      expect(tiles.every((tile) => tile === Tile.Floor)).toBe(true);
+    });
+
+    it('leaves the openings of ordinary rooms to the door chance of the openings', () => {
+      // given
+      const rooms = { roomCount: { min: 1, max: 1 }, doorChance: 1 };
+
+      // when
+      const tiles = exitTiles(rooms, 0);
+
+      // then
+      expect(tiles).not.toHaveLength(0);
+      expect(tiles.every((tile) => tile === Tile.Floor)).toBe(true);
+    });
+  });
+
   it('opens optional exits of a template as far as exitsPerRoom asks', () => {
     // given
     const rooms = { roomCount: noRooms, templates: [hall] };

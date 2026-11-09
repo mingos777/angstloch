@@ -6,8 +6,10 @@ import type { TemplatePlacement } from './template-placement';
 
 /**
  * Lists the ways to open the exits of a templated room onto a maze cell: odd
- * coordinates inside the map, not blocked. `Exit` and `Door` cells are fixed
- * and decided by `doors`; `OptionalExit` cells are not.
+ * coordinates inside the map, not blocked. `Exit` and `Door` cells are fixed,
+ * `OptionalExit` cells are not, and every one gets its door from `doors`
+ * where that has an answer for it (a templated room's do), else by the
+ * `doorChance` of the step that opens it.
  */
 export function findTemplateOpenings(
   placement: TemplatePlacement,
@@ -41,7 +43,7 @@ export function findTemplateOpenings(
           wall,
           inside: { x: wall.x - step.x, y: wall.y - step.y },
           outside,
-          door: fixed ? doors.get(wall.y * width + wall.x) : undefined,
+          door: doors.get(wall.y * width + wall.x),
           fixed,
         });
       }

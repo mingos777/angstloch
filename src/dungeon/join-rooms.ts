@@ -66,7 +66,8 @@ type Routing =
  * block with its corridor. A corridor that reaches a stand-in opens its wall
  * into floor, which is no exit of the result. Where that wall was reserved
  * `Openable`, the entrance of a cell block, it is opened through
- * `openReserved` and gets a door by `doorChance`, and where it is in the shape
+ * `openReserved` and gets a door by `doorChance`, or as the `doors` of a
+ * templated room's shape decided, and where it is in the shape
  * of a room that had exits already, it becomes an exit of that room too. Such
  * an entrance with the floor of another piece right beyond it is opened first,
  * the same way, with no corridor (see `joinTouchingPieces`). Where a corridor
@@ -107,9 +108,15 @@ export function joinRooms(
       });
     });
   }
+  // the doors decided when the templates were placed, optional exits included
+  const doors = new Map(
+    state.roomShapes.flatMap((shape) =>
+      shape.doors.map(({ x, y, door }) => [y * width + x, door] as const),
+    ),
+  );
   const touched = joinTouchingPieces(state, covered);
   for (const { x, y } of touched) {
-    if (random() < settings.doorChance) {
+    if (doors.get(y * width + x) ?? random() < settings.doorChance) {
       state.grid.set(x, y, Tile.Door);
     }
   }
@@ -140,13 +147,6 @@ export function joinRooms(
     for (;;) {
       // rooms with exits are part of the stand-in their doors open onto
       const standIns = findStandIns(scratch, kept.map(shapeOf));
-      const doors = new Map(
-        kept
-          .map(shapeOf)
-          .flatMap(({ doors: decided }) =>
-            decided.map(({ x, y, door }) => [y * width + x, door] as const),
-          ),
-      );
       const shapes = [...kept.map(shapeOf), ...standIns.shapes];
       // the potential exits of stand-ins that something reserved as its way in
       const entrances = new Set(

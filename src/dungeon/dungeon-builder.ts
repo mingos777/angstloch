@@ -45,7 +45,7 @@ export interface DungeonBuilderOptions {
   blocked?: Uint8Array;
   /** One byte per tile, 1 where no exit may be opened, such as a wall that an earlier step sealed. */
   sealed?: Uint8Array;
-  /** Whether each `Exit` and `Door` cell of the templates gets a door, keyed by `y * width + x`. */
+  /** Whether each `Exit`, `Door` and `OptionalExit` cell of the templates gets a door, keyed by `y * width + x`. An exit opened on such a tile takes this answer instead of rolling `doorChance`. */
   doors?: ReadonlyMap<number, boolean>;
   /**
    * The id from which the rooms stand in for floor that is not a room, such
@@ -208,7 +208,9 @@ export function createDungeonBuilder(
     const door =
       (!ids.some((id) => id >= firstStandIn) ||
         (options.entrances?.has(position.y * width + position.x) ?? false)) &&
-      (forcedDoor ?? options.doorChance > random());
+      (forcedDoor ??
+        options.doors?.get(position.y * width + position.x) ??
+        options.doorChance > random());
     grid.set(position.x, position.y, door ? Tile.Door : Tile.Floor);
     for (let y = position.y - 1; y <= position.y + 1; ++y) {
       for (let x = position.x - 1; x <= position.x + 1; ++x) {
@@ -441,7 +443,10 @@ export function createDungeonBuilder(
           ...operation,
           exits: operation.exits.map((exit) => ({
             ...exit,
-            door: exit.door ?? options.doorChance > random(),
+            door:
+              exit.door ??
+              options.doors?.get(exit.position.y * width + exit.position.x) ??
+              options.doorChance > random(),
           })),
         }
       : operation;

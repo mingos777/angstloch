@@ -4,7 +4,7 @@ import { decideTemplateDoors } from './decide-template-doors';
 import { TemplateCell } from './template-cell';
 import type { TemplatePlacement } from './template-placement';
 
-const { Wall: W, Exit: E, Door: D, Floor: F } = TemplateCell;
+const { Wall: W, Exit: E, Door: D, Floor: F, OptionalExit: O } = TemplateCell;
 
 function placement(x: number, cells: TemplateCell[][]): TemplatePlacement {
   return {
@@ -47,6 +47,44 @@ describe('decideTemplateDoors', () => {
 
     // then
     expect([doors.get(1), doors.get(3)]).toEqual([true, false]);
+  });
+
+  it('gives a door to optional exit cells by the chance', () => {
+    // given
+    const shape = placement(0, [[W, O, W, O, F]]);
+    const rolls = [0.1, 0.9];
+
+    // when
+    const doors = decideTemplateDoors(
+      () => rolls.shift() ?? 0,
+      [shape],
+      [],
+      0.5,
+      10,
+    );
+
+    // then
+    expect([doors.get(1), doors.get(3)]).toEqual([true, false]);
+  });
+
+  it('gives a mirror image of an optional exit the answer of the cell it mirrors', () => {
+    // given
+    const left = placement(1, [[O]]);
+    const right = placement(8, [[O]]);
+    const transforms = createTransforms('horizontal', 10, 3, false);
+    const rolls = [0.9, 0.1];
+
+    // when
+    const doors = decideTemplateDoors(
+      () => rolls.shift() ?? 0,
+      [left, right],
+      transforms,
+      0.5,
+      10,
+    );
+
+    // then
+    expect([doors.get(1), doors.get(8)]).toEqual([false, false]);
   });
 
   it('ignores cells that are not exits or doors', () => {

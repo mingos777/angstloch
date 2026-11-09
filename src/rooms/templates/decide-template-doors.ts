@@ -4,10 +4,11 @@ import { TemplateCell } from './template-cell';
 import type { TemplatePlacement } from './template-placement';
 
 /**
- * Decides which `Exit` and `Door` cells of the placements get a door: `Door`
- * cells always do, `Exit` cells by `doorChance`. A cell that is the mirror
- * image of one decided before it gets the same answer. The result is keyed by
- * `y * width + x`.
+ * Decides which `Exit`, `Door` and `OptionalExit` cells of the placements get
+ * a door: `Door` cells always do, `Exit` and `OptionalExit` cells by
+ * `doorChance`. An optional exit's answer holds if a later step opens it. A
+ * cell that is the mirror image of one decided before it gets the same answer.
+ * The result is keyed by `y * width + x`.
  */
 export function decideTemplateDoors(
   random: Random,
@@ -20,7 +21,11 @@ export function decideTemplateDoors(
   for (const placement of placements) {
     placement.cells.forEach((row, dy) => {
       row.forEach((cell, dx) => {
-        if (cell !== TemplateCell.Exit && cell !== TemplateCell.Door) {
+        if (
+          cell !== TemplateCell.Exit &&
+          cell !== TemplateCell.Door &&
+          cell !== TemplateCell.OptionalExit
+        ) {
           return;
         }
         const point = { x: placement.x + dx, y: placement.y + dy };

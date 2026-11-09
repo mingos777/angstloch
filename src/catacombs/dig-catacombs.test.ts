@@ -13,6 +13,7 @@ import { Reserve } from '../pipeline/reserve';
 import { reserveTile } from '../pipeline/reserve-tile';
 import { step } from '../pipeline/step';
 import type { CatacombGroup } from '../rooms/catacomb-group';
+import type { Exit } from '../rooms/exit';
 import type { Room } from '../rooms/room';
 import type { RoomShape } from '../rooms/room-shape';
 import type { RoomTemplate } from '../rooms/templates/room-template';
@@ -1317,6 +1318,48 @@ describe('digCatacombs', () => {
     // then
     expect(run).toThrow(TemplatePlacementError);
   });
+
+  it.each([
+    [1, 0, Tile.Door],
+    [0, 1, Tile.Floor],
+  ])(
+    'gives an optional exit of a template placed before the door its step decided (%i), whatever its own chance (%i)',
+    (placedChance, ownChance, tile) => {
+      // given
+      const optional: RoomTemplate = {
+        cells: [
+          [W, O, W],
+          [O, F, O],
+          [W, O, W],
+        ],
+      };
+      const steps = () =>
+        [
+          placeScatteredRooms({
+            roomCount: { min: 1, max: 1 },
+            templates: [optional],
+            doorChance: placedChance,
+          }),
+          digCatacombs({ doorChance: ownChance }),
+        ] as const;
+
+      // when
+      const tiles = SEEDS.slice(0, 10).flatMap((seed) => {
+        const { rooms, roomExits, grid } = pipeline(wallMap(), steps(), {
+          random: mulberry32(seed),
+        });
+        const room = rooms.find(({ template }) => template !== undefined);
+        return (room?.exits ?? []).map((at) => {
+          const { x, y } = (roomExits[at] as Exit).position;
+          return grid.get(x, y);
+        });
+      });
+
+      // then
+      expect(tiles).not.toHaveLength(0);
+      expect(tiles.every((opened) => opened === tile)).toBe(true);
+    },
+  );
 
   it('enters the rooms placed before on the whole map through their optional exits', () => {
     // given

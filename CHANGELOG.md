@@ -27,4 +27,5 @@ Initial release. The README documents everything below in full.
 
 ### Changed
 
+- **Doors of optional exits in templates**: the `doorChance` of the step that places a template now decides the `OptionalExit` cells too, when the template is placed, and `RoomShape.doors` lists them, opened or not. `digCorridors`, `digCatacombs`, `openMazeRooms` and `placeMineRooms` keep that answer when they open one, instead of rolling their own `doorChance`, so a template placed with `doorChance: 1` gets doors in every exit. The exits of ordinary rooms still follow the step that opens them. The same seed gives a different map.
 - **Areas**: the type of the `area` option is `AreaSpec` (was `AreaSize`), and its check is `assertAreaSpec` (was `assertAreaSize`), since it is to say more than a size.

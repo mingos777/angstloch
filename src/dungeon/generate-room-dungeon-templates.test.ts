@@ -274,6 +274,72 @@ describe('generateRoomDungeon with templates', () => {
     expect(result.rooms[0]?.exitCount).toBe(1);
   });
 
+  describe('doors of optional exits', () => {
+    const optional: RoomTemplate = {
+      cells: [
+        [W, O, W],
+        [W, F, W],
+        [W, W, W],
+      ],
+    };
+
+    /** The tiles of the exits of a room, over several seeds. */
+    function exitTiles(
+      room: number,
+      scatter: PlaceScatteredRoomsOptions,
+      corridors: { doorChance: number },
+    ): number[] {
+      return [1, 2, 3, 4, 5].flatMap((seed) => {
+        const result = dungeon(scatter, seed, { corridors });
+        return result.exits
+          .filter(({ rooms }) => rooms.includes(room))
+          .map(({ position }) => result.grid.get(position.x, position.y));
+      });
+    }
+
+    it('makes them doors by the door chance of the template, not of the corridors', () => {
+      // given
+      const scatter = { templates: [optional], doorChance: 1 };
+
+      // when
+      const tiles = exitTiles(0, scatter, { doorChance: 0 });
+
+      // then
+      expect(tiles).not.toHaveLength(0);
+      expect(tiles.every((tile) => tile === Tile.Door)).toBe(true);
+    });
+
+    it('makes them no doors with a door chance of 0 on the template', () => {
+      // given
+      const scatter = { templates: [optional], doorChance: 0 };
+
+      // when
+      const tiles = exitTiles(0, scatter, { doorChance: 1 });
+
+      // then
+      expect(tiles).not.toHaveLength(0);
+      expect(tiles.every((tile) => tile === Tile.Floor)).toBe(true);
+    });
+
+    it('leaves the exits of ordinary rooms to the door chance of the corridors', () => {
+      // given
+      const scatter = {
+        templates: [optional],
+        doorChance: 1,
+        roomCount: { min: 4, max: 4 },
+      };
+
+      // when
+      const tiles = [1, 2, 3].flatMap((room) =>
+        exitTiles(room, scatter, { doorChance: 0 }),
+      );
+
+      // then
+      expect(tiles).not.toHaveLength(0);
+      expect(tiles.every((tile) => tile === Tile.Floor)).toBe(true);
+    });
+  });
+
   it('counts templated rooms towards the room count', () => {
     // given
     const templates = [{ ...closet, count: { min: 2, max: 2 } }];
@@ -490,7 +556,7 @@ describe('generateRoomDungeon with template symmetry', () => {
     expect(rooms.filter(({ template }) => template === 0)).toHaveLength(2);
   });
 
-  it('mirrors the tiles of the room', () => {
+  it('mirrors the tiles of the room, but for the optional exits', () => {
     // given
     const options = {
       templates: [
@@ -511,6 +577,10 @@ describe('generateRoomDungeon with template symmetry', () => {
     expect(twin?.template).toBe(0);
     for (let dy = 0; dy < (room?.height ?? 0); dy++) {
       for (let dx = 0; dx < (room?.width ?? 0); dx++) {
+        // the corridors, which have no symmetry here, open them one by one
+        if (hall.cells[dy]?.[dx] === O) {
+          continue;
+        }
         const tile = result.grid.get((room?.x ?? 0) + dx, (room?.y ?? 0) + dy);
         const image = result.grid.get(
           (twin?.x ?? 0) + (room?.width ?? 0) - 1 - dx,

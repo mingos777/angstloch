@@ -257,7 +257,12 @@ function planOpenings(
       break;
     }
     if (!nextToOpening(exit)) {
-      openings.push({ exit, outside, door: random() < settings.doorChance });
+      const at = (placement.y + exit.y) * grid.width + placement.x + exit.x;
+      openings.push({
+        exit,
+        outside,
+        door: doors.get(at) ?? random() < settings.doorChance,
+      });
       ++added;
     }
   }
@@ -418,9 +423,12 @@ export function layRooms(
       mark(solid, mapWidth, room, 1);
     }
   }
+  // an ordinary room's exits get a door by the chance when they are opened
   const doors = decideTemplateDoors(
     random,
-    pending.map(({ placement }) => placement),
+    pending
+      .filter((room) => room.template !== undefined)
+      .map(({ placement }) => placement),
     [],
     settings.doorChance,
     mapWidth,
