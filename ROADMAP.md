@@ -4,8 +4,6 @@ What is wanted next, roughly in the user's order, and what was rejected. Finishe
 
 ## Next up
 
-- **Cave overlap as a range**, before the first release: `designs/cave-overlap.md`.
-
 A design for the shore (see More generators, Shore and beach) is in progress in `designs/shore.md`.
 
 ## Backlog
