@@ -85,6 +85,17 @@ describe('findTakenTiles', () => {
     expect(taken?.[2 * 10 + 4]).toBe(0);
   });
 
+  it('takes the approaches it is given', () => {
+    // given
+    const state = wallMap();
+
+    // when
+    const taken = findTakenTiles(state, [], [{ x: 6, y: 5 }]);
+
+    // then
+    expect(taken?.[5 * 10 + 6]).toBe(1);
+  });
+
   it('ignores the optional exits of an ordinary room', () => {
     // given
     const state = wallMap();

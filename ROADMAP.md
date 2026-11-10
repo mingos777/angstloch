@@ -5,7 +5,6 @@ What is wanted next, roughly in the user's order, and what was rejected. Finishe
 ## Next up
 
 - **Cave overlap as a range**, before the first release: `designs/cave-overlap.md`.
-- **Keeping a cell block's approach clear**, before the first release: `designs/cell-block-approach.md`.
 
 A design for the shore (see More generators, Shore and beach) is in progress in `designs/shore.md`.
 
@@ -94,6 +93,7 @@ All optional; each needs a design talk.
 
 - **Decay**: collapsed stretches of gallery and rubble, once the mine's cave-ins exist.
 - **A standalone `digNiches`** for other maps, built on the niche code (`carveNiche`).
+- **Entering cell blocks**: today a block inside a catacomb's area is sealed in by the reserved rock, and the README says to keep blocks out. The galleries could enter a block as they enter the rooms placed before, through a passage from the tile in front of its entrance; where the opened entrance is recorded is open, since `roomExits` needs a room and the block corridor is none.
 
 ### Ponds, lakes and swamps
 

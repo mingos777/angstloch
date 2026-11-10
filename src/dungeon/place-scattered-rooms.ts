@@ -3,6 +3,7 @@ import { scatterRoomPlan } from '../rooms/scatter-room-plan';
 import type { PlacedRooms } from './placed-rooms';
 import { roomPlacementStep } from './room-placement-step';
 import type { PlaceScatteredRoomsOptions } from './place-scattered-rooms-options';
+import type { PlacedCellBlocks } from '../rooms/placed-cell-blocks';
 
 /**
  * A step that scatters the rooms of a dungeon over the map, or over each of
@@ -23,6 +24,9 @@ import type { PlaceScatteredRoomsOptions } from './place-scattered-rooms-options
  */
 export function placeScatteredRooms(
   options: PlaceScatteredRoomsOptions = {},
-): MapStep<Partial<PlacedRooms>, PlacedRooms> {
+): MapStep<
+  Partial<PlacedRooms> & Partial<Pick<PlacedCellBlocks, 'roomGroups'>>,
+  PlacedRooms
+> {
   return roomPlacementStep('placeScatteredRooms', options, scatterRoomPlan);
 }

@@ -277,6 +277,41 @@ describe('digCorridors', () => {
       ]);
     });
 
+    it('opens an entrance that floor reaches a tile beyond it, digging that tile', () => {
+      // given
+      const base = emptyMap({ width: 60, height: 40, tile: Tile.Wall });
+      const steps = [placeCellBlocks(), floorBeyondEntrances(2)] as const;
+      const before = pipeline(base, steps, { random: mulberry32(1) }).grid;
+
+      // when
+      const { grid, roomGroups, attempts } = pipeline(
+        base,
+        [...steps, digCorridors()],
+        { random: mulberry32(1) },
+      );
+
+      // then
+      const entrance = cellBlocksOf(roomGroups)[0]?.entrance ?? { x: 0, y: 0 };
+      const changed = [];
+      for (let y = 0; y < grid.height; ++y) {
+        for (let x = 0; x < grid.width; ++x) {
+          if (grid.get(x, y) !== before.get(x, y)) {
+            changed.push({ x, y, tile: grid.get(x, y) });
+          }
+        }
+      }
+      expect(attempts).toBe(1);
+      expect(changed).toHaveLength(2);
+      expect(changed).toContainEqual({ ...entrance, tile: Tile.Door });
+      expect(
+        changed.some(
+          ({ x, y, tile }) =>
+            tile === Tile.Floor &&
+            Math.abs(x - entrance.x) + Math.abs(y - entrance.y) === 1,
+        ),
+      ).toBe(true);
+    });
+
     it('joins a block with a guard room and the rooms into one dungeon', () => {
       // given
       const make = (seed: number) =>

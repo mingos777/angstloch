@@ -1,4 +1,5 @@
 import type { Area } from '../core/area';
+import type { Point } from '../core/point';
 import type { Random } from '../core/random';
 import { Tile } from '../core/tile';
 import { isFree } from '../pipeline/is-free';
@@ -46,7 +47,8 @@ export interface BuiltCatacomb extends LinedCatacomb {
 
 /**
  * Builds a catacomb on the whole of a state, inside a ring of wall: places
- * the crypts (see `placeCrypts`), plans its lattice (see `planLattice`),
+ * the crypts (see `placeCrypts`), clear of the `approaches` of unopened cell
+ * block entrances, in the coordinates of the state, plans its lattice (see `planLattice`),
  * mirrored on the axes that `symmetry` mirrors about the middle of the state, keeps
  * the edges whose floor, nodes and a margin round them are free, prunes them
  * (see `pruneLattice`), together with their twins, plans how they enter the crypts and the `earlier`
@@ -66,6 +68,7 @@ export function buildCatacomb(
   random: Random,
   settings: CatacombSettings,
   earlier: readonly CatacombRoom[] = [],
+  approaches: readonly Point[] = [],
 ): BuiltCatacomb {
   const { grid } = state;
   const mirrors = createCatacombMirrors(
@@ -78,6 +81,7 @@ export function buildCatacomb(
     random,
     settings,
     earlier.map(({ shape }) => shape),
+    approaches,
   );
   const lattice = planLattice(
     random,

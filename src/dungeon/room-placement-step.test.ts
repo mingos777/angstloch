@@ -7,11 +7,14 @@ import { pipeline } from '../pipeline/pipeline';
 import { Reserve } from '../pipeline/reserve';
 import { step } from '../pipeline/step';
 import { stampTile } from '../pipeline/stamp-tile';
+import type { CellBlockGroup } from '../rooms/cell-block-group';
+import { placeCellBlocks } from '../rooms/place-cell-blocks';
 import type { Room } from '../rooms/room';
 import type { RoomTemplate } from '../rooms/templates/room-template';
 import { TemplateCell } from '../rooms/templates/template-cell';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
 import { overlap, SEEDS } from '../test-helpers/dungeon-checks';
+import { cellBlocksOf } from '../test-helpers/cell-blocks-of';
 import { mulberry32 } from '../test-helpers/mulberry32';
 import { placeClusteredRooms } from './place-clustered-rooms';
 import { placePartitionedRooms } from './place-partitioned-rooms';
@@ -55,6 +58,18 @@ function near(room: Room, x: number, y: number, gap: number) {
     y >= room.y - gap &&
     y < room.y + room.height + gap
   );
+}
+
+/** The tile in front of the entrance of a block, on the axis of its corridor, away from it. */
+function approachOf({ entrance, corridor }: CellBlockGroup) {
+  const { x, y } = entrance;
+  if (x < corridor.x) {
+    return { x: x - 1, y };
+  }
+  if (x >= corridor.x + corridor.width) {
+    return { x: x + 1, y };
+  }
+  return y < corridor.y ? { x, y: y - 1 } : { x, y: y + 1 };
 }
 
 /** The number of tiles that differ from their mirror image about the middle of the map. */
@@ -559,6 +574,45 @@ describe.each([
         }
       }
     });
+
+    it.each([
+      ['without a guard room', {}],
+      [
+        'entered through a guard room',
+        { guardRoom: { placement: 'through' as const } },
+      ],
+    ])(
+      'keeps ordinary rooms away from the approach of a cell block %s',
+      (_case, blockOptions) => {
+        // given
+        const blocks = placeCellBlocks({
+          ...blockOptions,
+          blocks: { min: 2, max: 2 },
+        });
+        const seeds = Array.from({ length: 30 }, (_, i) => i + 1);
+
+        // when
+        const results = seeds.map((seed) =>
+          pipeline(
+            emptyMap({ width: 61, height: 41, tile: Tile.Wall }),
+            [blocks, makeStep({ fill: 0.4 })],
+            { random: mulberry32(seed) },
+          ),
+        );
+
+        // then
+        for (const { rooms, roomGroups } of results) {
+          for (const group of cellBlocksOf(roomGroups)) {
+            const approach = approachOf(group);
+            expect(
+              rooms
+                .filter(({ kind }) => kind === 'room')
+                .some((room) => near(room, approach.x, approach.y, 1)),
+            ).toBe(false);
+          }
+        }
+      },
+    );
 
     it('puts templates where an earlier step left room', () => {
       // given

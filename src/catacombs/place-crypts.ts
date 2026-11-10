@@ -1,3 +1,4 @@
+import type { Point } from '../core/point';
 import type { Random } from '../core/random';
 import type { MapState } from '../pipeline/map-state';
 import { createTakenPlacement } from '../rooms/create-taken-placement';
@@ -22,7 +23,9 @@ export interface PlacedCrypt {
  * Places every copy of the templates on a state, as the room steps do (see
  * `prepareTemplates`): clear of every tile that is not free, of the ring of
  * wall round the state and of the tiles in front of the fixed exits of the
- * `earlier` shapes, in the coordinates of the state, that are not opened yet.
+ * `earlier` shapes, in the coordinates of the state, that are not opened yet,
+ * and of the `approaches` of unopened cell block entrances (see
+ * `findBlockApproaches`), in the same coordinates.
  * Carves them, their exits that lead outside left shut, and reserves their
  * shapes (see `reserveRoomShape`). An `Exit` cell gets a door by
  * `doorChance`. With `templateSymmetry`, every copy brings its images under
@@ -37,6 +40,7 @@ export function placeCrypts(
     'templates' | 'templateSymmetry' | 'doorChance' | 'symmetry'
   >,
   earlier: readonly RoomShape[],
+  approaches: readonly Point[] = [],
 ): PlacedCrypt[] {
   const { templates, templateSymmetry, doorChance, symmetry } = settings;
   if (templates.length === 0) {
@@ -45,7 +49,8 @@ export function placeCrypts(
   const { grid } = state;
   const { width, height } = grid;
   const taken =
-    findTakenTiles(state, earlier) ?? new Uint8Array(width * height);
+    findTakenTiles(state, earlier, approaches) ??
+    new Uint8Array(width * height);
   for (let y = 0; y < height; ++y) {
     for (let x = 0; x < width; ++x) {
       if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {

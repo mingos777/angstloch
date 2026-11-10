@@ -9,6 +9,7 @@ import { horizontalShare } from '../rooms/pick-direction';
 import type { PlaceClusteredRoomsOptions } from './place-clustered-rooms-options';
 import type { PlacedRooms } from './placed-rooms';
 import { roomPlacementStep } from './room-placement-step';
+import type { PlacedCellBlocks } from '../rooms/placed-cell-blocks';
 
 /**
  * A step that grows the rooms of a dungeon from a seed, for corridors to join
@@ -34,7 +35,10 @@ import { roomPlacementStep } from './room-placement-step';
  */
 export function placeClusteredRooms(
   options: PlaceClusteredRoomsOptions = {},
-): MapStep<Partial<PlacedRooms>, PlacedRooms> {
+): MapStep<
+  Partial<PlacedRooms> & Partial<Pick<PlacedCellBlocks, 'roomGroups'>>,
+  PlacedRooms
+> {
   const {
     gap = { min: 1, max: 4 },
     horizontalBias = 0,

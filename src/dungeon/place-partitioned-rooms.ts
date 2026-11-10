@@ -3,6 +3,7 @@ import { partitionRoomPlan } from '../rooms/partition-room-plan';
 import type { PlacePartitionedRoomsOptions } from './place-partitioned-rooms-options';
 import type { PlacedRooms } from './placed-rooms';
 import { roomPlacementStep } from './room-placement-step';
+import type { PlacedCellBlocks } from '../rooms/placed-cell-blocks';
 
 /**
  * A step that places the rooms of a dungeon by binary space partitioning, for
@@ -23,6 +24,9 @@ import { roomPlacementStep } from './room-placement-step';
  */
 export function placePartitionedRooms(
   options: PlacePartitionedRoomsOptions = {},
-): MapStep<Partial<PlacedRooms>, PlacedRooms> {
+): MapStep<
+  Partial<PlacedRooms> & Partial<Pick<PlacedCellBlocks, 'roomGroups'>>,
+  PlacedRooms
+> {
   return roomPlacementStep('placePartitionedRooms', options, partitionRoomPlan);
 }

@@ -3,6 +3,7 @@ import { buildInArea } from '../pipeline/build-in-area';
 import type { MapStep } from '../pipeline/map-step';
 import { placeAreas } from '../pipeline/place-areas';
 import { step } from '../pipeline/step';
+import { findBlockApproaches } from '../rooms/find-block-approaches';
 import { isFeatureRoom } from '../rooms/is-feature-room';
 import type { RoomShape } from '../rooms/room-shape';
 import { TemplatePlacementError } from '../rooms/templates/template-placement-error';
@@ -110,6 +111,8 @@ export function digCatacombs(
       const roomShapes = [...(state.roomShapes ?? [])];
       const roomExits = [...(state.roomExits ?? [])];
       const roomGroups = [...(state.roomGroups ?? [])];
+      // a corridor must be able to reach every block from its approach
+      const approaches = findBlockApproaches(state, roomGroups);
       for (const box of placeAreas(state, random, area, { min: 1, max: 1 })) {
         // in the coordinates of the map, and back
         const shift = <T extends Point>(local: T, by = 1): T => ({
@@ -150,6 +153,7 @@ export function digCatacombs(
                 );
               },
             })),
+            approaches.map((approach) => shift(approach, -1)),
           ),
         );
         const { segments, niches, chambers, shapes, crypts, entries } = built;

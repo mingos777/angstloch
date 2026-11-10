@@ -20,6 +20,7 @@ import type { DigCorridorsOptions } from './dig-corridors-options';
 import { connectRooms } from './connect-rooms';
 import { createSteering } from './create-steering';
 import { findStandIns } from './find-stand-ins';
+import { joinAcrossApproaches } from './join-across-approaches';
 import type { PlacedRooms } from './placed-rooms';
 
 /**
@@ -70,7 +71,9 @@ type Routing =
  * templated room's shape decided, and where it is in the shape
  * of a room that had exits already, it becomes an exit of that room too. Such
  * an entrance with the floor of another piece right beyond it is opened first,
- * the same way, with no corridor (see `joinTouchingPieces`). Where a corridor
+ * the same way, with no corridor (see `joinTouchingPieces`), and so is one
+ * with the floor of another piece a tile or two out, through free rock that
+ * becomes floor (see `joinAcrossApproaches`). Where a corridor
  * or such an entrance enters a hall or a cavern, that is an exit of the hall or
  * the cavern (see `recordDugEntries`).
  */
@@ -114,7 +117,10 @@ export function joinRooms(
       shape.doors.map(({ x, y, door }) => [y * width + x, door] as const),
     ),
   );
-  const touched = joinTouchingPieces(state, covered);
+  const touched = [
+    ...joinTouchingPieces(state, covered),
+    ...joinAcrossApproaches(state, covered),
+  ];
   for (const { x, y } of touched) {
     if (doors.get(y * width + x) ?? random() < settings.doorChance) {
       state.grid.set(x, y, Tile.Door);

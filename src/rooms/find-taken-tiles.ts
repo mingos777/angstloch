@@ -1,4 +1,5 @@
 import { DIRECTIONS } from '../core/directions';
+import type { Point } from '../core/point';
 import { isFree } from '../pipeline/is-free';
 import type { MapState } from '../pipeline/map-state';
 import { Reserve } from '../pipeline/reserve';
@@ -9,12 +10,15 @@ import type { TemplatePlacement } from './templates/template-placement';
  * The tiles that new rooms keep off, a byte for each tile, row by row: every
  * tile that is not free (see `isFree`), and the tiles in front of the fixed
  * exits of the `shapes` (in the coordinates of the state) that are not opened
- * yet, which a corridor must be able to start on. Returns `undefined` when
- * there are none.
+ * yet, which a corridor must be able to start on, and the `approaches` of the
+ * cell blocks whose entrance is not opened yet (see `findBlockApproaches`),
+ * in the same coordinates, for the same reason. Returns `undefined` when there
+ * are none.
  */
 export function findTakenTiles(
   state: Pick<MapState, 'grid' | 'base' | 'prunable' | 'reserved'>,
   shapes: readonly TemplatePlacement[],
+  approaches: readonly Point[] = [],
 ): Uint8Array | undefined {
   const { grid } = state;
   const taken = new Uint8Array(grid.width * grid.height);
@@ -47,6 +51,9 @@ export function findTakenTiles(
         }
       }
     }
+  }
+  for (const { x, y } of approaches) {
+    take(x, y);
   }
   return taken.includes(1) ? taken : undefined;
 }

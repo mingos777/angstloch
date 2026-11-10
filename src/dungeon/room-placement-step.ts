@@ -1,3 +1,4 @@
+import type { Point } from '../core/point';
 import type { Random } from '../core/random';
 import { assertAreaSpec } from '../pipeline/assert-area-spec';
 import { assertWallBase } from '../pipeline/assert-wall-base';
@@ -12,6 +13,7 @@ import { createRoomShape } from '../rooms/create-room-shape';
 import { createTakenPlacement } from '../rooms/create-taken-placement';
 import { createTileBlocker } from '../rooms/create-tile-blocker';
 import { effectiveSpacing } from '../rooms/effective-spacing';
+import { findBlockApproaches } from '../rooms/find-block-approaches';
 import { findTakenTiles } from '../rooms/find-taken-tiles';
 import { listShapeDoors } from '../rooms/list-shape-doors';
 import { reserveRoomShape } from '../rooms/reserve-room-shape';
@@ -27,6 +29,7 @@ import { validateTemplateAreas } from '../rooms/templates/validate-template-area
 import { assertRoomPlacementOptions } from './assert-room-placement-options';
 import type { PlacedRooms } from './placed-rooms';
 import type { RoomPlacementOptions } from './room-placement-options';
+import type { PlacedCellBlocks } from '../rooms/placed-cell-blocks';
 
 type Settings = Required<
   Omit<RoomPlacementOptions, 'area' | 'count' | 'templates'>
@@ -36,8 +39,9 @@ type Settings = Required<
 /**
  * Places, carves and reserves the rooms of one area, on its scratch state:
  * the templates first, then the ordinary rooms by `placer`, both clear of the
- * taken tiles. `earlier` holds the shapes of the rooms there are, in the
- * coordinates of the scratch. The placer is given the `earlier` shapes to grow
+ * taken tiles. `earlier` holds the shapes of the rooms there are, and
+ * `approaches` the tiles in front of the unopened entrances of cell blocks,
+ * both in the coordinates of the scratch. The placer is given the `earlier` shapes to grow
  * from when `grows` and the area is the whole map, else the first template;
  * with `grows` and nothing earlier to grow from, the first template goes in
  * the middle. Ids start at 0, coordinates at the scratch's.
@@ -48,13 +52,14 @@ function placeInArea(
   settings: Settings,
   placer: RoomPlacer,
   earlier: readonly TemplatePlacement[],
+  approaches: readonly Point[],
   grows: boolean,
   wholeMap: boolean,
 ): PlacedRooms {
   const { width, height } = scratch.grid;
   const lattice = settings.placement === 'lattice';
   const spacing = effectiveSpacing(settings.roomSpacing, lattice);
-  const taken = findTakenTiles(scratch, earlier);
+  const taken = findTakenTiles(scratch, earlier, approaches);
 
   // templated rooms come first, so they have the lowest ids
   const templated = prepareTemplates(
@@ -131,7 +136,10 @@ export function roomPlacementStep(
   options: RoomPlacementOptions & { spacingUniformity?: number },
   placer: RoomPlacer,
   grows = false,
-): MapStep<Partial<PlacedRooms>, PlacedRooms> {
+): MapStep<
+  Partial<PlacedRooms> & Partial<Pick<PlacedCellBlocks, 'roomGroups'>>,
+  PlacedRooms
+> {
   assertRoomPlacementOptions(options);
   const { templates = [], area = {}, count = { min: 1, max: 1 } } = options;
   const settings: Settings = {
@@ -151,7 +159,10 @@ export function roomPlacementStep(
   };
   const lattice = settings.placement === 'lattice';
 
-  return step<Partial<PlacedRooms>, PlacedRooms>(
+  return step<
+    Partial<PlacedRooms> & Partial<Pick<PlacedCellBlocks, 'roomGroups'>>,
+    PlacedRooms
+  >(
     name,
     {
       adds: ['rooms', 'roomShapes'],
@@ -167,6 +178,8 @@ export function roomPlacementStep(
     (state, { random }) => {
       const rooms = [...(state.rooms ?? [])];
       const roomShapes = [...(state.roomShapes ?? [])];
+      // a corridor must be able to reach every block from its approach
+      const approaches = findBlockApproaches(state, state.roomGroups ?? []);
       for (const box of placeAreas(state, random, area, count, { lattice })) {
         // the shapes of halls and caverns block nothing
         const earlier = roomShapes
@@ -185,6 +198,7 @@ export function roomPlacementStep(
             settings,
             placer,
             earlier,
+            approaches.map(({ x, y }) => ({ x: x - box.x, y: y - box.y })),
             grows,
             wholeMap,
           ),
