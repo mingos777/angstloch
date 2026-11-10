@@ -34,6 +34,21 @@ export function assertCaveAreaOptions(options: CaveAreaOptions): void {
       "area.x, area.y and area.gravity cannot be used with placement 'beside', which picks its own spot",
     );
   }
+  if (options.overlapShare !== undefined) {
+    if (placement !== 'overlap') {
+      throw new RangeError(
+        `overlapShare can only be used with placement 'overlap', got placement '${placement}'`,
+      );
+    }
+    const { min, max } = options.overlapShare;
+    assertFraction('overlapShare.min', min);
+    assertFraction('overlapShare.max', max);
+    if (min > max) {
+      throw new RangeError(
+        `overlapShare.min (${String(min)}) must not exceed overlapShare.max (${String(max)})`,
+      );
+    }
+  }
   if (options.count) {
     assertRange('count', options.count, 0);
   }

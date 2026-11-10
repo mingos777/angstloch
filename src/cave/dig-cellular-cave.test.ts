@@ -495,6 +495,45 @@ describe('digCellularCave', () => {
       expect(findCaveRegions(grid)).toHaveLength(1);
     });
 
+    it('fails the attempt when a cave it needs finds no spot where the overlap share fits', () => {
+      // given
+      const steps = [
+        reserveAll,
+        digCellularCave({
+          ...small,
+          placement: 'overlap',
+          overlapShare: { min: 0, max: 0.5 },
+        }),
+      ] as const;
+
+      // when
+      const run = () => pipeline(base, steps, { random: mulberry32(1) });
+
+      // then
+      expect(run).toThrow(/No spot for a cave.*overlapShare/);
+    });
+
+    it('takes an overlap share that fits', () => {
+      // given
+      const steps = [
+        corridor,
+        digCellularCave({
+          ...small,
+          placement: 'overlap',
+          overlapShare: { min: 0, max: 0 },
+        }),
+      ] as const;
+
+      // when
+      const { caverns, attempts } = withCaves(
+        pipeline(base, steps, { random: mulberry32(1) }),
+      );
+
+      // then
+      expect(caverns.length).toBeGreaterThan(0);
+      expect(attempts).toBe(1);
+    });
+
     it('carves no floor on a reserved tile with overlap, and makes no cave', () => {
       // given
       const steps = [
@@ -542,6 +581,12 @@ describe('digCellularCave', () => {
       placement: 'beside' as const,
       area: { gravity: { toward: 'left' as const, strength: 1 } },
     },
+    { overlapShare: { min: 0, max: 1 } },
+    { placement: 'beside' as const, overlapShare: { min: 0, max: 1 } },
+    { placement: 'overlap' as const, overlapShare: { min: -0.1, max: 1 } },
+    { placement: 'overlap' as const, overlapShare: { min: 0, max: 1.5 } },
+    { placement: 'overlap' as const, overlapShare: { min: 0.6, max: 0.4 } },
+    { placement: 'overlap' as const, overlapShare: { min: NaN, max: 1 } },
   ])('throws a RangeError at once for %o', (options) => {
     // given
     const bad: DigCellularCaveOptions = options;

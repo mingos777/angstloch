@@ -4,6 +4,27 @@
   "description": "A suite of map generators for roguelike games.",
   "license": "BSD-3-Clause",
   "author": "Dominik Marczuk",
+  "homepage": "https://github.com/mingos777/angstloch#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mingos777/angstloch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mingos777/angstloch/issues"
+  },
+  "keywords": [
+    "roguelike",
+    "procedural-generation",
+    "procgen",
+    "map-generator",
+    "dungeon-generator",
+    "maze",
+    "dungeon",
+    "cave",
+    "cellular-automata",
+    "gamedev",
+    "typescript"
+  ],
   "type": "module",
   "sideEffects": false,
   "engines": {

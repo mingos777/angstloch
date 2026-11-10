@@ -53,6 +53,7 @@ export function digNoiseCave(
     minRegionSize = 0,
     largestOnly = false,
     placement = 'free',
+    overlapShare = { min: 0, max: 1 },
     area = {},
     count = { min: 1, max: 1 },
   } = options;
@@ -99,7 +100,7 @@ export function digNoiseCave(
         ...carveCaveInAreas(
           state,
           random,
-          { area, count, minRegionSize, largestOnly, placement },
+          { area, count, minRegionSize, largestOnly, placement, overlapShare },
           (box) => {
             let grid = createNoiseCaveGrid(random, {
               width: box.width,

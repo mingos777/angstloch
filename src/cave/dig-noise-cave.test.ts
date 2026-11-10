@@ -544,6 +544,12 @@ describe('digNoiseCave', () => {
     { persistence: 2 },
     { symmetryChance: 2 },
     { placement: 'anywhere' as 'free' },
+    { overlapShare: { min: 0, max: 1 } },
+    { placement: 'beside' as const, overlapShare: { min: 0, max: 1 } },
+    { placement: 'overlap' as const, overlapShare: { min: -0.1, max: 1 } },
+    { placement: 'overlap' as const, overlapShare: { min: 0, max: 1.5 } },
+    { placement: 'overlap' as const, overlapShare: { min: 0.6, max: 0.4 } },
+    { placement: 'overlap' as const, overlapShare: { min: NaN, max: 1 } },
   ])('throws a RangeError at once for %o', (options) => {
     // given
     const bad: DigNoiseCaveOptions = options;

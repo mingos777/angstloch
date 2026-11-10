@@ -41,6 +41,7 @@ export function digCellularCave(
     minRegionSize = 0,
     largestOnly = false,
     placement = 'free',
+    overlapShare = { min: 0, max: 1 },
     area = {},
     count = { min: 1, max: 1 },
   } = options;
@@ -75,7 +76,7 @@ export function digCellularCave(
       ...carveCaveInAreas(
         state,
         random,
-        { area, count, minRegionSize, largestOnly, placement },
+        { area, count, minRegionSize, largestOnly, placement, overlapShare },
         ({ width, height }) => {
           let grid = createCaveNoise(random, {
             width,

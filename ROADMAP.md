@@ -4,7 +4,10 @@ What is wanted next, roughly in the user's order, and what was rejected. Finishe
 
 ## Next up
 
-Nothing is picked yet. A design for the shore (see More generators, Shore and beach) is in progress in `designs/shore.md`.
+- **Cave overlap as a range**, before the first release: `designs/cave-overlap.md`.
+- **Keeping a cell block's approach clear**, before the first release: `designs/cell-block-approach.md`.
+
+A design for the shore (see More generators, Shore and beach) is in progress in `designs/shore.md`.
 
 ## Backlog
 
@@ -13,7 +16,6 @@ Roughly in the order the user wants them. Each needs a design talk before it is 
 ### Caves
 
 - **Rooms and templates inside caves** are a composition now: `digCellularCave` or `digNoiseCave` in an area, a room placement step, then `digVeins` (which enters the rooms) or `digCorridors` (which joins the cave as a stand-in). A preset key for it on `generateCave` is not wanted yet.
-- **Overlap as a share**: `placement: 'overlap'` of the cave steps may become a fraction or a `Range` of a cave's tiles that may overlap other things (default 0 to 0), still never over reserved tiles.
 - **Water and lava**: needs new `Tile` values and a rule that keeps lakes from cutting the map in two. Much later.
 
 ### Forests and roads
@@ -79,7 +81,6 @@ All optional; each needs a design talk.
 
 - **A T-shaped block corridor**, with cells along three sides.
 - **Extra entrances**: an option for more than one entrance per block (default 1).
-- **Keeping the approach clear.** Nothing keeps a later step off the two tiles beyond a block's entrance. A later hall that reaches them is handled (`joinTouchingPieces` opens the entrance), but a later room whose wall lands there cuts the block off and the map is retried: with 1 to 2 blocks, `digPillarHalls`, `placeScatteredRooms` and `digCorridors` on 80 by 50, about one map in four is retried and 1 in 200 fails (5 in 200 with guard rooms the blocks are entered through); without the hall, one in ten and none. A fix needs a new kind of reservation (no step builds there, a joining step may dig), a change to `Reserve`.
 
 ### Dungeons, follow-ups
 

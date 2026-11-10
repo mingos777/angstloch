@@ -587,4 +587,135 @@ describe('placeAreas', () => {
       expect(boxes).toEqual([{ x: 0, y: 0, width: 40, height: 30 }]);
     });
   });
+
+  describe('with accepts', () => {
+    const SEEDS = 30;
+    const BOX = { width: { min: 5, max: 5 }, height: { min: 5, max: 5 } };
+
+    it('keeps only drawn spots that it accepts', () => {
+      // given
+      const state = emptyMap({ width: 40, height: 30, tile: Tile.Wall })();
+      const accepts = (box: Area): boolean => box.x >= 20;
+
+      // when
+      const boxes = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), BOX, ONE, { accepts }),
+      ).flat();
+
+      // then
+      expect(boxes).toHaveLength(SEEDS);
+      for (const { x } of boxes) {
+        expect(x).toBeGreaterThanOrEqual(20);
+      }
+    });
+
+    it('is asked only about boxes that are clear', () => {
+      // given
+      const state = emptyMap({ width: 30, height: 10, tile: Tile.Wall })();
+      for (let y = 0; y < 10; ++y) {
+        state.reserved.fill(Reserve.Solid, y * 30, y * 30 + 14);
+      }
+      const asked: Area[] = [];
+      const accepts = (box: Area): boolean => {
+        asked.push(box);
+        return true;
+      };
+
+      // when
+      placeAreas(state, mulberry32(1), BOX, ONE, { accepts });
+
+      // then
+      expect(asked.length).toBeGreaterThan(0);
+      for (const { x } of asked) {
+        expect(x).toBeGreaterThanOrEqual(15);
+      }
+    });
+
+    it('throws an ordinary Error when it accepts no spot', () => {
+      // given
+      const state = emptyMap({ width: 30, height: 10, tile: Tile.Wall })();
+
+      // when
+      const call = () =>
+        placeAreas(state, mulberry32(1), BOX, ONE, { accepts: () => false });
+
+      // then
+      expect(call).toThrow(/No free spot/);
+      expect(call).not.toThrow(RangeError);
+    });
+
+    it('stops a slide at the first step that it does not accept', () => {
+      // given
+      const state = emptyMap({ width: 40, height: 30, tile: Tile.Wall })();
+      const area = {
+        ...BOX,
+        gravity: { toward: 'left' as const, strength: 1 },
+      };
+      const accepts = (box: Area): boolean => box.x >= 10;
+
+      // when
+      const boxes = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), area, ONE, { accepts }),
+      ).flat();
+
+      // then
+      for (const { x } of boxes) {
+        expect(x).toBe(10);
+      }
+    });
+
+    it('is asked about the whole map for a box as big as the map', () => {
+      // given
+      const state = emptyMap({ width: 40, height: 30, tile: Tile.Wall })();
+      const asked: Area[] = [];
+      const accepts = (box: Area): boolean => {
+        asked.push(box);
+        return true;
+      };
+
+      // when
+      const boxes = placeAreas(state, mulberry32(1), {}, ONE, { accepts });
+
+      // then
+      expect(asked).toEqual([{ x: 0, y: 0, width: 40, height: 30 }]);
+      expect(boxes).toEqual(asked);
+    });
+
+    it('throws an ordinary Error when it does not accept the whole map', () => {
+      // given
+      const state = emptyMap({ width: 40, height: 30, tile: Tile.Wall })();
+
+      // when
+      const call = () =>
+        placeAreas(state, mulberry32(1), {}, ONE, { accepts: () => false });
+
+      // then
+      expect(call).toThrow(/whole 40 by 30 map.*not accepted/);
+      expect(call).not.toThrow(RangeError);
+    });
+
+    it('draws the same boxes as without it when it accepts everything', () => {
+      // given
+      const state = emptyMap({ width: 60, height: 40, tile: Tile.Wall })();
+      const area = {
+        width: { min: 5, max: 12 },
+        height: { min: 5, max: 9 },
+        gravity: { toward: 'top' as const, strength: 0.5 },
+      };
+      const count = { min: 1, max: 4 };
+
+      // when
+      const accepted = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), area, count, {
+          accepts: () => true,
+        }),
+      );
+      const plain = Array.from({ length: SEEDS }, (_, seed) =>
+        placeAreas(state, mulberry32(seed), area, count),
+      );
+
+      // then
+      expect(accepted).toEqual(plain);
+    });
+  });
 });

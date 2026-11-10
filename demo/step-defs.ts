@@ -105,10 +105,11 @@ function caveFields(): Field[] {
       ['beside', 'beside'],
       ['overlap', 'overlap'],
     ]),
+    ...pair('overlapShare', 'Overlap share', 0, 1, FRACTION),
   ];
 }
 
-/** The shared options of a cave step, from the controls of `caveFields`. */
+/** The shared options of a cave step, from the controls of `caveFields`; `overlapShare` only with `placement: 'overlap'`. */
 function caveOptions(v: Values) {
   return {
     borderWalls: v.flag('borderWalls'),
@@ -119,6 +120,9 @@ function caveOptions(v: Values) {
     area: v.area(),
     count: v.range('count'),
     placement: v.text('placement') as CavePlacement,
+    ...(v.text('placement') === 'overlap'
+      ? { overlapShare: v.range('overlapShare') }
+      : {}),
   };
 }
 
