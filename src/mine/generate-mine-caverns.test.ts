@@ -219,7 +219,7 @@ describe('generateMine with caverns', () => {
             height: { min: size, max: size },
           },
         },
-        random: mulberry32(5),
+        random: mulberry32(6),
       });
 
     // when

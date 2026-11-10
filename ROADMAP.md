@@ -4,7 +4,7 @@ What is wanted next, roughly in the user's order, and what was rejected. Finishe
 
 ## Next up
 
-The parallel adits of the fishbone are wanted next, under Mines, follow-ups.
+Nothing is picked yet. A design for the shore (see More generators, Shore and beach) is in progress in `designs/shore.md`.
 
 ## Backlog
 
@@ -38,9 +38,8 @@ All of this is optional follow-up to the finished forest.
 
 ### Mines, follow-ups
 
-The first entry is wanted; the rest are optional:
+All optional:
 
-- **Roughly parallel adits in the fishbone.** The user wants the adits of `digFishbone` (and of the fishbone layout of `generateMine`) to run roughly parallel to each other, instead of leaving their tunnels at independent random angles as they do now. Needs a design talk.
 - **Symmetry** for mines was deferred; it would fit the cave's layout symmetry.
 - **Cave-ins**: parts of a mine cut off by a collapse, which the always-connected rule rules out now.
 - **Mixed layouts**, for example pillar halls joined by a fishbone: two layout steps, each in an area of its own, then `digVeins`, in a pipeline of your own. The preset takes one layout only, and no array of layouts is planned.

@@ -11,6 +11,7 @@ import type { Random } from '../core/random';
 import { digFishbone } from './dig-fishbone';
 import type { DigFishboneOptions } from './dig-fishbone-options';
 import type { MinePassage } from '../veins/mine-passage';
+import { diagonalJumps } from '../test-helpers/dungeon-checks';
 
 const base = emptyMap({ width: 80, height: 50, tile: Tile.Wall });
 
@@ -82,7 +83,7 @@ describe('digFishbone', () => {
     const pieces = seeds.map(
       (seed) =>
         findCaveRegions(
-          pipeline(base, [digFishbone({ loops: 0.5 })], {
+          pipeline(base, [digFishbone({ crosscuts: 0.5 })], {
             random: mulberry32(seed),
           }).grid,
         ).length,
@@ -92,17 +93,25 @@ describe('digFishbone', () => {
     expect(pieces).toEqual(seeds.map(() => 1));
   });
 
-  it('starts with the main shaft and lists the adits after it', () => {
+  it('starts with the main shaft and lists the adits and then the crosscuts after it', () => {
     // given
-    const steps = [digFishbone()] as const;
+    const steps = [digFishbone({ crosscuts: 1 })] as const;
 
     // when
     const { passages } = pipeline(base, steps, { random: mulberry32(1) });
 
     // then
-    expect(passages[0]?.kind).toBe('shaft');
-    expect(passages.slice(1).every(({ kind }) => kind === 'adit')).toBe(true);
-    expect(passages.length).toBeGreaterThan(1);
+    const kinds = passages.map(({ kind }) => kind);
+    const adits = kinds.filter((kind) => kind === 'adit').length;
+    const crosscuts = kinds.filter((kind) => kind === 'crosscut').length;
+    expect(kinds[0]).toBe('shaft');
+    expect(adits).toBeGreaterThan(0);
+    expect(crosscuts).toBeGreaterThan(0);
+    expect(kinds).toEqual([
+      'shaft',
+      ...Array<string>(adits).fill('adit'),
+      ...Array<string>(crosscuts).fill('crosscut'),
+    ]);
   });
 
   it('digs in a smaller area and leaves the rest of the map alone', () => {
@@ -493,12 +502,14 @@ describe('digFishbone shaft and adits', () => {
     }
   });
 
-  it('ends adits in dead ends, with no loops, by default', () => {
+  it('ends adits in dead ends, with no loops, with no crosscuts', () => {
     // given
     const seeds = [1, 2, 3, 4, 5];
 
     // when
-    const mines = seeds.map((seed) => dig({ random: mulberry32(seed) }));
+    const mines = seeds.map((seed) =>
+      dig({ crosscuts: 0, random: mulberry32(seed) }),
+    );
 
     // then
     for (const { grid } of mines) {
@@ -514,6 +525,7 @@ describe('digFishbone shaft and adits', () => {
       angle: 111,
       shaftWindiness: 0.75,
       aditWindiness: 0,
+      crosscuts: 0,
       random: mulberry32(3),
     };
 
@@ -545,18 +557,26 @@ describe('digFishbone shaft and adits', () => {
     }
   });
 
-  it('makes loops when adits break through into other tunnels', () => {
+  it('leaves no corner where two tunnels meet diagonally', () => {
     // given
-    const seeds = [1, 2, 3, 4, 5];
+    const seeds = Array.from({ length: 40 }, (_, i) => i + 1);
 
     // when
-    const mines = seeds.map((seed) =>
-      dig({ loops: 1, random: mulberry32(seed) }),
+    const grids = seeds.map(
+      (seed) =>
+        dig({
+          width: 71,
+          height: 35,
+          aditWindiness: 0.4,
+          crosscuts: 0.3,
+          random: mulberry32(seed),
+        }).grid,
     );
 
     // then
-    const enclosed = mines.map(({ grid }) => countEnclosedWalls(grid));
-    expect(enclosed.every((count) => count > 0)).toBe(true);
+    for (const grid of grids) {
+      expect(diagonalJumps(grid)).toEqual([]);
+    }
   });
 
   it('digs a mine on a tiny map without failing', () => {
@@ -575,12 +595,15 @@ describe('digFishbone shaft and adits', () => {
     ['density', { density: 1.5 }],
     ['shaftWindiness', { shaftWindiness: -0.1 }],
     ['aditWindiness', { aditWindiness: 2 }],
-    ['loops', { loops: 1.1 }],
+    ['crosscuts', { crosscuts: 1.1 }],
     ['shaftWidth', { shaftWidth: { min: 0, max: 2 } }],
     ['aditWidth', { aditWidth: { min: 3, max: 2 } }],
     ['aditLength', { aditLength: { min: 1.5, max: 4 } }],
     ['branchAngle', { branchAngle: { min: 10, max: 180 } }],
     ['branchAngle', { branchAngle: { min: 0, max: 90 } }],
+    ['aditSpread', { aditSpread: -1 }],
+    ['aditSpread', { aditSpread: 2.5 }],
+    ['aditSpread', { aditSpread: 91 }],
   ])('throws a RangeError for an invalid %s', (_name, invalid) => {
     // given
     const options = invalid;
@@ -590,5 +613,266 @@ describe('digFishbone shaft and adits', () => {
 
     // then
     expect(make).toThrow(RangeError);
+  });
+});
+
+/** The direction from the first tile of an adit to its last, in degrees, clockwise from east. */
+function direction(tiles: readonly { x: number; y: number }[]): number {
+  const first = tiles[0] ?? { x: 0, y: 0 };
+  const last = tiles[tiles.length - 1] ?? first;
+  return (Math.atan2(last.y - first.y, last.x - first.x) * 180) / Math.PI;
+}
+
+/** Digs straight ribs off a straight shaft along a row, at a rib angle of 60, and returns the shaft and the adits. */
+function digStraightRibs(seed: number, aditSpread: number) {
+  return digStraightMine(seed, aditSpread, 0).passages;
+}
+
+/** Digs straight ribs off a straight shaft along a row, at a rib angle of 60. */
+function digStraightMine(seed: number, aditSpread: number, crosscuts: number) {
+  return dig({
+    angle: 0,
+    shaftWindiness: 0,
+    shaftWidth: { min: 1, max: 1 },
+    aditWindiness: 0,
+    aditWidth: { min: 1, max: 1 },
+    aditLength: { min: 20, max: 30 },
+    branchAngle: { min: 60, max: 60 },
+    aditSpread,
+    crosscuts,
+    random: mulberry32(seed),
+  });
+}
+
+const key = ({ x, y }: { x: number; y: number }) => `${String(x)},${String(y)}`;
+
+/** How far a rib runs from the shaft along a row, in degrees: 60 for a rib at the rib angle, either side. */
+const ribAngle = (degrees: number) => {
+  const away = Math.abs(degrees);
+  return Math.min(away, 180 - away);
+};
+
+/** The rounding of tiles bends the line from the first to the last tile of an adit by at most this, in degrees. */
+const TOLERANCE = 4;
+
+/** A crosscut is short, so the rounding of tiles bends it by more, in degrees. */
+const CROSSCUT_TOLERANCE = 20;
+
+describe('digFishbone ribs', () => {
+  it('starts every adit on the main shaft', () => {
+    // given
+    const seeds = [1, 2, 3, 4, 5];
+
+    // when
+    const mines = seeds.map((seed) => dig({ random: mulberry32(seed) }));
+
+    // then
+    for (const { passages } of mines) {
+      const [shaft, ...rest] = passages;
+      const adits = rest.filter(({ kind }) => kind === 'adit');
+      const onShaft = new Set(
+        shaft?.tiles.map(({ x, y }) => `${String(x)},${String(y)}`),
+      );
+      expect(adits.length).toBeGreaterThan(0);
+      for (const { tiles } of adits) {
+        const start = tiles[0] ?? { x: -1, y: -1 };
+        expect(onShaft.has(`${String(start.x)},${String(start.y)}`)).toBe(true);
+      }
+    }
+  });
+
+  it('starts every adit within the spread of the line of its side', () => {
+    // given
+    const seeds = [1, 2, 3, 4, 5];
+
+    // when
+    const mines = seeds.map((seed) => digStraightRibs(seed, 10));
+
+    // then
+    for (const passages of mines) {
+      const adits = passages.slice(1);
+      expect(adits.length).toBeGreaterThan(0);
+      for (const { tiles } of adits) {
+        const off = Math.abs(ribAngle(direction(tiles)) - 60);
+        expect(off).toBeLessThanOrEqual(10 + TOLERANCE);
+      }
+    }
+  });
+
+  it('runs every adit along the line of its side with a spread of 0', () => {
+    // given
+    const seeds = [1, 2, 3, 4, 5];
+
+    // when
+    const mines = seeds.map((seed) => digStraightRibs(seed, 0));
+
+    // then
+    for (const passages of mines) {
+      for (const { tiles } of passages.slice(1)) {
+        const off = Math.abs(ribAngle(direction(tiles)) - 60);
+        expect(off).toBeLessThanOrEqual(TOLERANCE);
+      }
+    }
+  });
+
+  it('mirrors the adits on the two sides of the shaft, both leaning forward', () => {
+    // given
+    const seeds = [1, 2, 3, 4, 5];
+
+    // when
+    const mines = seeds.map((seed) => digStraightRibs(seed, 0));
+
+    // then
+    for (const passages of mines) {
+      const directions = passages.slice(1).map(({ tiles }) => direction(tiles));
+      const below = directions.filter((degrees) => degrees > 0);
+      const above = directions.filter((degrees) => degrees < 0);
+      expect(below.length).toBeGreaterThan(0);
+      expect(above.length).toBeGreaterThan(0);
+      // the forward end is the same for every adit, so the sign of x agrees
+      const forward = directions.map((degrees) => Math.abs(degrees) < 90);
+      expect(new Set(forward).size).toBe(1);
+      // a rib below runs at the mirror image of a rib above
+      for (const degrees of below) {
+        for (const other of above) {
+          expect(Math.abs(degrees + other)).toBeLessThanOrEqual(2 * TOLERANCE);
+        }
+      }
+    }
+  });
+});
+
+describe('digFishbone crosscuts', () => {
+  const seeds = [1, 2, 3, 4, 5];
+
+  /** For every crosscut, the indices of the adits that its two ends lie on. */
+  function joinedAdits(passages: readonly MinePassage[]) {
+    const lying = (tile: { x: number; y: number } | undefined) =>
+      passages.findIndex(
+        ({ kind, tiles }) =>
+          kind === 'adit' &&
+          tile !== undefined &&
+          tiles.some((other) => key(other) === key(tile)),
+      );
+    return passages
+      .filter(({ kind }) => kind === 'crosscut')
+      .map(({ tiles }) => [lying(tiles[0]), lying(tiles[tiles.length - 1])]);
+  }
+
+  it('joins neighboring adits with crosscuts, which make loops', () => {
+    // given
+    const options = { crosscuts: 1 };
+
+    // when
+    const mines = seeds.map((seed) =>
+      dig({ ...options, random: mulberry32(seed) }),
+    );
+
+    // then
+    for (const { grid, passages } of mines) {
+      expect(passages.some(({ kind }) => kind === 'crosscut')).toBe(true);
+      expect(countEnclosedWalls(grid)).toBeGreaterThan(0);
+    }
+  });
+
+  it('digs no crosscuts with a chance of 0', () => {
+    // given
+    const options = { crosscuts: 0 };
+
+    // when
+    const mines = seeds.map((seed) =>
+      dig({ ...options, random: mulberry32(seed) }),
+    );
+
+    // then
+    for (const { passages } of mines) {
+      expect(passages.some(({ kind }) => kind === 'crosscut')).toBe(false);
+    }
+  });
+
+  it('digs more crosscuts with a higher chance', () => {
+    // given
+    const count = (crosscuts: number) =>
+      seeds
+        .map((seed) => dig({ crosscuts, random: mulberry32(seed) }).passages)
+        .flat()
+        .filter(({ kind }) => kind === 'crosscut').length;
+
+    // when
+    const few = count(0.2);
+    const many = count(1);
+
+    // then
+    expect(many).toBeGreaterThan(few);
+  });
+
+  it('runs every crosscut straight, one tile wide, from one adit to another', () => {
+    // given
+    const options = { crosscuts: 1 };
+
+    // when
+    const mines = seeds.map((seed) =>
+      dig({ ...options, random: mulberry32(seed) }),
+    );
+
+    // then
+    for (const { grid, passages } of mines) {
+      for (const [from, to] of joinedAdits(passages)) {
+        expect(from).toBeGreaterThan(0);
+        expect(to).toBeGreaterThan(0);
+        expect(from).not.toBe(to);
+      }
+      for (const { kind, tiles, width } of passages) {
+        if (kind === 'crosscut') {
+          expect(width).toBe(1);
+          for (const { x, y } of tiles) {
+            expect(grid.get(x, y)).toBe(Tile.Floor);
+          }
+        }
+      }
+    }
+  });
+
+  it('joins each pair of adits once at most', () => {
+    // given
+    const options = { crosscuts: 1 };
+
+    // when
+    const mines = seeds.map((seed) =>
+      dig({ ...options, random: mulberry32(seed) }),
+    );
+
+    // then
+    for (const { passages } of mines) {
+      const pairs = joinedAdits(passages).map((pair) =>
+        [...pair].sort((a, b) => a - b).join(','),
+      );
+      expect(new Set(pairs).size).toBe(pairs.length);
+    }
+  });
+
+  it('joins adits on the same side of the shaft, the shortest way across', () => {
+    // given
+    const mines = seeds.map((seed) => digStraightMine(seed, 0, 1));
+
+    // when
+    const crosscuts = mines.flatMap(({ passages }) =>
+      passages.filter(({ kind }) => kind === 'crosscut'),
+    );
+
+    // then
+    expect(crosscuts.length).toBeGreaterThan(0);
+    for (const { passages } of mines) {
+      const row = passages[0]?.tiles[0]?.y ?? 0;
+      for (const { kind, tiles } of passages) {
+        if (kind === 'crosscut') {
+          const sides = new Set(tiles.map(({ y }) => Math.sign(y - row)));
+          expect(sides.size).toBe(1);
+          // the ribs run at 60 or 120 degrees from east, so square to them is 150 or 30
+          const off = Math.abs(ribAngle(direction(tiles)) - 30);
+          expect(off).toBeLessThanOrEqual(CROSSCUT_TOLERANCE);
+        }
+      }
+    }
   });
 });

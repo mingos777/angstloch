@@ -11,6 +11,7 @@ import type { Random } from '../core/random';
 import { digRings } from './dig-rings';
 import type { DigRingsOptions } from './dig-rings-options';
 import type { MinePassage } from '../veins/mine-passage';
+import { diagonalJumps } from '../test-helpers/dungeon-checks';
 
 const base = emptyMap({ width: 80, height: 50, tile: Tile.Wall });
 
@@ -36,6 +37,22 @@ const earlier = step<object, { passages: MinePassage[] }>(
 );
 
 describe('digRings', () => {
+  it('leaves no corner where a spoke meets a ring diagonally', () => {
+    // given
+    const seeds = Array.from({ length: 100 }, (_, i) => i + 1);
+    const map = emptyMap({ width: 71, height: 35, tile: Tile.Wall });
+
+    // when
+    const grids = seeds.map(
+      (seed) => pipeline(map, [digRings()], { random: mulberry32(seed) }).grid,
+    );
+
+    // then
+    for (const grid of grids) {
+      expect(diagonalJumps(grid)).toEqual([]);
+    }
+  });
+
   it('digs the same mine from the same seed', () => {
     // given
     const make = () => pipeline(base, [digRings()], { random: mulberry32(5) });

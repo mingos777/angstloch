@@ -9,8 +9,9 @@ import type { MinePassage } from '../veins/mine-passage';
 
 /**
  * A step that digs a fishbone mine: the main shaft first, through a point near
- * the middle of the area, and then side tunnels, the adits, which branch off
- * the existing ones until the `density` is reached. The mine is one connected
+ * the middle of the area, and then side tunnels, the adits, which leave the
+ * shaft as roughly parallel ribs, mirrored on its two sides, until the
+ * `density` is reached. The mine is one connected
  * piece, closed in by a ring of wall inside its area. Tunnels are dug out of
  * wall and never through a reserved tile, so a mine dug over reserved ground
  * may come out in pieces.
@@ -29,10 +30,11 @@ export function digFishbone(
     shaftWindiness = 0.1,
     angle = 'random',
     aditWidth = { min: 1, max: 2 },
-    aditWindiness = 0.4,
+    aditWindiness = 0.1,
     aditLength = { min: 15, max: 50 },
     branchAngle = { min: 45, max: 90 },
-    loops = 0,
+    aditSpread = 10,
+    crosscuts = 0.1,
     area = {},
     count = { min: 1, max: 1 },
   } = options;
@@ -65,7 +67,8 @@ export function digFishbone(
             aditWindiness,
             aditLength,
             branchAngle,
-            loops,
+            aditSpread,
+            crosscuts,
             lane,
             protect: scratch.reserved,
           }),

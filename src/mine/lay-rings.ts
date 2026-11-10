@@ -3,11 +3,13 @@ import type { Point } from '../core/point';
 import type { Random } from '../core/random';
 import { randomInt } from '../core/random-int';
 import type { Range } from '../core/range';
+import { Tile } from '../core/tile';
 import type { NoiseFunction } from '../noise/noise-function';
 import { joinTiles } from '../roads/join-tiles';
 import { carvePassageTiles } from '../veins/carve-passage-tiles';
 import { digVein, keepInside, LANE_SPACING, MARGIN } from '../veins/dig-vein';
 import type { MinePassage } from '../veins/mine-passage';
+import { carveCornerGaps } from './carve-corner-gaps';
 import type { MineRingShape } from './mine-ring-shape';
 
 /** The smallest radius of a ring, in tiles. A ring any smaller is left out. */
@@ -103,8 +105,10 @@ function pickCount(
  * join them. The rings are ovals around the middle of the map, evenly spaced,
  * the outermost one near the border, and each wobbles by smooth noise so that
  * it is not perfect. Between every ring and the next, at least one spoke runs
- * at a random angle, which makes the mine one piece. Nothing is dug on a tile
- * of `protect`, so a ring that crosses one is cut there.
+ * at a random angle, which makes the mine one piece. Where a spoke meets a
+ * ring at a corner gap, the tip of the rock between them is dug out, even
+ * where that leaves a pillar standing free. Nothing
+ * is dug on a tile of `protect`, so a ring that crosses one is cut there.
  */
 export function layRings(
   grid: Grid,
@@ -134,6 +138,7 @@ export function layRings(
     radiusY: ringShape === 'circle' ? round : fitY,
   };
   const passages: MinePassage[] = [];
+  const rock = grid.clone();
   if (frame.radiusX < MIN_RADIUS || frame.radiusY < MIN_RADIUS) {
     return passages;
   }
@@ -200,6 +205,20 @@ export function layRings(
       }
     }
   }
+
+  carveCornerGaps(
+    grid,
+    (x, y) => rock.get(x, y) === Tile.Wall,
+    (x, y) =>
+      x >= MARGIN &&
+      y >= MARGIN &&
+      x < grid.width - MARGIN &&
+      y < grid.height - MARGIN &&
+      (protect?.[y * grid.width + x] ?? 0) === 0,
+    undefined,
+    // a ring mine is all loops, so a pillar cut off from the rock is fine
+    true,
+  );
   return passages;
 }
 

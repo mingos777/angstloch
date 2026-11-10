@@ -1,5 +1,6 @@
 import { assertFraction } from '../core/assert-fraction';
 import { assertRange } from '../core/assert-range';
+import { assertWholeNumber } from '../core/assert-whole-number';
 import type { DigFishboneOptions } from './dig-fishbone-options';
 
 /** Throws a `RangeError` unless the options of the fishbone are valid. The `area` is checked against the map later. */
@@ -16,7 +17,7 @@ export function assertFishboneOptions(
     ['density', options.density],
     ['shaftWindiness', options.shaftWindiness],
     ['aditWindiness', options.aditWindiness],
-    ['loops', options.loops],
+    ['crosscuts', options.crosscuts],
   ] as const) {
     if (value !== undefined) {
       assertFraction(name, value);
@@ -36,6 +37,14 @@ export function assertFishboneOptions(
     throw new RangeError(
       `branchAngle.max must be at most 179 degrees, got ${String(options.branchAngle.max)}`,
     );
+  }
+  if (options.aditSpread !== undefined) {
+    assertWholeNumber('aditSpread', options.aditSpread, 0);
+    if (options.aditSpread > 90) {
+      throw new RangeError(
+        `aditSpread must be at most 90 degrees, got ${String(options.aditSpread)}`,
+      );
+    }
   }
   if (options.count) {
     assertRange('count', options.count, 0);

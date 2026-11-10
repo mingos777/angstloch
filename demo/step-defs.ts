@@ -368,20 +368,21 @@ export const STEP_DEFS: StepDef[] = [
   {
     name: 'digFishbone',
     summary:
-      'a main shaft with side tunnels branching off it (needs a wall map)',
+      'a main shaft with roughly parallel side tunnels off it (needs a wall map)',
     fields: [
       number('density', 'Density', 0.15, FRACTION),
       ...pair('shaftWidth', 'Shaft width', 2, 3, POSITIVE),
       number('shaftWindiness', 'Shaft windiness', 0.1, FRACTION),
       number('angle', 'Angle (blank: random)', '', { step: '5' }),
       ...pair('aditWidth', 'Adit width', 1, 2, POSITIVE),
-      number('aditWindiness', 'Adit windiness', 0.4, FRACTION),
+      number('aditWindiness', 'Adit windiness', 0.1, FRACTION),
       ...pair('aditLength', 'Adit length', 15, 50, POSITIVE),
       ...pair('branchAngle', 'Branch angle', 45, 90, {
         min: '1',
         max: '179',
       }),
-      number('loops', 'Loops', 0, FRACTION),
+      number('aditSpread', 'Adit spread', 10, { min: '0', max: '90' }),
+      number('crosscuts', 'Crosscuts', 0.1, FRACTION),
       ...areaFields(),
     ],
     make: (v) =>
@@ -394,7 +395,8 @@ export const STEP_DEFS: StepDef[] = [
         aditWindiness: v.number('aditWindiness'),
         aditLength: v.range('aditLength'),
         branchAngle: v.range('branchAngle'),
-        loops: v.number('loops'),
+        aditSpread: v.number('aditSpread'),
+        crosscuts: v.number('crosscuts'),
         area: v.area(),
         count: v.range('count'),
       }),

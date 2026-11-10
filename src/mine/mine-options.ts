@@ -14,7 +14,7 @@ import type { PlaceMineRoomsOptions } from './place-mine-rooms-options';
  * given (`hallVeins` goes with `pillars`); none means `fishbone` with its defaults.
  */
 export interface MineStepOptions {
-  /** A fishbone layout: a main shaft with side tunnels branching off it and off each other. See `digFishbone`. The layout when no other is given. */
+  /** A fishbone layout: a main shaft with roughly parallel side tunnels off it, mirrored on its two sides. See `digFishbone`. The layout when no other is given. */
   fishbone?: DigFishboneOptions;
   /** A veins layout: an irregular web of winding tunnels that join junctions spread over the map. See `digVeins`. */
   veins?: DigVeinsOptions;
