@@ -1,6 +1,6 @@
 # Shore
 
-Design in progress, not started. Delete this file once the feature is done and documented in the README.
+Design in progress, not started. Delete this file once the feature is done and documented in `docs/`.
 
 ## Scope
 
@@ -75,7 +75,7 @@ None left before task 1.
 
 ## Tasks
 
-1. `Tile.Sand` and the `layShore` step (bands, noisy coast, verge, `shore` extra), on the steps page of the playground; README and CHANGELOG.
+1. `Tile.Sand` and the `layShore` step (bands, noisy coast, verge, `shore` extra), on the steps page of the playground; `docs/steps/lay-shore.md` (and the `Tile` table in `docs/concepts.md`) and CHANGELOG.
 2. The `shore` key of `generateForest`; `layStreams` ends at the sea.
 3. `layRoads` ends where the sand starts.
 4. `layFootbridges` ignores the sea; clearings are left as they are.

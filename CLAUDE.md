@@ -2,19 +2,19 @@
 
 Angstloch is a map generator library for roguelike games on a 2D square grid. It is written in modern TypeScript and will be published on NPM for browser-based roguelikes to consume.
 
-**Read `ROADMAP.md` at the start of every session.** It says what is wanted next and what was rejected; finished features are documented in `README.md`, never in the roadmap. Designs in progress live in `designs/`, one Markdown file per feature with its decisions, open questions and task split; read the one for the feature at hand.
+**Read `ROADMAP.md` at the start of every session.** It says what is wanted next and what was rejected; finished features are documented in `docs/`, never in the roadmap. Designs in progress live in `designs/`, one Markdown file per feature with its decisions, open questions and task split; read the one for the feature at hand.
 
 ## Rules
 
 ### Workflow
 
-- **Design first, build when told.** Talk a feature through with options, a recommendation and a list of open questions. Record the decisions and the task split in `designs/<feature>.md`, not in `ROADMAP.md`, which only lists what is wanted. Delete the design file once the feature is done and documented in the README. Do not start implementing until the user says so, even when their answers to the design questions seem to settle everything.
+- **Design first, build when told.** Talk a feature through with options, a recommendation and a list of open questions. Record the decisions and the task split in `designs/<feature>.md`, not in `ROADMAP.md`, which only lists what is wanted. Delete the design file once the feature is done and documented in `docs/`. Do not start implementing until the user says so, even when their answers to the design questions seem to settle everything.
 - **One task at a time.** Split a feature into small tasks. Stop after each one with a short report (what changed, what the tests cover, anything that surprised you) and let the user review it.
 - **The playground follows every task.** Each task that adds or changes behavior also extends `demo/`, so the user can see it and react before the next task builds on it.
-- **Defaults are the user's call.** They tune defaults by looking at the playground, and many defaults in the README came from that, so do not change them unasked.
-- **Playground colors** come from the `Color` constant in `demo/draw-grid.ts`, the ANSI terminal palette of the user's game. Keep the glyph colors listed in the README in sync with `GLYPHS` there, and do not overwrite the user's choices.
+- **Defaults are the user's call.** They tune defaults by looking at the playground, and many defaults in the docs came from that, so do not change them unasked.
+- **Playground colors** come from the `Color` constant in `demo/draw-grid.ts`, the ANSI terminal palette of the user's game. Keep the glyph colors listed in `docs/playground.md` in sync with `GLYPHS` there, and do not overwrite the user's choices.
 - **American English** in code, identifiers, comments, error messages and docs (center, color, behavior), although the user writes British English.
-- Before reporting a task as done, run `npm run typecheck`, `npm run lint`, `npm run format:check` and `npm test`; after the first release, also `npm run check:version`.
+- Before reporting a task as done, run `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` and `npm run check:docs`; after the first release, also `npm run check:version`.
 
 ### Git
 
@@ -64,17 +64,20 @@ A step is named `verb` + what it makes, and the verb tells the **job**, never th
 
 Until the first release, `package.json` stays at `0.0.0` and only the changelog is kept. After the user tags `v1.0.0`, `package.json` holds the **next** version to publish and the latest git tag holds the last one released, so the version only ever moves up between releases.
 
-- **Levels.** Patch: a fix, a changed default (the old behavior is one option away), a README-only correction. Minor: something added (a step, an export, an optional field, a `Tile` value). Major: anything that breaks code written against the previous version (an option or result field removed, renamed or changed in meaning, a `Tile` renumbered, an export removed). A major bump needs the user's go-ahead.
-- **Only what ships counts:** `src/` (behavior, options, types, defaults) and the README. Demo, scripts, tests, designs and the other docs never bump the version or the changelog.
+- **Levels.** Patch: a fix, a changed default (the old behavior is one option away), a docs-only correction (`README.md` or `docs/`). Minor: something added (a step, an export, an optional field, a `Tile` value). Major: anything that breaks code written against the previous version (an option or result field removed, renamed or changed in meaning, a `Tile` renumbered, an export removed). A major bump needs the user's go-ahead.
+- **Only what ships counts:** `src/` (behavior, options, types, defaults) and the docs (`README.md` and `docs/`). Demo, scripts, tests, designs, `ROADMAP.md` and `CLAUDE.md` never bump the version or the changelog.
 - **The ratchet.** A task that changes what ships raises the version only if its level beats the pending one (the difference between `package.json` and the tag; `1.0.0` is none, `1.0.1` patch, `1.1.0` minor, `2.0.0` major). A bump resets the lower numbers (a feature on `1.0.3` gives `1.1.0`).
-- **`CHANGELOG.md`** is in the Keep a Changelog layout: `Unreleased` on top, then one section per released version (`## 1.0.0 - 2026-11-01`), with entries under Added, Changed, Fixed and Removed. Every task that changes what ships adds its entries in the same task, like the README. Entries are as terse as possible, one short line each, naming what changed and nothing more; the details belong in the README. An entry of a major change starts with **Breaking:**, and a Removed entry counts as major.
+- **`CHANGELOG.md`** is in the Keep a Changelog layout: `Unreleased` on top, then one section per released version (`## 1.0.0 - 2026-11-01`), with entries under Added, Changed, Fixed and Removed. Every task that changes what ships adds its entries in the same task, like the docs. Entries are as terse as possible, one short line each, naming what changed and nothing more; the details belong in the docs. An entry of a major change starts with **Breaking:**, and a Removed entry counts as major.
 - **Before the first release** `Unreleased` describes the initial release, so it has only Added: a task updates or adds the Added entries to say what the release contains, and never writes Changed, Fixed or Removed, which would be relative to nothing.
 - **Release.** When the user says so, rename `Unreleased` to the version and the date, and put a new empty `Unreleased` on top. The user tags and publishes.
 - **Flag discrepancies.** Run `npm run check:version` at the start of a session and before reporting a task that touches what ships, and report what it lists. End such a task report with a line like `Version: 1.1.0 pending (minor: new step)`.
 
 ### Documentation
 
-- `README.md` is the page npmjs shows to the world. Every time something is implemented or changed, document it there in the same task, and in `CHANGELOG.md` (see Versioning). The tool must be documented accurately and thoroughly: options, defaults, result shape and examples. Check the README still matches the code.
+- `README.md` is the page npmjs shows to the world, and it is for getting started: what Angstloch is, one line per generator, installation, a quick start and a link to the docs. Keep it short; the reference goes to `docs/`.
+- `docs/` holds the reference, as plain Markdown read on GitHub; it is not in the npm package. `docs/README.md` is the table of contents, `concepts.md`, `composing.md`, `rooms.md`, `room-templates.md`, `noise.md`, `distances.md`, `playground.md` and `development.md` sit beside it, `docs/generators/` has one file per preset and `docs/steps/` one file per step, named like its source file (`dig-veins.md`). A new step gets a file of its own and a line in the table of contents and in Steps at a glance (`composing.md`).
+- Every time something is implemented or changed, document it in `docs/` in the same task (and in the README when it changes what the README shows), and in `CHANGELOG.md` (see Versioning). The tool must be documented accurately and thoroughly: options, defaults, result shape and examples. Check the docs still match the code.
+- All links are relative, in the README as in `docs/`: npmjs.com turns a relative link in the README into a link to the file on GitHub. `npm run check:docs` checks that every relative link points to a file and a heading that exist.
 
 ### Library design
 
@@ -111,7 +114,8 @@ Until the first release, `package.json` stays at `0.0.0` and only the changelog 
   - `catacombs/`: `digCatacombs`, a step with no preset, and the code under it (`planLattice`, `pruneLattice`, `placeCrypts`, `joinCatacombRooms`, `buildCatacomb`, `lineCatacomb`, `createCatacombMirrors`). It uses `core/`, `pipeline/` and `rooms/`; its group types (`CatacombGroup`, `CatacombSegment`, `CatacombNiche`, `CatacombChamber`, `CatacombSide`) live in `rooms/` with the other groups.
   - `test-helpers/`: seedable PRNG and dungeon checks for tests.
 - `demo/`: visual playground, run with `npm run dev`. Not published. The steps page (`steps.html`, with `step-defs.ts` and `step-fields.ts`) is the pipeline-based page: a list of steps to add and configure. Every generator is made there, and the template editor (`template-editor.ts`) sits at the bottom of it; the noise page stays as the only other page. `index.html` only links to the pages.
-- `scripts/`: development scripts, run through Vite's `runnerImport`. Not published. `check-forest.ts` scores forests with roads and streams for artifacts over many seeds, using `createForestSteps` and `pipeline` with `trace`. `check-dungeon.ts` measures the failures, time and look of the room-first and grown dungeons over many seeds, and the failures and time of rooms scattered round a pillar hall and a noise cavern. `check-version.ts` compares `package.json`, the latest git tag and `CHANGELOG.md` (the rules sit in `find-version-problems.ts`, which has the only tests in `scripts/`; `node-modules.d.ts` declares the Node modules the scripts import, since the project has no `@types/node`).
+- `scripts/`: development scripts, run through Vite's `runnerImport`. Not published. `check-forest.ts` scores forests with roads and streams for artifacts over many seeds, using `createForestSteps` and `pipeline` with `trace`. `check-dungeon.ts` measures the failures, time and look of the room-first and grown dungeons over many seeds, and the failures and time of rooms scattered round a pillar hall and a noise cavern. `check-version.ts` compares `package.json`, the latest git tag and `CHANGELOG.md`, and `check-docs.ts` checks the links of `README.md` and `docs/` (their rules sit in `find-version-problems.ts` and `find-docs-problems.ts`, which have the only tests in `scripts/`; `node-modules.d.ts` declares the Node modules the scripts import, since the project has no `@types/node`).
+- `docs/`: the reference documentation, read on GitHub (see Documentation). Not published.
 - `designs/`: designs in progress, one Markdown file per feature. Not published.
 - `dist/`: build output (gitignored).
 
@@ -123,4 +127,5 @@ Until the first release, `package.json` stays at `0.0.0` and only the changelog 
 - `npm run typecheck`, `npm run lint`, `npm run format` / `format:check`.
 - `npm run check:forest`: count the road and stream artifacts over seeds 1 to 200 (`-- --seeds 6,9 --show` prints the maps).
 - `npm run check:version`: list what disagrees between `package.json`, the latest git tag and `CHANGELOG.md`; exits with 1 when something does.
+- `npm run check:docs`: list the broken relative links of `README.md` and `docs/` (a missing file or heading); exits with 1 when there is one.
 - `npm run check:dungeon`: measure the dungeons over seeds 1 to 200 (`-- --templates 15,20 --placement lattice` for other loads).

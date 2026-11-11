@@ -27,9 +27,6 @@
   ],
   "type": "module",
   "sideEffects": false,
-  "engines": {
-    "node": ">=22"
-  },
   "files": [
     "dist"
   ],
@@ -45,6 +42,7 @@
   "scripts": {
     "dev": "vite demo --port 5180 --strictPort",
     "build": "vite build",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run check:version && npm run check:docs && npm run build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -53,6 +51,7 @@
     "test:watch": "vitest",
     "check:forest": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-forest.ts'))\" --",
     "check:version": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-version.ts'))\" --",
+    "check:docs": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-docs.ts'))\" --",
     "check:dungeon": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-dungeon.ts'))\" --"
   },
   "devDependencies": {

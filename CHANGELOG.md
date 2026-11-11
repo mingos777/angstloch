@@ -6,7 +6,7 @@ All notable changes to Angstloch are listed here, newest first. The format follo
 
 ### Added
 
-Initial release; see the README.
+Initial release; see the [documentation](docs/README.md).
 
 - Generators: mazes, room-first and grown dungeons, cellular and noise caves, mines (fishbone, veins, pillar halls, rings) and forests.
 - Composable steps (`pipeline`), including prison cell blocks, sewers and catacombs.

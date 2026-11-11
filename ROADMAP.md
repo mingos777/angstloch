@@ -1,10 +1,12 @@
 # Roadmap
 
-What is wanted next, roughly in the user's order, and what was rejected. Finished features are documented in `README.md`, the rules of the code base and how we work in `CLAUDE.md`, and designs in progress in `designs/`, one file per feature.
+What is wanted next, roughly in the user's order, and what was rejected. Finished features are documented in `docs/` (the README is for getting started), the rules of the code base and how we work in `CLAUDE.md`, and designs in progress in `designs/`, one file per feature.
 
 ## Next up
 
 A design for the shore (see More generators, Shore and beach) is in progress in `designs/shore.md`.
+
+Maps in the docs, generated from examples run with seed 1, are designed in `designs/doc-maps.md`.
 
 ## Backlog
 
@@ -74,7 +76,7 @@ All optional; each needs a design talk.
 
 ### Cell blocks, follow-ups
 
-`placeCellBlocks` is done and documented in the README. Optional follow-ups:
+`placeCellBlocks` is done and documented in `docs/steps/place-cell-blocks.md`. Optional follow-ups:
 
 - **A T-shaped block corridor**, with cells along three sides.
 - **Extra entrances**: an option for more than one entrance per block (default 1).
@@ -87,11 +89,11 @@ All optional; each needs a design talk.
 
 ### Catacombs, follow-ups
 
-`digCatacombs` is done and documented in the README. Optional follow-ups, each needs a design talk:
+`digCatacombs` is done and documented in `docs/steps/dig-catacombs.md`. Optional follow-ups, each needs a design talk:
 
 - **Decay**: collapsed stretches of gallery and rubble, once the mine's cave-ins exist.
 - **A standalone `digNiches`** for other maps, built on the niche code (`carveNiche`).
-- **Entering cell blocks**: today a block inside a catacomb's area is sealed in by the reserved rock, and the README says to keep blocks out. The galleries could enter a block as they enter the rooms placed before, through a passage from the tile in front of its entrance; where the opened entrance is recorded is open, since `roomExits` needs a room and the block corridor is none.
+- **Entering cell blocks**: today a block inside a catacomb's area is sealed in by the reserved rock, and its docs say to keep blocks out. The galleries could enter a block as they enter the rooms placed before, through a passage from the tile in front of its entrance; where the opened entrance is recorded is open, since `roomExits` needs a room and the block corridor is none.
 
 ### Ponds, lakes and swamps
 

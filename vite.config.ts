@@ -17,6 +17,8 @@ export default defineConfig({
   },
   test: {
     include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
+    // Pipeline tests run several seeds and take a few seconds under coverage.
+    testTimeout: 20000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
