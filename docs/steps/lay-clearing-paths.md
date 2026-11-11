@@ -24,3 +24,62 @@ const { grid, roads } = pipeline(
 - **Templates.** A path to a clearing with a template stops at the tile before the first tile of the template's box that holds something other than ground or trees, so at the edge of its walls. A path that still runs through a template, which can happen to a path to another clearing, makes the step throw a `TemplatePlacementError` ("a road or path runs through it"), and `pipeline` builds the map again. With wide paths, mind that the brush of a path that stops at a template may touch its wall.
 - **Water.** A path tile over water becomes `bridgeTile` where the path spans the water, joining the two pieces of land it cuts the map into, and stays water everywhere else, as for the generated roads of [`layRoads`](lay-roads.md) that are not planned.
 - **Adds** `roads`, `junctions`, `exits` and `bridges` again, which replace those of `layRoads`: the same lists with the paths added. A path is a road of `kind: 'branch'` that comes after the roads that were there, in the order of the clearings. A path from the border adds an exit.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)), before and after `layClearingPaths`:
+
+<!-- map: lay-clearing-paths -->
+
+```ts
+import {
+  emptyMap,
+  pipeline,
+  Tile,
+  plantTrees,
+  layRoads,
+  placeClearings,
+  layClearingPaths,
+} from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 38, height: 22, tile: Tile.Grass }),
+  [
+    plantTrees(),
+    layRoads(),
+    placeClearings({
+      clearings: [{ radiusX: { min: 4, max: 4 }, path: { width: 1 } }],
+    }),
+    layClearingPaths(),
+  ],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+before                                    after
+""T""""""""""""""""""""T"""""T"T"=====    ""T""""""""""""""""""""T"""""T"T"=====
+""""""""""""""""""""""T"""""""""====="    """"""""""""""""""""""T"""""""""====="
+""""""""""""""""""""T"""""""""""====T"    """"""""""""""""""""T"""""""""""====T"
+""T"""""""""""""""""T""""""""""=====T"    ""T"""""""""""""""""T""""""""""=====T"
+"""""""""""""""""T""""""""""""====="""    """"""""=="""""""T""""""""""""====="""
+"""""""""""""""""""""""""""""======"""    """""""""==""""""""""""""""""======"""
+""""""""""""""""""""""""""========"T"T    """"""""""==""""""""""""""========"T"T
+"""""""""""""""T""""""""=========""""T    """""""""""="""T""""""""=========""""T
+"""T""""""""TTT""""""===========""""""    """T"""""""==TT""""""===========""""""
+"T"""""""""""T""""""========="""""""""    "T""""""""""==""""""========="""""""""
+"""""""""""T"""""""========""""""T""""    """""""""""T"==""""========""""""T""""
+"""""""""T"T"""""=======""""""T""""T"T    """""""""T"T""=="=======""""""T""""T"T
+""""""""""""""""=======""""""""""""""T    """""""""""""""========""""""""""""""T
+""""""""T"T""T"=======""""""""""""""""    """"""""T"T""T"=======""""""""""""""""
+""T"""""""""""======T"""""""""""""""""    ""T"""""""""""======T"""""""""""""""""
+"""""""""""""======T""T"""""""""""""""    """""""""""""======T""T"""""""""""""""
+""""""T"""""======""""""""""""T"""""""    """"""T"""""======""""""""""""T"""""""
+T"T""""""T=======""TT""""T""""""""""""    T"T""""""T=======""TT""""T""""""""""""
+"""""""""=======""TT""""""""""""""""""    """""""""=======""TT""""""""""""""""""
+""T""""T=======T""""""T"""""""""""""""    ""T""""T=======T""""""T"""""""""""""""
+"""""========T"TTT"""""""""""""""""""T    """""========T"TTT"""""""""""""""""""T
+"T"=========TTT"""""T"""""""""""""""""    "T"=========TTT"""""T"""""""""""""""""
+```
+
+<!-- /map -->

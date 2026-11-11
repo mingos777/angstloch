@@ -33,3 +33,53 @@ const { grid } = pipeline(
 | `symmetryChance` | 1          | How often a vein gets its twins, from 0 to 1. Applies with a `symmetry` only.                                                                        |
 
 **Symmetry.** With a `symmetry`, every vein gets twins with the chance `symmetryChance`, rolled once for every vein: once it is dug, every tile it carved is dug at its mirror images about the center of the map too (the same transforms as the [dungeons](../generators/dungeon.md#layout-symmetry)), and so are the doors it opened, where their images are `Openable`. A twin tile that is not free rock a vein can reach (the border margin, a reserved tile, a pillar, but not rock that veins shut in) is left out, so a twin can be partial, but it never digs into a room or a hall. Twins are listed in `passages`, after their vein (after both veins of a junction). The pieces that the twin veins join are the images of the ones the vein joins, so a map whose pieces are symmetric gets a symmetric network. On a map with pieces, a vein gets a twin only at the images where the twin would join two things too: where each of its ends lands on floor, or on an `Openable` tile for a door. A junction gets the twins of its two veins together, so a piece without a twin leaves no dead-end twin vein, only a vein with no twin there. The junctions of the web (`density`) are not mirrored themselves, so a web grown on an empty map is only roughly symmetric. The twins count toward `density`.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)), before and after `digVeins`:
+
+<!-- map: dig-veins -->
+
+```ts
+import {
+  emptyMap,
+  pipeline,
+  Tile,
+  placeScatteredRooms,
+  digVeins,
+} from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 38, height: 22, tile: Tile.Wall }),
+  [placeScatteredRooms(), digVeins()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+before                                    after
+######################################    ######################################
+######################################    ######################################
+######################################    ######################################
+######################################    ######################################
+######################################    #############################....#####
+#############.....####################    #############.....##########.......###
+#############.....####################    #############.....#########........###
+###...#######.....####################    ###...#....##.................###.####
+###...#########################......#    ###.....##.##.#####..........##......#
+###...###.......###############......#    ###...###.......#######....####......#
+###...###.......###############......#    ###...###.......########.######......#
+###...###.......###############......#    ###...###.......########.######......#
+#########.......###############......#    #########.......########.###.........#
+#########.......######################    #########.......########.##..#########
+#########.......######################    #########.......#######..#..##########
+#########.......######################    #########...........###.##.###########
+######################################    ###################...#....###########
+######################################    #####################.#...############
+######################################    #####################...##############
+######################################    ######################################
+######################################    ######################################
+######################################    ######################################
+```
+
+<!-- /map -->

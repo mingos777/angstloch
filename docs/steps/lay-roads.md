@@ -24,3 +24,49 @@ const { grid, roads, bridges } = pipeline(
 - **Streams.** When the state has `streams` (an `layStreams` step ran before), a generated road is planned across them: it is bent to cross at `bridgeAngle`, straight and square to the stream for the length of the bridge, and a road tile over water becomes `bridgeTile` along that straight run. A road tile over water that is no part of a crossing gives way to the water: a road that clips a bank, or runs along a stream, does not make a bridge. The roads of `specs` are not bent. They are bridged where they span the water. Without `streams` the step works on dry land, and `bridgeAngle` has no effect.
 - **Order.** `layStreams` must come before it. Put `plantTrees` first, so that the verge has trees to clear.
 - **Diagnostics.** Through the `trace` option of [`pipeline`](../composing.md#pipeline) the step reports `trace('layRoads', { grown, plans })`: `grown`, the centerline of every generated road as it was grown, before the streams bent it, and `plans`, a `CrossingPlan` for every road that comes near a stream (its `start`, `end`, and for each crossing the `approach`, `entry`, `exit` and `departure` tiles, which are where the road turns onto and off the straight run, and where it reaches and leaves the water). Nothing is traced unless `trace` is given.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: lay-roads -->
+
+```ts
+import { emptyMap, pipeline, Tile, plantTrees, layRoads } from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 80, height: 25, tile: Tile.Grass }),
+  [plantTrees(), layRoads()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+""T"""""""""""""=======T"""""T"T""""""""""""""""""""""""""""T"""""T"T"""""T""""T
+""""""""""""""""T"======="""""""T"""T""""T"""""T""""""T"""""""""T"""T"T""""""T""
+T""""""""""""""""""======="""""""""""""""""""T""T"""""""""""""T""""""T""""""""T"
+"""""""""""""""T""""========"""T""""T""""T""""""""T"T""""""""""T"""T""""""""TTT"
+""""""""""""""""""""""========""""""""""""""T"T""""T"""""""""""""""""""T"""T""T"
+"""""""""""""T"""""""""============""""""""""T""TT"""T"TT""""""""""""""""T""""""
+"""""""""""""""""""""""""=================="""""""""""T""""""""""""T""""T""T"T"T
+"""""""""""""""""""""""""""=================="""""""""T"""""""""""""""""""""""T"
+""""""T""""""""T"T""""""""T""""T===============""""""""""""""""T"""""""""T"""T""
+"""""""""T"""""""T""""""""""""""""T"""""========"""""""T"T""""""""""""""T""""T"T
+"""""""""""TT"""""""""""""""""""""T"""""""=======""""""""""""""""""""""T"TT"""""
+""""""T""""""""""""""T""""""""""""""""""""""=======T"""""""""""""""""""T"""""T"T
+""TT""""""""""""""""T""""""""""T"""""""T"""""=======""""""T"""""""""""""""T"""T"
+"T""""""""""""""""""""""""""""""""T"""""""""""==================="""""""""""T"""
+"""T"T"""""TTT""T"T"""""""""""""""""""""TT"""TT"===================""""""""T"T""
+""""""""T"""""""""""""""""""""""""""""""TT"""TT""====================T""""""T"""
+""""T"TT""""T"""""""""""""""""""""""T""""T"T"""""""T""T"""""""======="T"""""""""
+""""T"""""T"T""""""T"T""""T"""""""T"T""""T"TT""""T""T"""T"""""""======""""""""""
+""""T"""T"T"""""T"""""T""""""""""""""""T"T""T"""T""""""""""T""""""====="""""T"T"
+"""""""T""TTT"""T"""""""""T"""T""""""""""T""T""T"""T"""""T""""""""=====""T""""""
+"""""""TT"T"T"""""TT""""""T""""""""T""""""""T""""""T"T"""""""""""""======"""""""
+T"""""""""""""TT"""""""""""T"""""""""""T"""""T""""T"TT""""""""""""""======"T""""
+""""""""T""""T""""""""TT"T"T""""""""T"T""""""""T""""T"""T"""""""""""======""""""
+"""""""""""""""""T""T""""""""""T""""""""T"""T""""T""""""""""""""""""""======="T"
+""""T"""""""T""TT""""T""""""""""""""""""""T""""""T"""""""""""""""""""""========"
+```
+
+<!-- /map -->

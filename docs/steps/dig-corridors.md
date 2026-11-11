@@ -45,6 +45,56 @@ const { grid, rooms, roomExits } = pipeline(
 - **What it reserves.** Every exit of a room goes through [`openReserved`](../composing.md#mapstate), so it and the potential exits round it become `Reserve.Solid`. Corridors reserve nothing.
 - **Needs no rooms.** It **uses** `rooms`, `roomShapes` and `roomExits` from the steps before it, if any, and **adds** all three again: the dropped rooms left out, the rest renumbered with their shapes and the exits, and the new exits appended to `roomExits` (an [`Exit`](../rooms.md#exit) each, listed on its rooms). With no rooms to join, it joins the [features](#features) alone, such as the halls of [`digPillarHalls`](dig-pillar-halls.md).
 
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)), before and after `digCorridors`:
+
+<!-- map: dig-corridors -->
+
+```ts
+import {
+  emptyMap,
+  pipeline,
+  Tile,
+  placeScatteredRooms,
+  digCorridors,
+} from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 38, height: 22, tile: Tile.Wall }),
+  [placeScatteredRooms(), digCorridors()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+before                                    after
+######################################    ######################################
+######################################    ######################################
+######################################    ######################################
+######################################    ######################################
+######################################    ######################################
+#############.....####################    #############.....####################
+#############.....####################    #######.....+.....####################
+###...#######.....####################    ###...+.#####.....+.##################
+###...#########################......#    ###...#######+#####.###########......#
+###...###.......###############......#    ###...###.......###...........+......#
+###...###.......###############......#    ###...###.......###.###########......#
+###...###.......###############......#    ###...+.#.......###.###########......#
+#########.......###############......#    ###+###.+.......###.###########......#
+#########.......######################    ###.#####.......###.##################
+#########.......######################    ###.#####.......###.##################
+#########.......######################    ###.#####.......###.##################
+######################################    ###.###############.##################
+######################################    ###.................##################
+######################################    ######################################
+######################################    ######################################
+######################################    ######################################
+######################################    ######################################
+```
+
+<!-- /map -->
+
 ## Features
 
 Any tile outside the shapes of the rooms that have no exits yet that is not the base tile is floor of a feature, and the pieces it makes, joined along edges, are joined like rooms. A room that has exits already, such as a cell of a [cell block](place-cell-blocks.md) or a room of [`openMazeRooms`](open-maze-rooms.md), is part of the piece its doors open onto: rooms and floor joined by open doors count as one thing to join. A feature need not say what it is: whatever made it, `digCorridors` finds it on the map. The halls of `digPillarHalls`, the caverns of the cave steps and the chambers, cisterns and tunnels of [`digSewers`](dig-sewers.md) are listed in `rooms` all the same, by their kinds `'pillarHall'`, `'cavern'`, `'sewerChamber'`, `'cistern'` and `'sewerTunnel'`, but are joined as features, on their floor (see [halls and caverns](../rooms.md#room)), and get an exit wherever a corridor enters them (see [ways into halls and caverns](../rooms.md#ways-into-halls-and-caverns)). This makes "rooms round a cavern and a pillar hall" a list of steps:

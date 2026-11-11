@@ -22,3 +22,49 @@ const { grid, streams } = pipeline(
 - **Adds `streams`**: an array of roads, `{ kind, width, points }`, the main stream first and then the tributaries. The `points` run with the water: a tributary runs from its source to where it joins. Later steps (roads that cross the stream, footbridges, clearings on the water) work from this list alone.
 - **Water tiles** are stamped over what is there, so they are not prunable, and the trees are cleared beside them by the verge.
 - **Order.** It must come before the steps that lay roads, so that the roads can cross it. With `roads` already in the state it throws a `TypeError` at once, without retrying, since no other map would help.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: lay-streams -->
+
+```ts
+import { emptyMap, pipeline, Tile, plantTrees, layStreams } from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 80, height: 25, tile: Tile.Grass }),
+  [plantTrees(), layStreams()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+""T""""""""""""""""""""T""~~~T"T""""""""""""""""""""""""""""T"""""T"T"""""T""""T
+""""""""""""""""T"""""""""""~"""T"""T""""T"""""T""""""T"""""""""T"""T"T""""""T""
+T"""""""""""""""""""""""""""~~~""""""""""""""T""T"""""""""""""T""""""T""""""""T"
+"""""""""""""""T""""T"""""""""~~~"""T""""T""""""""T"T""""""""""T"""T""""""""TTT"
+"""""""""""""""""""""""T""""""""~~~"""""""""T"T""""T"""""""""""""""""""T"""T""T"
+"""""""""""""T"""""""""""""T""""""~~~""""""""T""TT"""T"TT""""""""""""""""T""""""
+"""""""""""""""""""""""""""T""""""""~~~~""""""""""""""T""""""""""""T""""T""T"T"T
+""""""""""""""""""""""""""""""""T""""""~~~""""""""""""T"""""""""""""""""""""""T"
+""""""T""""""""T"T""""""""T""""T""""T"T"T~~~T""""""""""""""""""T"""""""""T"""T""
+"""""""""T"""""""T""""""""""""""""T""""""""~"TT""""""""T"T""""""""""""""T""""T"T
+"""""""""""TT"""""""""""""""""""""T""""""""~~"TT"""""""""""""""""""""""T"TT"""""
+""""""T""""""""""""""T""""""""""""""""""""""~T""T""T"""""""""""""""""""T"""""T"T
+""TT""""""""""""""""T""""""""""T"""""""T""""~""""TT"""""""T"""""""""""""""T"""T"
+"T""""""""""""""""""""""""""""""""T"""""""""~~""""""T"""""""""""""""""""""""T"""
+"""T"T"""""TTT""T"T"""""""""""""""""""""TT"""~T""""""""""""""""""""""""""""T"T""
+""""""""T"""""""""""""""""""""""""""""""TT"""~T""T"""""T"T"""""""""""T""""""T"""
+""""T"TT""""T"""""""""""""""""""""""T""""T"T"~~""""T""T"""""""""""""""T"""""""""
+""""T"""""T"T""""""T"T""""T"""""""T"T""""T"TT"~~"T""T"""T"""""""""""T"""""""""""
+""""T"""T"T"""""T"""""T""""""""""""""""T"T""T""~~~~""""""""T""""""""""T"""""T"T"
+"""""""T""TTT"""T"""""""""T"""T""""""""""T""T""T""~~~~~~"T"""""""""""""""T""""""
+"""""""TT"T"T"""""TT""""""T""""""""T""""""""T""""""T"T"~~~~"""""""""""""""""""""
+T"""""""""""""TT"""""""""""T"""""""""""T"""""T""""T"TT""""~~~""""""""""""""T""""
+""""""""T""""T""""""""TT"T"T""""""""T"T""""""""T""""T"""T"""~~""""""""""""""""""
+"""""""""""""""""T""T""""""""""T""""""""T"""T""""T"""""""""""~""""""""""""""T"T"
+""""T"""""""T""TT""""T""""""""""""""""""""T""""""T"""""""""""~~"""""""""""""""""
+```
+
+<!-- /map -->

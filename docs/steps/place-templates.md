@@ -20,3 +20,78 @@ const { grid, templates } = pipeline(
 - **Reads** `clearings`, optionally: a clearing holds one template at most, and the clearing is never grown.
 - **Adds** `templates`: for each template that was placed, in the order of the list and of its copies, `template` (the index in `templates`), the box it fills (`x`, `y`, `width`, `height`), `rotation`, `mirrored`, `clearing` (the index in the `clearings` extra, left out for a template placed anywhere or on a clearing of its own) and `ownClearing`.
 - **Retries.** A copy that finds no spot throws a `TemplatePlacementError`, and `pipeline` builds the map again, up to `attempts` times, before it throws the last error. A template bigger than the map is `permanent` and is thrown at once.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: place-templates -->
+
+```ts
+import {
+  emptyMap,
+  pipeline,
+  TemplateCell,
+  Tile,
+  plantTrees,
+  placeTemplates,
+} from 'angstloch';
+
+const { Unused: _, Floor: F, Wall: W } = TemplateCell;
+
+const result = pipeline(
+  emptyMap({ width: 80, height: 25, tile: Tile.Grass }),
+  [
+    plantTrees(),
+    placeTemplates({
+      templates: [
+        {
+          name: 'ruin',
+          cells: [
+            [_, _, W, W, W, _, _],
+            [_, W, F, F, F, W, _],
+            [W, F, F, F, F, F, W],
+            [W, F, F, F, F, F, W],
+            [W, F, F, F, F, F, W],
+            [_, W, W, F, W, W, _],
+            [_, _, _, _, _, _, _],
+          ],
+          rotate: [0, 90, 180, 270],
+          mirror: true,
+        },
+      ],
+    }),
+  ],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+""T""""""""""""""""""""T"""""T"T""""""""""""""""""""""""""""T"""""T"T"""""T""""T
+""""""""""""""""T"""""""""""""""T"""T""""T"""""T""""""T"""""""""T"""T"T""""""T""
+T""""""""""""""""""""""""""""""""""""""""""""T""T"""""""""""""T""""""T""""""""T"
+"""""""""""""""T""""T""""""""""T""""T""""T""""""""T"T""""""""""T"""T""""""""TTT"
+"""""""""""""""""""""""T""""""""""""""""""""T"T""""T"""""""""""""""""""T"""T""T"
+"""""""""""""T"""""""""""""T"""""""""""""""""T""TT"""T"TT""""""""""""""""T""""""
+"""""""""""""""""""""""""""T""""""""""""""""""""""""""T""""""""""""T""""T""T"T"T
+""""""""""""""""""""""""""""""""T""""""""T""""""""""""T"""""""""""###"""""""""T"
+""""""T""""""""T"T""""""""T""""T""""T"T"T"""T""""""""""""""""""T"#...#"""T"""T""
+"""""""""T"""""""T""""""""""""""""T""""""""""TT""""""""T"T""""""#.....#"T""""T"T
+"""""""""""TT"""""""""""""""""""""T"""""""""""TT""""""""""""""""#.....#T"TT"""""
+""""""T""""""""""""""T"""""""""""""""""""""""T""T""T""""""""""""#.....#T"""""T"T
+""TT""""""""""""""""T""""""""""T"""""""T"""""""""TT"""""""T""""""##.##""""T"""T"
+"T""""""""""""""""""""""""""""""""T"""""""""""""""""T"""""""""""""""""""""""T"""
+"""T"T"""""TTT""T"T"""""""""""""""""""""TT"""TT""""""""""""""""""""""""""""T"T""
+""""""""T"""""""""""""""""""""""""""""""TT"""TT""T"""""T"T"""""""""""T""""""T"""
+""""T"TT""""T"""""""""""""""""""""""T""""T"T"""""""T""T"""""""""""""""T"""""""""
+""""T"""""T"T""""""T"T""""T"""""""T"T""""T"TT""""T""T"""T"""""""""""T"""""""""""
+""""T"""T"T"""""T"""""T""""""""""""""""T"T""T"""T""""""""""T""""""""""T"""""T"T"
+"""""""T""TTT"""T"""""""""T"""T""""""""""T""T""T"""T"""""T"""""""""""""""T""""""
+"""""""TT"T"T"""""TT""""""T""""""""T""""""""T""""""T"T""""""""""""""""""""""""""
+T"""""""""""""TT"""""""""""T"""""""""""T"""""T""""T"TT"""""""""""""""""""""T""""
+""""""""T""""T""""""""TT"T"T""""""""T"T""""""""T""""T"""T"""""""""""""""""""""""
+"""""""""""""""""T""T""""""""""T""""""""T"""T""""T""""""""""""""""""""""""""T"T"
+""""T"""""""T""TT""""T""""""""""""""""""""T""""""T""""""""""""""""""""""""""""""
+```
+
+<!-- /map -->

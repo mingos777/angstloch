@@ -29,3 +29,49 @@ const { grid, rooms, roomExits } = pipeline(
 - **Growing.** Each try picks a room, a wall of it by the biases, a gap, a size and a spot along the wall, off its corners, and the new room is placed so that its floor faces that spot. A room from which 20 tries in a row failed is crowded, and is only picked again when every room is. Growing stops at `roomCount.max`, at the `fill` once `roomCount.min` is reached, or when 300 tries in a row fail.
 - **Gaps and spacing.** The floors of two rooms a gap of `n` apart are `n + 2` tiles apart (a wall, the corridor and a wall), and 1 tile for a gap of 0. A gap whose rooms would be closer than `roomSpacing` is left out of the range, and a range with nothing left throws a `RangeError` when the step is made. Rooms keep `roomSpacing` from every other room too, not only from the one they are built off, and from the rooms of an earlier step two wall tiles at least, as in `placeScatteredRooms`, so a gap of 0 never joins them.
 - **Symmetry.** With a `symmetry`, a new room brings its mirror images along as often as `symmetryChance` says, and all of them must fit.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: place-clustered-rooms -->
+
+```ts
+import { emptyMap, pipeline, Tile, placeClusteredRooms } from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 80, height: 25, tile: Tile.Wall }),
+  [placeClusteredRooms()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+####################################################################....########
+####################################################################....########
+####################################################################....########
+####################################################################....########
+################################################......##############....########
+##############.....#####......######.......#####......####....######....########
+##############.....#####......######.......#####......####....######....########
+##############.....#####......######.......#####......####....##################
+##############.....#####......######.......#####################################
+##############.....#################.......####...###......#####################
+##############.....#################.......####...###......#####################
+####################################.......####...###......#####################
+###############################################...###......#####################
+################################################################################
+##############################################.......###########################
+#####################################......###.......###########################
+#####################################......###.......###########################
+#####################################......###.......###########################
+#####################################......#####################################
+################################################################################
+################################################################################
+```
+
+<!-- /map -->

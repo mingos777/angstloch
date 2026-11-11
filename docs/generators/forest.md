@@ -24,6 +24,54 @@ Every step that lays something clears the trees from its own [verge](../composin
 
 The chance of a tree is set at the two ends of the noise: `trees.density` is a `Range` of fractions, `min` where the noise is at its lowest and `max` where it is at its highest. In between the chance rises evenly with the noise. With the defaults, 0 and 0.25, the lowest parts are bare and the thickest woods are a quarter full of trees, so the trees stand apart. Raise `max` for tighter woods: 1 packs the thickest parts solid. Both can be anything from 0 to 1, and `min` may be the larger of the two, which puts the trees where the noise is low. The noise is sampled at the center of each tile, and `random` both seeds the built-in noise and rolls the chance for each tile, so the same seed always gives the same forest. The noise rarely reaches the very ends of its range, so the chances rarely do either. There is no `density` in the result: count the trees, or sample the noise yourself.
 
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: generate-forest -->
+
+```ts
+import { generateForest } from 'angstloch';
+
+const result = generateForest({
+  width: 80,
+  height: 25,
+  streams: {},
+  roads: {},
+  random: mulberry32(1),
+});
+```
+
+```text
+""T""""""""""""""""""""T""~~~T"T""""""""""""""""""""""""""""T"""""T"T"""""T""""T
+""""""""""""""""T"""""""""""~"""T"""T""""T"""""T""""""T"""""""""T"""T"T""""""T""
+T"""""""""""""""""""""""""""~~~""""""""""""""T""T"""""""""""""T""""""T""""""""T"
+"""""""""""""""T""""T"""""""""~~~"""T""""T""""""""T"T""""""""""T"""T""""""""TTT"
+"""""""""""""""""""""""T""""""""~~~"""""""""T"T""""T"""""""""""""""""""T"""T"===
+"""""""""""""T"""""""""""""T""""""~~~""""""""T""TT"""T"TT""==========""""T======
+"""""""""""""""""""""""""""T""""""""~~~~""""""""""""""T=========================
+""""""""""""""""""""""""""""""""T""""""~~~""""""""""============================
+""""""T""""""""T"T""""""""T""""T""""T"T"T~~~T"""=============="T""===========T""
+===="""""T"""""""T""""""""""""""""T""""""""%==============""""""""""""""T""""T"T
+========"""TT"""""""""""""""""""""T"""=====%%==========""""""""""""""""T"TT"""""
+===========""""""""""T"""""""""""===========%======T"""""""""""""""""""T"""""T"T
+"=============""""""T""""""=================%="""TT"""""""T"""""""""""""""T"""T"
+"T"""===================================="""~~""""""T"""""""""""""""""""""""T"""
+"""T"T""============================""""TT"""~T""""""""""""""""""""""""""""T"T""
+""""""""T""===================""""""""""TT"""~T""T"""""T"T"""""""""""T""""""T"""
+""""T"TT""""T""""=====""""""""""""""T""""T"T"~~""""T""T"""""""""""""""T"""""""""
+""""T"""""T"T""""""T"T""""T"""""""T"T""""T"TT"~~"T""T"""T"""""""""""T"""""""""""
+""""T"""T"T"""""T"""""T""""""""""""""""T"T""T""~~~~""""""""T""""""""""T"""""T"T"
+"""""""T""TTT"""T"""""""""T"""T""""""""""T""T""T""~~~~~~"T"""""""""""""""T""""""
+"""""""TT"T"T"""""TT""""""T""""""""T""""""""T""""""T"T"~~~~"""""""""""""""""""""
+T"""""""""""""TT"""""""""""T"""""""""""T"""""T""""T"TT""""~~~""""""""""""""T""""
+""""""""T""""T""""""""TT"T"T""""""""T"T""""""""T""""T"""T"""~~""""""""""""""""""
+"""""""""""""""""T""T""""""""""T""""""""T"""T""""T"""""""""""~""""""""""""""T"T"
+""""T"""""""T""TT""""T""""""""""""""""""""T""""""T"""""""""""~~"""""""""""""""""
+```
+
+<!-- /map -->
+
 ## Roads
 
 ```ts

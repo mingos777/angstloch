@@ -52,3 +52,49 @@ const { grid, rooms, roomGroups } = pipeline(
 - **Caverns and the floor that was there.** `minRegionSize` and `largestOnly` measure the caverns after that: unreserved floor that was there already counts as part of a cavern it touches, so a cavern cut in two by an earlier tunnel is still one cavern, and reserved tiles count as wall. Floor that no new floor touches is never left out, whatever its size.
 - **Caverns are rooms.** Every cavern that is kept is a [`Room`](../rooms.md#room) of kind `'cavern'`, its box the smallest rectangle that holds its floor and its shape in `roomShapes` that floor, which blocks nothing and reserves nothing (see [halls and caverns](../rooms.md#room)). It holds only the floor this cave dug, not the floor that was there. The caverns of one copy are a `'cave'` [group](../rooms.md#roomgroup) with the box the copy was grown in. They are the caverns as the step dug them: a later step that joins them, or digs into them, does not change them.
 - **Uses** `rooms`, `roomShapes` and `roomGroups`, from the steps before it, and **adds** all three again with its own appended, the ids following on.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: dig-cellular-cave -->
+
+```ts
+import { emptyMap, pipeline, Tile, digCellularCave } from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 80, height: 25, tile: Tile.Wall }),
+  [digCellularCave()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+################################################################################
+###########################..###################################################
+##########################....####################....#####..#####.......#######
+#########.######..####........###...###...###..........###....###.........######
+#########.#####....###........###....#.................##.....###.............##
+###############................#......................####.....#.........#....##
+###############......................................#######..........#####...##
+###############........###...........................########.........####....##
+##############........#####.........................##########................##
+######....###.......#######.........................##########...............###
+#####..............########..........................#########...............###
+#####..........###########.............................#######................##
+##..#.........#########................................########...............##
+#.............########...........................###############..............##
+#.............####.............................############..####.............##
+#.............###..........................###############....#######........###
+##............###.........................###############......######.....######
+##........................................##############.........###......######
+##........................................############...##................#####
+##............................######.....#########......###................#####
+##.........##..............##########....########.......###................#####
+###........#####.........############....########......####..............#######
+####......#########.....##############...#########...######...####.....#########
+#######...#################################################..###################
+################################################################################
+```
+
+<!-- /map -->

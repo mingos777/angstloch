@@ -6,8 +6,6 @@ What is wanted next, roughly in the user's order, and what was rejected. Finishe
 
 A design for the shore (see More generators, Shore and beach) is in progress in `designs/shore.md`.
 
-Maps in the docs, generated from examples run with seed 1, are designed in `designs/doc-maps.md`.
-
 ## Backlog
 
 Roughly in the order the user wants them. Each needs a design talk before it is built.

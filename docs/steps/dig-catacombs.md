@@ -103,3 +103,49 @@ A catacomb of 43 by 26 before it is joined, with two main galleries two tiles wi
 - **Fails** with an ordinary `Error` when no gallery finds free room in its area, and with a [`TemplatePlacementError`](../room-templates.md) for a crypt that finds no place or cannot be joined, both of which [`pipeline`](../composing.md#pipeline) answers with a new map; a crypt that can never fit the area throws at once. Run it before the steps that fill its area, other than the rooms it should enter. Keep [cell blocks](place-cell-blocks.md) out of its area (give the catacomb an `area` beside them, or place the blocks after it): the galleries do not enter a block, and the reserved rock seals it in, so `digCorridors` fails the map and `digVeins` leaves the block cut off.
 - **Rooms and the group.** Every chamber is a [`Room`](../rooms.md#room) of kind `'burialChamber'`, its box its floor, with its shape in `roomShapes`, its floor and the tiles of its niches inside a wall, and its door in `roomExits`, so it has an exit already: [`digCorridors`](dig-corridors.md) counts it as one with the gallery its door opens onto, and leaves it alone. Every crypt is a room with its shape in `roomShapes` and the exits it was entered by. Each catacomb adds a [`'catacomb'` group](../rooms.md#roomgroup) to `roomGroups`, which its chambers and crypts point to with `Room.group`, with its area, the segments of its galleries, its niches, its chambers and its crypts, in the coordinates of the map. A room placed before that the galleries enter keeps its id and gets the new exits appended.
 - **Uses** `rooms`, `roomShapes`, `roomExits` and `roomGroups`, from the steps before it, and **adds** all four again with its own appended, the ids following on.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: dig-catacombs -->
+
+```ts
+import { emptyMap, pipeline, Tile, digCatacombs } from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 80, height: 25, tile: Tile.Wall }),
+  [digCatacombs()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+################################################################################
+################################################################################
+################################################################################
+##############################.#.###############################################
+#############################.....##############################################
+############################.......###########...###############################
+#############################.....############...#################.#############
+###############################+###############+################.#.#.#.#########
+#######..............##########..#########...........#########...........#######
+#######.#.#.#.#.##...##########..#########.#########.#########.#########.#######
+#####...###.#.####...########.....########...####.##.#######....#######....#####
+#######.##########...##########..#########.#####...#.#########.#########.#######
+#####...##########...#########....########...#.....#.########...######....######
+#######.##########...##########..#########.#####...+.#########.#########.#######
+######..##########...#########....########..##.....#.#######....######....######
+#######.##########...##########..#########.#####...#.#########.#########.#######
+######..##########...#########.....#######...####.##.#######.....#######...#####
+#######.#.########...###.###.##..#########.#########.#########.#####.#.#.#######
+#######.#.#.#.#.##...#.#.#.#.##..#########.#########.#########.#.#.#.#.#.#######
+#######..................................................................#######
+#########.#.#.#.######################################.#.#.#.###.#.#.#.#########
+#########.###.#.##########################################.#####.###############
+################################################################################
+################################################################################
+################################################################################
+```
+
+<!-- /map -->

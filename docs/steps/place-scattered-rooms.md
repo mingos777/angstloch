@@ -41,3 +41,49 @@ const { grid, rooms, roomShapes, reserved } = pipeline(
 - **Templates.** A template that cannot be placed throws a [`TemplatePlacementError`](../room-templates.md), which [`pipeline`](../composing.md#pipeline) answers with a new map, up to its `attempts`. `Room.template` is an index into the `templates` of the step that placed the room.
 - **What it reserves.** Every room reserves its footprint, as [`placeMineRooms`](place-mine-rooms.md) does: walls, floor and inner doorways are `Reserve.Solid`, and potential exits are `Reserve.Openable`. The whole ring of an ordinary room, but its corners, is `Openable`. Where two rooms share a wall (`roomSpacing` 1) a tile stays `Openable` when it is a side of both rooms, and is `Solid` when it is the corner of either.
 - **Uses** `rooms` and `roomShapes` from the steps before it, and the cell blocks in `roomGroups` (for the tiles in front of their entrances), and **adds** `rooms` and `roomShapes` again with its own appended, with ids that follow on: in each area, templated rooms first, then ordinary ones, each with a [`RoomShape`](place-mine-rooms.md) in `roomShapes`. Its rooms have no exits yet.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: place-scattered-rooms -->
+
+```ts
+import { emptyMap, pipeline, Tile, placeScatteredRooms } from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 80, height: 25, tile: Tile.Wall }),
+  [placeScatteredRooms()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+################################################################################
+##############......############################################################
+##############......############################################################
+##############......############################################################
+##############......############################################################
+##################################################################...###########
+##########......##############.....#########################.....#...###########
+##########......##############.....#########################.....#...###########
+######...#......##############.....#########################.....#...###########
+######...#......############################################.....#...####......#
+######...#......############################################.....#...####......#
+######...############.......#############################################......#
+######...############.......#############################################......#
+#####################.......#############################################......#
+#####################.......#######...###....###################################
+#####################.......#######...###....###################################
+#####################.......#######...###....###################################
+#####################.......#######...###....###################################
+###################################...###....###################################
+###################################...###....###################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+```
+
+<!-- /map -->

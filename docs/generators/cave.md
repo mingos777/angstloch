@@ -29,6 +29,48 @@ Tiles outside the map count as walls. The default limits are the classic 4-5 rul
 
 The automaton usually leaves several caverns that are not joined to each other. Caverns are groups of floor tiles that touch along an edge; tiles that only touch diagonally are separate caverns. `cave.minRegionSize` fills in the small pockets, and `cave.largestOnly` keeps only the largest cavern. Both apply as the cave is grown, before the tunnels.
 
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: generate-cave -->
+
+```ts
+import { generateCave } from 'angstloch';
+
+const result = generateCave({ width: 80, height: 25, random: mulberry32(1) });
+```
+
+```text
+################################################################################
+###########################..###################################################
+##########################....####################....#####..#####.......#######
+#########..#####..####........###...###...###..........###....###.........######
+#########...###....###........###....#.................##.....###.............##
+###########.###................#......................####.....#.........#....##
+###########.###......................................#######..........#####...##
+#########...###........###...........................########.........####....##
+#########.####........#####.........................##########................##
+######....###.......#######.........................##########...............###
+#####..............########..........................#########...............###
+#####..........###########.............................#######................##
+##..#.........#########................................########...............##
+#.............########...........................#####..########..............##
+#.............####.............................########..##..####.............##
+#.............###..........................#############......#######........###
+##............###.........................###############......######.....######
+##........................................##############.........###......######
+##........................................############...##................#####
+##............................######.....#########......###................#####
+##.........##..............##########....########.......###................#####
+###........#####.........############....########......####..............#######
+####......#########.....##############...#########...######...####.....#########
+#######...#################################################..###################
+################################################################################
+```
+
+<!-- /map -->
+
 ## Joining the caverns
 
 The tunnels are on by default, and join every cavern into one network. They are the veins of [`digVeins`](../steps/dig-veins.md), with its pieces, ports and routing: the two caverns nearest each other are joined first, then the cavern nearest the network, and so on, so a tunnel may end on another tunnel. A tunnel runs through free rock round the other caverns, never across one, and keeps a wall between itself and them. Where the rock between two caverns is a single wall thick, there is no room for a wall on each side, so the tunnel is let through it as a last resort, and a cavern shut in by the others is entered through the rock that shuts it in. It only ever turns rock into floor, so no floor tile is lost.
@@ -133,6 +175,52 @@ The look of the noise is set with the same options as the [forest](../steps/plan
 `cave.iterations` runs that many passes of the cave automaton over the thresholded noise (the 4-5 rule on 8 neighbors), which rounds off specks and corners. It defaults to 0, which leaves the noise as it is. The smoothing eats thin corridors, so it suits `'blobs'` and spoils `'veins'`.
 
 `cave.symmetry` works by sampling: a tile reads the noise at its first twin (row by row) with the chance `cave.symmetryChance`, and at its own position otherwise. The walls are picked after that, so `fill` stays accurate. At 1 (the default) the noise itself is symmetric, and so is the cave, and the tunnels and exits keep it so when they are given the same symmetry (see [Symmetry](#symmetry)).
+
+### Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: generate-noise-cave -->
+
+```ts
+import { generateNoiseCave } from 'angstloch';
+
+const result = generateNoiseCave({
+  width: 80,
+  height: 25,
+  random: mulberry32(1),
+});
+```
+
+```text
+################################################################################
+###########......##.......#####...............................#######.......####
+######.####...............#####......................##.......########.......###
+##..#...###.......###.....#####...............##....######...########..........#
+##.....####......#####....####...............###...#######...#############.....#
+#.....######...#######...#####..............##.....#######...##.##########.##..#
+#......#####.....####....#####.............###...#..######.###..#.##.#####..####
+#.......###......#######.#######..........####...##..#######..........####..####
+##.....#####.....#######.########........#####..####.#####..........#....##.####
+###....##.##############..#######.......######...#########............#####.##.#
+###...#...#############.....######..#....#.##....#########...........######....#
+##......#.#############......#####..##...........##########..........####.##..##
+#...........###########......#####...............##########...........#........#
+#............########.........#...................#########..............#.....#
+#...............###...............##..............#########............###.....#
+#...............#.................#####...........########...####......####....#
+###.#..........#...................######.........#######....####......#####...#
+#######........#...................######..........######.....###.....####.....#
+########..............#...###.......######.........#####.....####.....####..##.#
+#######....####......#...######.....#######.......#####......#####.##..####..###
+#######....####......############....#..#####......####......#######...#########
+######......###......#############........####......#.......########...#########
+#####......#######..##############............................###......#########
+####........######################.......##.##..............#####.#.....########
+################################################################################
+```
+
+<!-- /map -->
 
 ### `NoiseCaveOptions`
 

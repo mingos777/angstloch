@@ -61,6 +61,52 @@ o...................#
 - **Over 200 seeds** of the run above on 80 by 50, no map failed, every map came out in one piece and none needed a second map. With a pillar hall and `digVeins` instead, none needed one either.
 - **Steps after the block.** A step after the block may build right up to its reserved ring, so a later hall can reach the tile beyond the entrance. [`digCorridors`](dig-corridors.md) and [`digVeins`](dig-veins.md) then open the entrance with no corridor or vein. The room placement steps keep that tile free (see what it reserves). A hall or a sewer that stops a tile or two short of it is joined by `digCorridors` with a short straight way (see [features](dig-corridors.md#features)). On 80 by 50 with 1 to 2 blocks, then `digPillarHalls`, `placeScatteredRooms` and `digCorridors`, 4 maps in 200 needed another (2 with guard rooms the blocks are entered through), and none failed; with `digSewers` in place of the hall, 1 needed another for a cut-off block. With `digVeins` instead of `digCorridors`, none needed another. A [catacomb](dig-catacombs.md) seals a block in its area, so keep the blocks out of it.
 
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: place-cell-blocks -->
+
+```ts
+import { emptyMap, pipeline, Tile, placeCellBlocks } from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 80, height: 25, tile: Tile.Wall }),
+  [placeCellBlocks()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+##########...#...#...#...#...###################################################
+##########...#...#...#...#...###################################################
+##########...#...#...#...#...###################################################
+###########+###+###+###+###+####################################################
+##########...................###################################################
+###########+###+###+###+###+####################################################
+##########...#...#...#...#...###################################################
+##########...#...#...#...#...###################################################
+##########...#...#...#...#...###################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+```
+
+<!-- /map -->
+
 ## Guard rooms
 
 With `guardRoom`, a block gets a guard room by its `chance`, beside the block or with the block entered through it. With the `placement` `'beside'`, the block gets a tunnel, one tile wide, that runs on from the end of its corridor, and the guard room stands beside the tunnel, on either side at random, its door centered on the wall it shares with the tunnel. The wall between the corridor and the tunnel becomes a door, and the entrance moves to the wall beyond the far end of the tunnel, which runs `tunnel` tiles past the guard room's door. The guard room is a [`Room`](../rooms.md#room) of kind `'guardRoom'` in the block's group, with its shape and its door in `roomExits` (with `door: true`), like a cell. The guard room and the tunnel, each with the walls round it, are reserved `Solid` and need a free ring of one tile too; they lie outside the block's `footprint`, and the group's `tunnel` is the tunnel's floor.

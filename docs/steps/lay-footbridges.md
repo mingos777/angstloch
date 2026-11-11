@@ -19,3 +19,58 @@ const { grid, bridges } = pipeline(
 - **Needs** `streams`, so it must come after `layStreams`. Run it after every step that lays roads or paths, since a road that bridges a stream makes a footbridge unnecessary.
 - **Land.** A water tile that holds `bridgeTile` already, which is a bridge of a road, counts as land, and so do dry roads and trees. A stream with a `spring` has land round its source, so it needs none. A footbridge never lies on the edge of the map and is at most 2 tiles longer than its stream is wide. Land that no such footbridge can join stays apart.
 - **Adds** `bridges` again, one point per group of bridge tiles, footbridges and the bridges of roads together, which replaces the list of `layRoads`.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)), before and after `layFootbridges`:
+
+<!-- map: lay-footbridges -->
+
+```ts
+import {
+  emptyMap,
+  pipeline,
+  Tile,
+  plantTrees,
+  layStreams,
+  layFootbridges,
+} from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 38, height: 22, tile: Tile.Grass }),
+  [
+    plantTrees(),
+    layStreams({ width: { min: 2, max: 3 } }),
+    layFootbridges({ minimum: 2 }),
+  ],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+before                                    after
+""T""""""""""""""""""""T"""""T"~~~""""    ""T""""""""""""""""""""T"""""T"~~~""""
+""""""""""""""""""""""T"""""""~~~"""""    """"""""""""""""""""""T"""""""%%%"""""
+""""""""""""""""""""T"""""""""~~~"""T"    """"""""""""""""""""T"""""""""~~%"""T"
+""T"""""""""""""""""T"""""""""~~""T"T"    ""T"""""""""""""""""T"""""""""~~""T"T"
+"""""T"""""""""""T""""""""""~~~~""""""    """""T"""""""""""T""""""""""~~~~""""""
+""""""""""""""""""""""""""""~~~~T"""""    """"""""""""""""""""""""""""~~~~T"""""
+"""""""""""""""""""""""""""~~~""T""T"T    """""""""""""""""""""""""""~~~""T""T"T
+"""""""""""""""T""""""""""~~~~"""""""T    """""""""""""""T""""""""""~~~~"""""""T
+"""T""""""""TTT"""""""""""~~~"""""""""    """T""""""""TTT"""""""""""~~~"""""""""
+"T"""""""""""T""""""""T""~~~""""""""""    "T"""""""""""T""""""""T""~~~""""""""""
+"""""""""""T""""""""""T"~~~~"""""T""""    """""""""""T""""""""""T"~~~~"""""T""""
+"""""""""T"T""""""""""""~~~"""T""""T"T    """""""""T"T""""""""""""~~~"""T""""T"T
+"""""""""""""""""T""""""~~"""""""""""T    """""""""""""""""T""""""~~"""""""""""T
+""""""""T"T""T""""""""""~~""""""""""""    """"""""T"T""T""""""""""~~""""""""""""
+""T""""""""""""T""""T"""~~""""""""""""    ""T""""""""""""T""""T"""~~""""""""""""
+"""""""""""""""""""T""T"~~""""""""""""    """""""""""""""""""T""T"%%""""""""""""
+""""""T"""""T"TT""""""""~~""""T"""""""    """"""T"""""T"TT""""""""~~""""T"""""""
+T"T""""""T"TT""""""TT"""~~""""""""""""    T"T""""""T"TT""""""TT"""~~""""""""""""
+""""""""""""""""""TT""""~~~"""""""""""    """"""""""""""""""TT""""~~~"""""""""""
+""T""""T"""""""T""""""T"~~~~""""""""""    ""T""""T"""""""T""""""T"~~~~""""""""""
+"""""""""""""T"TTT"""""""~~~"""""""""T    """""""""""""T"TTT"""""""~~~"""""""""T
+"T""""""""""TTT"""""T"""""~~~"""""""""    "T""""""""""TTT"""""T"""""~~~"""""""""
+```
+
+<!-- /map -->

@@ -12,3 +12,57 @@
 - **Then the rest.** Each room draws its number of openings from `exitsPerRoom`, the fixed ones included, and more are opened wherever they join parts of the map that are not joined yet, as described under [rooms in mazes](../generators/maze.md#rooms-in-mazes).
 - **What it reserves.** Every opening goes through [`openReserved`](../composing.md#mapstate), so it and the potential exits round it become `Reserve.Solid`.
 - **Needs** `rooms` and `roomShapes`, **uses** `roomExits` from the steps before it, and **adds** `rooms` and `roomExits` again, with the exits of the rooms it opened appended. The rooms of the state are copied, not changed.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)), before and after `openMazeRooms`:
+
+<!-- map: open-maze-rooms -->
+
+```ts
+import {
+  emptyMap,
+  pipeline,
+  Tile,
+  placeMazeRooms,
+  digMaze,
+  openMazeRooms,
+} from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 37, height: 21, tile: Tile.Wall }),
+  [
+    placeMazeRooms({ roomCount: { min: 2, max: 3 } }),
+    digMaze(),
+    openMazeRooms(),
+  ],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+before                                   after
+#####################################    #####################################
+#...........#.........#...........#.#    #...........#.........#...........#.#
+#.###########.###.#####.#########.#.#    #.#########+#.###.#####.#########.#.#
+#...#...#...#...#.......#.....#...#.#    #...#...#...#...#.......#.....#...#.#
+#.#.#.#.#...###.###########.###.###.#    #.#.#.#.#...###.###########.###.###.#
+#.#...#.#...#.#.#...........#...#...#    #.#...#.#...#.#.#...........#...#...#
+#######.#...#.#.#.#####.#####.###.#.#    ###+###.#...#.#.#.#####.#####.###.#.#
+#...#...#...#...#.#...#...#...#...#.#    #...#...#...#...#.#...#...#...#...#.#
+#...#.#.#####.#####.#.###.#.#####.#.#    #...#.#.#####.#####.#.###.#.#####.#.#
+#...#.#...#.#...#...#.....#.#.....#.#    #...#.#...#.#...#...#.....#.#.....#.#
+#####.###.#.###.#.#########.#.#.#####    #####.###.#.###.#.#########.#.#.#####
+#.#.....#.....#...#.........#.#.....#    #.#.....#.....#...#.........#.#.....#
+#.#.###.#.#######.###########.#####.#    #.#.###.#.#######.#+#########.#####.#
+#...#...#.#...#...#.......#.#.....#.#    #...#...#.#...#...+.......#.#.....#.#
+#.###.###.#.#.#.###.......#.###.###.#    #.###.###.#.#.#.###.......#.###.###.#
+#.#.#.#...#.#.#...#.......#...#.#...#    #.#.#.#...#.#.#...#.......#...#.#...#
+#.#.#.#.###.#.###.#########.###.#.###    #.#.#.#.###.#.###.#########.###.#.###
+#...#.#.#...#...#.....#...#.....#...#    #...#.#.#...#...#.....#...#.....#...#
+###.#.###.#####.#####.#.#.#########.#    ###.#.###.#####.#####.#.#.#########.#
+#...#.........#.........#...........#    #...#.........#.........#...........#
+#####################################    #####################################
+```
+
+<!-- /map -->

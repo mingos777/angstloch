@@ -33,3 +33,55 @@ const { grid, rooms, roomExits, roomShapes } = pipeline(
 - **What it reserves.** Every room reserves its footprint: its walls, its floor and its inner doorways are `Reserve.Solid`, and its potential exits, the `OptionalExit` cells and the `Exit` and `Door` cells that lead outside, are `Reserve.Openable`. Every opening it makes goes through `openReserved`, so the opening and the potential exits around it become `Solid`. An ordinary room's unopened wall stays `Openable`, which later steps can open as an exit.
 - **Uses** `passages`, `rooms`, `roomExits` and `roomShapes`, from the steps before it, and **adds** all four again with its own appended: `tunnel` entries in `passages`, and rooms whose ids, and exits whose indices, follow on from the ones there are. Its rooms are templated ones first, then ordinary ones. A tunnel that ends in a hall or a cavern gives it an exit too (see [ways into halls and caverns](../rooms.md#ways-into-halls-and-caverns)), appended after the exits of the new rooms.
 - **`roomShapes`** holds a `RoomShape` for every room, by id: the cells of the room as placed on the map (`x`, `y`, `width`, `height`, `cells`, `exits`, `rotation` and `mirrored`, as a `TemplatePlacement`), plus `doors`, a list of `{ x, y, door }` that says, in the coordinates of the map, whether each `Exit`, `Door` and `OptionalExit` cell gets a door, as decided when the room was placed. An `OptionalExit` is listed whether or not it is ever opened: a step that opens it later uses its entry instead of its own `doorChance`, and one that stays shut is a wall whatever its entry says. A templated room's shape is its placement. An ordinary room's is a ring of `OptionalExit` round its floor, with wall corners, and has no `doors`, so its exits get the `doorChance` of the step that opens them. Steps that work with rooms read their walls, floors and potential exits from it.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: place-mine-rooms -->
+
+```ts
+import {
+  emptyMap,
+  pipeline,
+  Tile,
+  digFishbone,
+  placeMineRooms,
+} from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 80, height: 25, tile: Tile.Wall }),
+  [digFishbone(), placeMineRooms()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+################################################################################
+#####################################################......#####################
+####################################################........####################
+##################################################...........###################
+################################################........##....##################
+###############################################........####....#################
+#############################################........#######....################
+###########################################........##########...################
+#########################################.........############...###############
+########################################........##############....##############
+#######################################.......#################....#############
+#####################################.......####################....############
+#####################################.......#####################....###########
+###################################.......#..#####################....##########
+##################################......####..#####################....#########
+#################################.........###..#####################....########
+################################...........###..#####################....#######
+#############################........###....###..#####################....######
+###########################.........#####....###...####################.....####
+##########################.........#######....####...#####.+....########.....###
+########################........###########.....####..####.#....##########....##
+######################........##############....#####..##..+....###########....#
+#####################........#################....####.....##+##############...#
+#####################......###################....######.#....##################
+################################################################################
+```
+
+<!-- /map -->

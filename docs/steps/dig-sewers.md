@@ -111,3 +111,49 @@ o..............................................###
 - **Fails** with an ordinary `Error` when the trunk finds no free room in its area, or its area reaches the border at fewer ends of a trunk than `outfalls.min`, which [`pipeline`](../composing.md#pipeline) answers with a new map. Run it before the steps that fill its area.
 - **Rooms and the group.** Every chamber is a [`Room`](../rooms.md#room) of kind `'sewerChamber'`, every cistern one of kind `'cistern'`, and every stretch of tunnel between them, or between one and the end of its canal, one of kind `'sewerTunnel'`, walkways included. Each is a rectangle, and its shape in `roomShapes` is all its tiles but the columns of a cistern, so [`createRoomMap`](../rooms.md#createroommap) gives every tile of the sewer a room. Each sewer adds a `'sewer'` [group](../rooms.md#roomgroup) with its canals, mouths and outfalls. They are [features](dig-corridors.md#features), joined on their walkways and ledges and never dropped.
 - **Uses** `rooms`, `roomShapes` and `roomGroups`, from the steps before it, and **adds** all three again with its own appended, the ids following on.
+
+## Example map
+
+The map this code makes with seed 1 (`mulberry32` is defined in the [quick start](../../README.md#quick-start)):
+
+<!-- map: dig-sewers -->
+
+```ts
+import { emptyMap, pipeline, Tile, digSewers } from 'angstloch';
+
+const result = pipeline(
+  emptyMap({ width: 80, height: 25, tile: Tile.Wall }),
+  [digSewers()],
+  { random: mulberry32(1) },
+);
+```
+
+```text
+################################################################################
+##########################################.~~.##################################
+##########################################.~~.##################################
+##########################################.~~.##################################
+##########################################.~~.##################################
+##########################################.%%.##################################
+########################.....#############.~~.##################################
+########################.....############..~~.##################################
+########################...................~~.##################################
+########################~~~~~~~~~~~~~~~~~~%~~.##################################
+########################...........%.......~~.##################################
+########################.....####..~..###..~~.##################################
+########################.....####..~..###..~~.##################################
+########################.....####..~..####.~~.##################################
+#################################..~..####.~~.##################################
+##################################.~.#####.%%.##################################
+##################################.~.#####.~~......######.....##################
+##################################.~.#####.~~.................##################
+##################################.~.#####.~~%~~~~~~~~~~~~~~~~##################
+##################################.~.#####.~~.................##################
+##################################.~.#####.~~......######.....##################
+##################################.~.#####.~~......#############################
+##########################################.~~.##################################
+##########################################.~~.##################################
+################################################################################
+```
+
+<!-- /map -->
