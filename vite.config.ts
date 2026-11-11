@@ -6,6 +6,9 @@ export default defineConfig({
     dts({
       include: ['src'],
       exclude: ['src/**/*.test.ts', 'src/test-helpers/**'],
+      // One bundled index.d.ts with no relative imports, so the types resolve
+      // under `moduleResolution: node16`/`nodenext` as well as `bundler`.
+      bundleTypes: true,
     }),
   ],
   build: {

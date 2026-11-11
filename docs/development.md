@@ -11,12 +11,15 @@ npm run lint
 npm run format         # or format:check
 npm run check:version  # what disagrees between package.json, the latest tag and CHANGELOG.md
 npm run check:docs     # broken links in README.md and docs/
+npm run check:package  # build, pack and install the package, typecheck and run a program against it
 npm run docs:maps      # write the example maps of the docs (-- --check lists the stale ones)
 npm run check:forest   # road and stream artifacts of forests over many seeds
 npm run check:dungeon  # failures, time and look of dungeons over many seeds
 ```
 
 The [playground](playground.md) shows every generator and step on screen.
+
+`npm run check:package` tests the package as a consumer gets it: it installs the packed tarball into a scratch project in the system's temporary directory, typechecks a small program against it with `moduleResolution` set to `bundler` and to `nodenext`, and runs it. The build bundles the declarations into one `dist/index.d.ts` (`bundleTypes` in `vite.config.ts`), since declarations that import each other without file extensions do not resolve under `nodenext`. `prepublishOnly` runs every check above and ends with this one.
 
 ## Example maps
 

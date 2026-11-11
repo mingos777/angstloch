@@ -4,6 +4,8 @@ All notable changes to Angstloch are listed here, newest first. The format follo
 
 ## Unreleased
 
+## 1.0.0 - 2026-11-11
+
 ### Added
 
 Initial release; see the [documentation](docs/README.md).

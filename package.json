@@ -1,6 +1,6 @@
 {
   "name": "angstloch",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "A suite of map generators for roguelike games.",
   "license": "BSD-3-Clause",
   "author": "Dominik Marczuk",
@@ -42,7 +42,7 @@
   "scripts": {
     "dev": "vite demo --port 5180 --strictPort",
     "build": "vite build",
-    "prepublishOnly": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run check:version && npm run check:docs && npm run docs:maps -- --check && npm run build",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run check:version && npm run check:docs && npm run docs:maps -- --check && npm run check:package",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -51,12 +51,14 @@
     "test:watch": "vitest",
     "check:forest": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-forest.ts'))\" --",
     "check:version": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-version.ts'))\" --",
+    "check:package": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-package.ts'))\" --",
     "check:docs": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-docs.ts'))\" --",
     "docs:maps": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/docs-maps.ts'))\" --",
     "check:dungeon": "node -e \"import('vite').then(({ runnerImport }) => runnerImport('./scripts/check-dungeon.ts'))\" --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@microsoft/api-extractor": "^7.60.1",
     "@vitest/coverage-v8": "^5.0.5",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",

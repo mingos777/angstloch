@@ -4,8 +4,17 @@ declare module 'node:child_process' {
   export function execFileSync(
     file: string,
     args: string[],
-    options: { encoding: 'utf8'; stdio: 'pipe' },
+    options: { encoding: 'utf8'; stdio: 'pipe'; cwd?: string },
   ): string;
+}
+
+declare module 'node:os' {
+  export function tmpdir(): string;
+}
+
+declare module 'node:path' {
+  export function join(...paths: string[]): string;
+  export function resolve(...paths: string[]): string;
 }
 
 declare module 'node:fs' {
@@ -16,6 +25,11 @@ declare module 'node:fs' {
     encoding: 'utf8',
   ): void;
   export function existsSync(path: string): boolean;
+  export function mkdtempSync(prefix: string): string;
+  export function rmSync(
+    path: string,
+    options: { recursive: true; force: true },
+  ): void;
   export function readdirSync(
     path: string,
     options: { encoding: 'utf8'; recursive: true },
